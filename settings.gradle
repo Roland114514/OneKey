@@ -1,0 +1,15 @@
+pluginManagement {
+	repositories {
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		mavenCentral()
+		gradlePluginPortal()
+	}
+}
+
+rootProject.name = 'onekey'
+
+// Fabric 端优先；NeoForge 端在 M7 里程碑加入（见 PLAN.md）
+include ':fabric'

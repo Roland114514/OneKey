@@ -1,0 +1,77 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+
+base {
+	archivesName = "onekey-fabric"
+}
+
+loom {
+	splitEnvironmentSourceSets()
+
+	mods {
+		"onekey" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+sourceSets {
+	// 跨加载器共享的纯逻辑内核（不引用任何 Minecraft / 加载器类型）
+	main {
+		java.srcDir rootProject.file('common/src/main/java')
+	}
+	test {
+		java.srcDir rootProject.file('common/src/test/java')
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	testImplementation platform('org.junit:junit-bom:5.11.4')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testImplementation 'com.google.code.gson:gson:2.11.0'
+}
+
+test {
+	useJUnitPlatform()
+	testLogging {
+		events 'passed', 'failed', 'skipped'
+	}
+}
+
+processResources {
+	def version = project.mod_version
+	inputs.property 'version', version
+	filesMatching('fabric.mod.json') {
+		expand 'version': version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+	it.options.encoding = 'UTF-8'
+}
+
+java {
+	withSourcesJar()
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+	from(rootProject.file('LICENSE')) {
+		rename { 'LICENSE_onekey' }
+	}
+}

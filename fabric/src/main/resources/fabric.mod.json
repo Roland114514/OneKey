@@ -1,0 +1,37 @@
+{
+	"schemaVersion": 1,
+	"id": "onekey",
+	"version": "${version}",
+	"name": "OneKey · 操作优化",
+	"description": "一键整理背包、统一快捷键框架、快速堆叠与存入附近容器。零第三方运行时依赖，只做操作优化，不改玩法数值。",
+	"authors": [
+		"easan"
+	],
+	"contact": {
+		"homepage": "https://github.com/easan/onekey",
+		"sources": "https://github.com/easan/onekey"
+	},
+	"license": "MIT",
+	"icon": "assets/onekey/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"me.easan.onekey.fabric.OneKeyFabric"
+		],
+		"client": [
+			"me.easan.onekey.fabric.client.OneKeyFabricClient"
+		]
+	},
+	"mixins": [
+		"onekey.mixins.json",
+		{
+			"config": "onekey.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25"
+	}
+}
