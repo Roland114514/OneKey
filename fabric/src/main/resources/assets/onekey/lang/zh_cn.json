@@ -3,5 +3,9 @@
   "key.onekey.quick_stack": "快速堆叠",
   "key.onekey.quick_stash": "存入附近容器",
   "key.onekey.settings": "OneKey 设置",
-  "key.category.onekey.keys": "OneKey"
+  "key.category.onekey.keys": "OneKey",
+  "onekey.sort.success": "已整理 %s 格物品",
+  "onekey.sort.already_sorted": "物品已经整齐，无需整理",
+  "onekey.sort.server_not_installed": "服务器未安装 OneKey，无法整理",
+  "onekey.sort.cannot_sort": "当前容器无法整理"
 }

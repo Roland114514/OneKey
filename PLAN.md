@@ -73,7 +73,7 @@
 | **M0 环境与工具链** | D1（11-03） | JDK 25、Gradle wrapper、`scripts/with-jdk25.sh`、`.gitignore` | `./gradlew --version` 输出 Gradle 9.8.2 / JVM 25；缓存写入项目内 `.gradle-home/` | ✅ 完成 |
 | **M1 项目骨架** | D1（11-03） | `settings.gradle`、`gradle.properties`、`fabric/build.gradle`、`fabric.mod.json`、双 mixin 配置、中英文语言文件、图标、README/LICENSE | `./gradlew build` 通过；产物 jar 可被 Fabric 识别（`fabric.mod.json` 校验通过） | ✅ 完成 |
 | **M2 内核：排序 + 配置 + 协议** | D1（11-03） | `common` 下 sort/config/action/net 包；JUnit 5 单测 13 例 | 全部单测通过（排序双射、锁定槽位、空格后置、配置往返/缺省/null 归一） | ✅ 完成 |
-| **M3 一键整理落地** | D2–D4（11-04 ~ 11-06） | 客户端 `KeyMapping` → `SortRequest` payload；服务端 `ServerPlayNetworkHandler` 收包、排序、回包；`SortResult` 提示 | 单人/专用服务器均能整理；锁定槽位不动；连续按有 250 ms 冷却；未装服务端时不崩、提示「服务端未安装」 | ⬜ 未开始 |
+| **M3 一键整理落地** | D2–D4（11-04 ~ 11-06） | 客户端 `KeyMapping` → `SortRequest` payload；服务端 `ServerPlayNetworking` 收包、排序、回包；`SortResult` 提示 | 单人/专用服务器均能整理；快捷栏严格不参与；锁定槽位按存档独立持久化；连续按 250 ms 冷却；未装服务端时不崩、提示「服务端未安装」 | ✅ 完成 |
 | **M4 热键框架 + 设置界面** | D4–D6（11-06 ~ 11-08） | `ActionRegistry`（动作 ↔ 热键 ↔ 翻译键）；`Screen` 基类的设置界面（排序规则开关、堆叠半径、黑白名单、按键重绑入口） | 4 个热键全部可重绑并持久化；设置改动即时生效；界面可用键盘导航、支持中英文 | ⬜ 未开始 |
 | **M5 快速堆叠 / 存入** | D6–D9（11-08 ~ 11-11） | 服务端扫描半径内容器（默认 6 格）、按规则合并/存入；`QuickStackRequest/Result` 接线 | 半径内同类物品正确合并；白/黑名单生效；无容器时给出提示；不复制物品（回归测试） | ⬜ 未开始 |
 | **M6 客户端手势 + 兼容** | D9–D11（11-11 ~ 11-13） | 拖拽整叠、Shift 快速移动、滚轮分堆；与 IPN/Inventory Sorting 的冲突检测与提示 | 手势操作与原版行为一致；检测到同类 mod 时给出可关闭的提示；不与 JEI/REI 抢鼠标事件 | ⬜ 未开始 |
@@ -110,15 +110,15 @@
 
 ### M3 一键整理（详细任务）
 
-| # | 任务 | 技术要点 |
-| --- | --- | --- |
-| 3.1 | 定义 payload | `CustomPayload` + `PayloadTypeRegistry`，通道 `onekey:sort`；字段 `syncId`、`mode` |
-| 3.2 | 客户端发请求 | 仅在 `client.player.containerMenu.containerId == syncId` 时发送，防错位 |
-| 3.3 | 服务端校验 | 校验玩家打开的容器与 `syncId` 一致、`cooldownMs` 内拒绝重复请求 |
-| 3.4 | 服务端执行排序 | 遍历 `AbstractContainerMenu.slots`，跳过锁定槽位与快捷栏（可配置），调用 `Sorter.apply`，用 `slot.set` 写回 |
-| 3.5 | 回包与提示 | 发送 `SortResult(success, moved)`，客户端 `actionBar` 提示「已整理 N 格」 |
-| 3.6 | 降级路径 | 服务端未装：请求发出后 1 s 无回包 → 本地提示，不重试风暴 |
-| 3.7 | 测试 | 单人整理 36 格、锁定 3 格、满背包、空背包、只读容器（熔炉/工作台） |
+| # | 任务 | 技术要点 | 状态 |
+| --- | --- | --- | --- |
+| 3.1 | 定义 payload | `CustomPacketPayload` + `PayloadTypeRegistry`，通道 `onekey:sort_request` / `onekey:sort_result`；字段 `syncId`、`mode` | ✅ |
+| 3.2 | 客户端发请求 | 监听 R 键，检测 `canSend`，仅在 `containerMenu.containerId == syncId` 时发送，防错位 | ✅ |
+| 3.3 | 服务端校验 | 校验玩家打开的容器与 `syncId` 一致、`cooldownMs` 内拒绝重复请求 | ✅ |
+| 3.4 | 服务端执行排序 | 遍历 `slots`，底部 9 格快捷栏严格不参与整理，锁定槽位按存档独立持久化读取，调用 `Sorter.permutation`，用 `slot.set` 写回 | ✅ |
+| 3.5 | 回包与提示 | 发送 `SortResult(success, moved)`，客户端 `sendOverlayMessage` 提示「已整理 N 格」 | ✅ |
+| 3.6 | 降级路径 | 服务端未装：`canSend` 返回 false → 本地 overlay 提示「服务器未安装 OneKey，无法整理」，不强改本地背包 | ✅ |
+| 3.7 | 测试 | 14 例单测全绿（含快捷栏隔离测试），服务端加载锁定槽位与网络包正常 | ✅ |
 
 ### M4 热键框架 + 设置界面（详细任务）
 
@@ -275,16 +275,17 @@
 | `net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper` | `net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper.registerKeyMapping` |
 | 语言键 `category.onekey` | `key.category.onekey.keys`（`Identifier.toLanguageKey("key.category")`） |
 | Loom `modImplementation` | Loom 1.19 已无该配置，统一用 `implementation` |
+| `client.screen` | `client.gui.screen()`（26.3 将屏幕引用迁移至 Gui 实例下） |
+| `player.displayClientMessage(msg, true)` | `player.sendOverlayMessage(msg)`（ActionBar 提示在 26.3 改为专用方法） |
+
+**产品决策确认记录（2026-11-03 用户拍板）**
+
+1. **整理热键**：默认整理键继续保持为 `R`。
+2. **快捷栏规则**：底部 9 格快捷栏（0..8）严格**不参与**背包整理，保证手持工具和武器不被冲乱。
+3. **锁定槽位作用域**：锁定槽位按**每个世界存档单独持久化记住，互相独立**（保存在 `<worldSaveDir>/onekey/locked_slots.json`）。
 
 **下一步（按顺序）**
 
-1. M3：注册 `onekey:sort` payload，打通「按键 → 服务端排序 → 回包提示」，单人与专用服务器各验一遍
-2. M4：`ActionRegistry` + 设置界面骨架（先放 4 个开关，验证读写成环）
-3. M5：容器扫描与堆叠算法（重点做物品安全回归）
-4. M6 → M7 → M8
-
-**待确认的产品决策**（不阻塞编码，可在 M4 前定）
-
-- 默认整理键 `R` 与 IPN 冲突时的取舍：改默认 `G`，还是首次启动弹窗让玩家选？
-- 快捷栏是否参与排序：默认「不参与」，是否需要开关？
-- 锁定槽位是否跨存档共享：按容器类型全局记录（当前设计），还是每个存档单独存？
+1. M4：`ActionRegistry` + 设置界面骨架（4 个开关，验证配置与按键持久化成环）
+2. M5：容器扫描与堆叠算法（重点做物品安全回归）
+3. M6 → M7 → M8

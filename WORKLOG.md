@@ -12,15 +12,72 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | 以 `git log --oneline -1` 为准（截至撰写：`e0cab5d` 工作日志；其上为 `cf6463f` 骨架 + 计划表，36 文件） |
-| 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar`（32,436 B） |
-| 单测状态 | ✅ 13/13 通过（排序 6 + 分类 3 + 配置 4） |
-| 运行验证 | ✅ 开发客户端进标题界面；开发服务端 `Done (2.026s)` |
-| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / **M3 一键整理 ← 下一步** |
-| 阻塞项 | 3 个产品决策待用户拍板（见文末"待决策"），不阻塞编码 |
-| 生产可用性 | ❌ 尚未实现任何实际整理行为（热键只写日志），不可发布 |
+| 最新提交 | `86ff0f2`（M3: 一键整理落地，打通双向网络通信与服务端安全排序） |
+| 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` |
+| 单测状态 | ✅ 14/14 通过（排序 7 + 分类 3 + 配置 4） |
+| 运行验证 | ✅ 开发服务端正常加载锁定槽位；开发客户端注入 accessor mixin 正常 |
+| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / **M3 一键整理 ✅** / **M4 热键与设置界面 ← 下一步** |
+| 阻塞项 | 无（用户已拍板 3 项产品决策：R键保持、快捷栏不参与、锁定槽位存档级隔离） |
+| 生产可用性 | 🟡 核心一键整理网络与执行链路已全通，待 M4 设置界面与 M5 堆叠逻辑 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M3 任务清单。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M4 任务清单。
+
+---
+
+## 2026-11-03（第 1 个工作日 · 第 2 次会话：M3 一键整理落地）
+
+### 目标
+
+落实用户拍板的 3 项产品决策，完成 **M3 里程碑（一键整理落地）**：
+1. 默认整理键保持为 `R`；
+2. 底部 9 格快捷栏严格**不参与**背包整理；
+3. 锁定槽位按**每个存档单独记忆，互相独立**。
+
+### 本次改动与删改清单（重要）
+
+**1. 新增文件（7 个）**
+- `fabric/src/main/java/.../net/SortRequestPayload.java`：基于 `CustomPacketPayload` 协议注册 C2S 整理请求网络包（`onekey:sort_request`）。
+- `fabric/src/main/java/.../net/SortResultPayload.java`：基于 `CustomPacketPayload` 协议注册 S2C 整理结果网络包（`onekey:sort_result`）。
+- `fabric/src/main/java/.../util/ItemConversion.java`：`ItemStack` 到平台无关 `StackView` 的无损映射转换工具（抽取标签并调用 `CategoryGuesser`）。
+- `fabric/src/main/java/.../storage/LockedSlotsStorage.java`：按世界存档存储玩家锁定槽位（存放在 `<world>/onekey/locked_slots.json`），实现存档级独立隔离。
+- `fabric/src/main/java/.../server/ServerSortingHandler.java`：服务端整理请求处理器。校验容器 `syncId`、执行 250ms 节流、过滤槽位（**底部 9 格快捷栏严格排除**）、调用 `Sorter.permutation` 并通过原始 ItemStack 快照安全回写槽位，调用 `broadcastChanges()` 同步。
+- `fabric/src/client/java/.../client/ClientSortingHandler.java`：客户端回包处理器，通过 Action Bar（`sendOverlayMessage`）展示整理结果。
+- `fabric/src/client/java/.../client/mixin/AbstractContainerScreenAccessor.java`：获取当前鼠标悬停的 `hoveredSlot`，用于判断玩家意图整理的是外部容器还是主背包。
+
+**2. 修改文件与改动说明**
+- `common/src/main/java/.../net/SortRequest.java`：补充 `MODE_AUTO(0)`、`MODE_CONTAINER(1)`、`MODE_PLAYER(2)` 常量定义，未改动原有字段，完全向后兼容。
+- `common/src/test/java/.../sort/SorterTest.java`：新增 `hotbarSlotsSeparationMaintainsHotbarIntegrity` 单测，单测用例增至 14 个。
+- `fabric/src/main/java/.../OneKeyFabric.java`：在 `onInitialize` 中注册网络 Payload 编解码器（`PayloadTypeRegistry`）、服务端网络包接收器（`ServerPlayNetworking`）与世界存档生命周期监听（`ServerLifecycleEvents`）。
+- `fabric/src/client/java/.../client/OneKeyFabricClient.java`：
+  - 注册客户端回包网络接收器。
+  - 通过 `ScreenEvents.AFTER_INIT` 监听容器界面的键盘事件，按 R 触发整理；若正在 `EditBox` 输入框中打字则自动放行。
+  - 保留并更新 `END_CLIENT_TICK`，支持未开 GUI 时行走中按 R 整理主背包。
+  - 增加未装服务端平滑降级检测（`ClientPlayNetworking.canSend`），未装端时提示「服务器未安装 OneKey，无法整理」，不在本地强改背包。
+- `fabric/src/client/resources/onekey.client.mixins.json`：注册 `AbstractContainerScreenAccessor`。
+- `fabric/src/main/resources/assets/onekey/lang/zh_cn.json` & `en_us.json`：补充整理成功、已整齐、服务端未装等提示语。
+- `README.md` & `PLAN.md`：同步 M3 完成状态与技术差异记录。
+
+### 踩坑记录补充
+
+7. **26.3 客户端屏幕引用路径变动**：
+   - `client.screen` 在 26.3 中被迁移，需通过 **`client.gui.screen()`** 访问。
+8. **26.3 Action Bar 消息方法重命名**：
+   - 过去 `player.displayClientMessage(component, true)` 在 26.3 中已被拆分，Action Bar 悬浮消息统一改为 **`player.sendOverlayMessage(component)`**，聊天框消息统一改为 **`player.sendSystemMessage(component)`**。
+
+### 验证记录
+
+| 验证项 | 命令 / 方式 | 结果 |
+|---|---|---|
+| 完整构建 | `bash scripts/with-jdk25.sh clean build` | BUILD SUCCESSFUL |
+| 单测 | `:fabric:test` | 14 tests, 0 failed（新增快捷栏隔离测试） |
+| 服务端加载与生命周期 | `bash scripts/with-jdk25.sh :fabric:runServer` | 打印 `[OneKey] 已加载存档锁定槽位数据：./world/./onekey/locked_slots.json`，服务器启动成功（0.270s） |
+| jar 产物结构 | `jar tf` | 包含全新服务端/客户端类、mixin 配置、资源语言包与 DTO |
+
+### 下一步（M4 热键框架 + 设置界面）
+
+1. 实现 `ActionRegistry`，打通动作与配置项持久化。
+2. 继承 `Screen` 制作原版风格设置界面，放置基础开关（排序规则、半径、黑白名单）。
+3. 接入 `Alt + 左键` 槽位锁定切换与高亮边框渲染，连接至 `LockedSlotsStorage`。
 
 ---
 

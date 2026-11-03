@@ -106,4 +106,30 @@ class SorterTest {
 
         assertArrayEquals(new int[] {0, 1}, Sorter.permutation(slots, Set.of(), new SortRule()));
     }
+
+    @Test
+    void hotbarSlotsSeparationMaintainsHotbarIntegrity() {
+        // 模拟 27 格主背包 + 9 格快捷栏
+        List<StackView> mainInventory = List.of(
+                stack("minecraft:cobblestone", 64, SortCategory.BLOCK),
+                stack("minecraft:apple", 5, SortCategory.FOOD),
+                StackView.EMPTY
+        );
+        List<StackView> hotbar = List.of(
+                stack("minecraft:diamond_sword", 1, SortCategory.TOOL),
+                stack("minecraft:torch", 64, SortCategory.BLOCK)
+        );
+
+        // 仅对主背包调用 Sorter，快捷栏完全隔离不参与
+        int[] perm = Sorter.permutation(mainInventory, Set.of(), new SortRule());
+        List<StackView> sortedMain = Sorter.apply(mainInventory, perm);
+
+        assertEquals("minecraft:cobblestone", sortedMain.get(0).itemId());
+        assertEquals("minecraft:apple", sortedMain.get(1).itemId());
+        assertTrue(sortedMain.get(2).isEmpty());
+
+        // 验证快捷栏保持不变
+        assertEquals("minecraft:diamond_sword", hotbar.get(0).itemId());
+        assertEquals("minecraft:torch", hotbar.get(1).itemId());
+    }
 }

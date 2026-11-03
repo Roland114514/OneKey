@@ -3,5 +3,9 @@
   "key.onekey.quick_stack": "Quick Stack",
   "key.onekey.quick_stash": "Stash to Nearby",
   "key.onekey.settings": "OneKey Settings",
-  "key.category.onekey.keys": "OneKey"
+  "key.category.onekey.keys": "OneKey",
+  "onekey.sort.success": "Sorted %s slots",
+  "onekey.sort.already_sorted": "Already sorted",
+  "onekey.sort.server_not_installed": "Server does not have OneKey installed",
+  "onekey.sort.cannot_sort": "Cannot sort this container"
 }
