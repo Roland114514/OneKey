@@ -12,7 +12,7 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `cf6463f`（2026-11-03，骨架 + 计划表，36 文件） |
+| 最新提交 | 以 `git log --oneline -1` 为准（截至撰写：`e0cab5d` 工作日志；其上为 `cf6463f` 骨架 + 计划表，36 文件） |
 | 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar`（32,436 B） |
 | 单测状态 | ✅ 13/13 通过（排序 6 + 分类 3 + 配置 4） |
 | 运行验证 | ✅ 开发客户端进标题界面；开发服务端 `Done (2.026s)` |
@@ -141,3 +141,4 @@
 3. 提交信息用中文、一句话说清做了什么（如 `M3: 注册 onekey:sort payload 并打通服务端排序`）。
 4. 不要提交 `.jdk/`、`.gradle-home/`、`fabric/run/`、`build/`（已在 `.gitignore`）。
 5. 遇到 API 变更/构建坑，先补到本文件"踩坑记录"，再改代码。
+6. **推送凭据**：本机 HTTPS 没有可用凭据，`origin` 的 pushurl 已设为 `git@github.com:Roland114514/OneKey.git`（SSH key 可用，`ssh -T git@github.com` 返回 `Hi Roland114514!`），fetch 仍走 HTTPS。直接 `git push origin main` 即可；若报 `fatal: could not read Username for 'https://github.com'`，说明 pushurl 被改回 HTTPS，用 `git remote set-url --push origin git@github.com:Roland114514/OneKey.git` 修回。
