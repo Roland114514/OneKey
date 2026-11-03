@@ -6,7 +6,7 @@
 - 纯逻辑内核（排序 / 配置 / 协议）与加载器解耦，Fabric 先行，NeoForge 排期适配
 - 只做操作优化，不改方块、不改数值，可用于原版服务器（服务端未装时自动降级）
 
-> 详细的里程碑、排期与验收标准见 [PLAN.md](PLAN.md)。
+> 详细的里程碑、排期与验收标准见 [PLAN.md](PLAN.md)；每天收工的工作日志（含交接信息与踩坑记录）见 [WORKLOG.md](WORKLOG.md)。
 
 当前产物（2026-11-03 验证）：`bash scripts/with-jdk25.sh clean build` 通过、13 例单测全绿、开发客户端可进入标题界面、开发服务端可正常启动并生成 `config/onekey.json`。
 

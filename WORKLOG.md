@@ -1,0 +1,143 @@
+# OneKey 工作日志
+
+> 交接用日志。**每次收工前必须追加一节**，写清"做了什么 / 验证了什么 / 踩了什么坑 / 下一步从哪开始"，方便另一个协作智能体无缝接续。
+>
+> - 仓库：https://github.com/Roland114514/OneKey （main）
+> - 格式约定：最新日志放在最上面（当天日期 `## YYYY-MM-DD`），越往下越早；只追加，不改写历史记录（发现写错就新开一条更正）。
+
+---
+
+## 交接速览（每次收工更新此表）
+
+| 项目 | 当前值 |
+|---|---|
+| 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
+| 最新提交 | `cf6463f`（2026-11-03，骨架 + 计划表，36 文件） |
+| 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar`（32,436 B） |
+| 单测状态 | ✅ 13/13 通过（排序 6 + 分类 3 + 配置 4） |
+| 运行验证 | ✅ 开发客户端进标题界面；开发服务端 `Done (2.026s)` |
+| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / **M3 一键整理 ← 下一步** |
+| 阻塞项 | 3 个产品决策待用户拍板（见文末"待决策"），不阻塞编码 |
+| 生产可用性 | ❌ 尚未实现任何实际整理行为（热键只写日志），不可发布 |
+
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M3 任务清单。
+
+---
+
+## 2026-11-03（第 1 个工作日）
+
+### 目标
+
+用户诉求（原话）："我要制作一个我的世界的mod，主要内容为最新版本的操作优化mod，例如各类快捷键与一键整理等辅助mod，做一个计划表"。
+
+经选项确认后定下的范围：**双加载器支持（Fabric 优先）+ v1 功能 = 一键整理 + 统一快捷键系统 + 快速堆叠/存入附近箱子 + 鼠标手势增强；交付 = 计划表 + 项目骨架；计划表格式 = Markdown 表格**。
+
+### 时间线
+
+1. **环境勘察**：确认最新稳定版是 **Minecraft 26.3**（26.4-snapshot-7 开发中），26.3 要求 **Java 25**；Fabric 侧 loader `0.20.1`、Loom `1.19-SNAPSHOT`（实际解析 1.19.3）、Fabric API `0.165.2+26.3`、Gradle wrapper 9.8.2；NeoForge `26.3.0.101`。本机原本只有 JDK 17/22、无 Gradle、无官方启动器。
+2. **装 JDK**：下载 Temurin 25（OpenJDK 25.0.5+8）到项目内 `.jdk/temurin-25`，不污染系统。压缩包留在 `.jdk/jdk25.tar.gz`（130 MB，已 gitignore）。
+3. **解决 Gradle 用户目录只读**：本机 `~/.gradle` 不可写，wrapper 报 `Could not create parent directory for lock file .../.gradle/wrapper/dists/...lck`。改为在 `scripts/with-jdk25.sh` 里 `export GRADLE_USER_HOME="$ROOT/.gradle-home"`，并把 `.gradle-home/` 加进 `.gitignore`。
+4. **搭骨架**：`settings.gradle`（`rootProject.name='onekey'`，`include ':fabric'`）、根 `gradle.properties`、`fabric/build.gradle`（Loom + `splitEnvironmentSourceSets()` + 把 `common/src/main/java` 挂进主源集、`common/src/test/java` 挂进测试源集、JUnit BOM 5.11.4）。
+5. **写纯逻辑内核 `common/`**（零 MC 依赖，可单测）：排序置换、分类猜测、配置编解码、协议 DTO。
+6. **写 Fabric 壳体 `fabric/`**，然后**首次编译失败**（详见"踩坑记录"第 1 条），改 API 后通过。
+7. **构建 + 单测 + 双端启动验证**全绿（详见"验证记录"）。
+8. **写文档与图标**：`PLAN.md`（290 行，主交付物）、`README.md`、MIT `LICENSE`、128×128 `icon.png`（Pillow 生成，绿底 + 三个色阶方块 + 白字 "1K"）。
+9. **git**：`git init` → 首个提交 `cf6463f`（36 文件）→ 用户推送到 GitHub；核对 origin/main 与本地一致，设置 upstream 跟踪。
+10. **收工**：本日志 + 提交推送。
+
+### 产出清单
+
+**顶层**
+- `PLAN.md` — 计划表（主交付物）：目标与量化成功标准、技术基线、架构决策、功能表 F1–F10、M0–M8 里程碑、逐里程碑任务分解、三周排期、快捷键与交互、配置项表、测试矩阵、风险表、发布清单、26.3 API 差异对照表
+- `README.md` — 状态表、快捷键、构建方式、目录结构
+- `LICENSE` — MIT（Copyright (c) 2026 easan）
+- `scripts/with-jdk25.sh` — 固定 JDK 25 + 项目内 `GRADLE_USER_HOME` 的构建入口
+- `settings.gradle` / `gradle.properties` / `.gitignore` / Gradle wrapper
+
+**`common/`（纯 Java 内核，无 Minecraft 依赖）**
+
+| 文件 | 作用 |
+|---|---|
+| `sort/StackView.java` | 槽位视图 record：`itemId` / `count` / `category`，含 `EMPTY`、`isEmpty()` |
+| `sort/SortCategory.java` | 分类枚举：TOOL(0) / BLOCK(1) / FOOD(2) / POTION(3) / MISC(4) |
+| `sort/CategoryGuesser.java` | `guess(itemId, tags)`：先看物品标签，再按 id 关键字（sword/planks/apple/potion…），兜底 MISC |
+| `sort/SortRule.java` | 规则开关 `groupByCategory` / `sortByName` / `sortByCountDesc`，`copy()` |
+| `sort/Sorter.java` | `permutation(slots, lockedSlots, rule) -> int[]`（`result[目标槽]=源槽`），空格置后、锁定槽不动、可 `apply()` 生成新列表 |
+| `config/OneKeyConfig.java` | 配置模型 + 默认值：`hotkeys{sort=r, quickStack=v, quickStash=b, settings=k}`、`sort{enabled,groupByCategory,sortByName,sortByCountDesc,cooldownMs=250}`、`quickStack{radius=6, stashMode, whitelist, blacklist}`、`compat{enabled=false, clickDelayMs=60}`；`normalized()`、`toRule()` |
+| `config/ConfigCodec.java` | Gson（pretty printing）编解码 + `load/save(Path)`，自动建父目录 |
+| `action/ActionId.java` | 动作 id 常量：`onekey.sort` / `onekey.quick_stack` / `onekey.quick_stash` / `onekey.settings` |
+| `net/ProtocolVersion.java` | `CURRENT = 1` |
+| `net/SortRequest.java` `net/SortResult.java` `net/QuickStackRequest.java` `net/QuickStackResult.java` | 协议 DTO（record）：`syncId`、`mode`、`radius`、`stash`、`moved`、`success` |
+
+**`fabric/`（Fabric 26.3 壳体）**
+- `src/main/java/.../OneKeyFabric.java` — 模组入口：加载 `config/onekey.json`，打印 `[OneKey] 已初始化（Minecraft 26.3 / Fabric）`
+- `src/client/java/.../client/OneKeyFabricClient.java` — 注册 4 个热键（R/V/B/K，分类 `key.category.onekey.keys`），`ClientTickEvents.END_CLIENT_TICK` 里 `consumeClick` 目前**只打日志**，M3/M4/M5 才接真实动作
+- 资源：`fabric.mod.json`、`onekey.mixins.json`、`onekey.client.mixins.json`（mixin 列表暂空）、`zh_cn.json` / `en_us.json`、`icon.png`
+- `fabric/build.gradle` — Loom 1.19.3、`version = project.mod_version`、`archivesName = "onekey-fabric"`、LICENSE 以 `LICENSE_onekey` 名入 jar
+
+**测试（`common/src/test/java`）**
+- `SorterTest`（6）：分类排序 / 相等堆叠保持相对序 / 置换恒为双射 / 全锁定=恒等 / 空格置后 / 锁定槽不被搬动
+- `CategoryGuesserTest`（3）：标签优先 / 常见物品 / 未知兜底 MISC
+- `ConfigCodecTest`（4）：JSON 往返 / 缺字段用默认值 / null 段归一化 / 存盘后读回
+
+### 验证记录（都实际跑过，非纸面）
+
+| 验证项 | 命令 / 方式 | 结果 |
+|---|---|---|
+| 完整构建 | `bash scripts/with-jdk25.sh clean build` | BUILD SUCCESSFUL |
+| 单测 | `:fabric:test` | 13 tests, 0 failed |
+| jar 内容 | `unzip -l fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` | 含 `fabric.mod.json`（version 已展开 `0.1.0-alpha`）、两个 mixin json、`assets/onekey/icon.png`、中英语言文件、`LICENSE_onekey` |
+| 服务端启动 | `bash scripts/with-jdk25.sh :fabric:runServer` | `- onekey 0.1.0-alpha`、`[OneKey] 配置已加载：./config/onekey.json`、`[OneKey] 已初始化（Minecraft 26.3 / Fabric）`、`Done (2.026s)!` |
+| 客户端启动 | `bash scripts/with-jdk25.sh :fabric:runClient` | 进入标题界面；`[OneKey] 客户端已初始化，注册 4 个热键（默认 R / V / B / K）`；无异常、无 mixin 报错 |
+| 配置生成 | 读 `fabric/run/config/onekey.json` | schema=1；hotkeys r/v/b/k；sort 全 true + cooldownMs=250；quickStack radius=6、stashMode=false、黑白名单空；compat false/60 |
+| 远端一致性 | `git fetch` + GitHub API | origin/main = 本地 HEAD = `cf6463f`，双方各 36 文件，`gradlew` 保留 100755 |
+
+> 注意：测试服务端目录是 **`fabric/run/`**（不是仓库根的 `run/`）；首次启动需 `fabric/run/eula.txt` 内写 `eula=true`，否则直接退出并提示 `You need to agree to the EULA in order to run the server`。
+
+### 踩坑记录（重要，别重复踩）
+
+1. **26.3 按键 API 全改名**（首次编译 8 个 error 的根因）：
+   - `InputConstants.Type.KEYSYM` → **`InputConstants.Type.KEYBOARD`**（26.3 只剩 `KEYBOARD`/`MOUSE`）
+   - `KeyMapping` 构造第 4 参不再是 `String`，而是 **`KeyMapping.Category`** record；必须先 `KeyMapping.Category.register(Identifier.fromNamespaceAndPath(modid, "keys"))`，重复注册抛 `IllegalArgumentException: Category '%s' is already registered.`
+   - 不再需要 `org.lwjgl.glfw.GLFW`，直接用 `InputConstants.KEY_R / KEY_V / KEY_B / KEY_K`
+   - Fabric 的 `KeyBindingHelper` → **`net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper.registerKeyMapping(...)`**（模块 jar 名 `fabric-key-mapping-api-v1`）
+   - 语言键由 `category.onekey` 改为 **`key.category.onekey.keys`**（`Category.label()` 用 `id.toLanguageKey("key.category")`）
+2. **Loom 1.19.3 没有 `modImplementation`**（报 `Could not find method modImplementation()`），mod 依赖统一用 `implementation`。
+3. **`base.archivesName` 会吃掉版本号**，jar 变成 `onekey-fabric.jar`；必须在 `fabric/build.gradle` 显式 `version = project.mod_version`。
+4. **`~/.gradle` 只读** → 一律用 `scripts/with-jdk25.sh`（内部设置 `GRADLE_USER_HOME=$ROOT/.gradle-home`），不要直接调 `./gradlew`。
+5. **调试类路径**的手段（下次缺包可用）：`./gradlew --init-script /tmp/printcp.gradle :fabric:printClientCp`，任务里遍历 `sourceSets.client.compileClasspath` 打印。也可用 `.jdk/temurin-25/.../bin/javap -cp <minecraft-clientonly-deobf jar> <类>` 反编译确认 26.3 真实签名。
+6. **Yarn 映射不可用**（只到 1.21.11），26.x 走 Mojang 官方映射，`build.gradle` 不要写 `mappings`。
+
+### 决策记录
+
+- **双加载器但 Fabric 优先**：common 写成纯 Java 内核，Fabric 与未来的 NeoForge 只做薄壳适配 → NeoForge 排到 M7，不阻塞 v1。
+- **排序在服务端执行**（客户端只发请求、服务端校验并回包）：避免客户端单方面改 `Inventory` 造成不同步/刷物品；代价是必须有网络 payload（M3 补）。
+- **零第三方运行时依赖**：Gson 仅用于配置读写（Minecraft 自带），不引入 Cloth Config 等，保证 jar 小、无版本冲突。
+- **物品分类放 common**：靠标签 + id 关键字猜测，简单可测；后续可加"用户自定义分类"。
+- **热键统一走 `ActionId` + `KeyMapping` 抽象**，为 M4 的可改键与设置界面留口。
+- **配置文件 `config/onekey.json`**（不是 `.toml`）：Gson 直接映射模型，省一个依赖。
+
+### 待决策（需要用户拍板，定了就能写进代码）
+
+1. 默认整理键 `R` 与 Inventory Profiles Next（IPN）冲突时：改默认 `G`，还是首次启动弹窗让玩家自己选？
+2. 快捷栏（9 格）是否参与整理？（当前设计：**不参与**）
+3. 槽位锁定按「容器类型全局」记录，还是「每个存档单独」记录？
+
+### 下一步（M3 一键整理，按 PLAN.md 第 5 节）
+
+1. 注册 `onekey:sort` 的 `CustomPayload` 类型（`PayloadTypeRegistry.playC2S()`）。
+2. 客户端：热键触发 → 读当前容器（`AbstractContainerMenu`）槽位 → 组 `SortRequest(syncId, mode)` → 发送。
+3. 服务端：`ServerPlayNetworking.registerGlobalReceiver` 校验（菜单 `syncId` 是否匹配、距离/权限、容器是否允许整理）→ 调 `Sorter.permutation(...)` → 回写槽位 → `broadcastChanges()`。
+4. 回包 `SortResult`（成功/移动数量），客户端给 action bar 提示。
+5. 降级：服务端未安装 OneKey 时，客户端提示"服务器未安装，无法整理"，**不要**本地强行改。
+6. 测试：单人 36 格容器排序、锁定槽位、空格后置、连续快速触发（`cooldownMs=250` 节流）、服务器未装模组的情况、断开重连后配置不丢。
+
+---
+
+## 协作约定（双方都遵守）
+
+1. **每次动手前**先 `git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动；有冲突先沟通，不要强推。
+2. **每次收工前**：更新本文件（新增当天小节 + 刷新"交接速览"表）→ `git add -A && git commit` → 推送 `origin main`。
+3. 提交信息用中文、一句话说清做了什么（如 `M3: 注册 onekey:sort payload 并打通服务端排序`）。
+4. 不要提交 `.jdk/`、`.gradle-home/`、`fabric/run/`、`build/`（已在 `.gitignore`）。
+5. 遇到 API 变更/构建坑，先补到本文件"踩坑记录"，再改代码。
