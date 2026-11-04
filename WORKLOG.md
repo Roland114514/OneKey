@@ -12,13 +12,13 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | 见下方（本次：v1.0.2 GUI 双开关 + 准星交互距离收紧 + 异常回滚加固） |
+| 最新提交 | `d51c04c` fix: 修复双箱界面绑定失效、异常路径丢物品与准星开关废键三个 P1（v1.0.2 重建） |
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.2.jar`（112,773 B ≈110KB）与 `neoforge/build/libs/onekey-neoforge-1.0.2.jar`（111,401 B ≈109KB） |
 | 单测状态 | ✅ 双端各 40 例（Fabric 40 + NeoForge 40 = **80 例全绿**） |
 | 版本状态 | ✅ `mod_version=1.0.2`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
 | 协议版本 | ⚠️ `ProtocolVersion.CURRENT=2`（`QuickStackRequest` 新增目标坐标字段）→ 多人游戏必须双端同版本 |
 | 当前任务聚焦 | 🎯 v1.0.2 提交与推送、GitHub Release 物料就绪 |
-| 发布状态 | ✅ v1.0.2 已发布：tag `v1.0.2` → `4c34f78`，Release 含 4 个产物 https://github.com/Roland114514/OneKey/releases/tag/v1.0.2 |
+| 发布状态 | ✅ v1.0.2 已发布（对抗审查后重建）：tag `v1.0.2` → `d51c04c`，Release 434335907 已替换为 4 个新产物 https://github.com/Roland114514/OneKey/releases/tag/v1.0.2 |
 | 运行实测 | ✅ R 键整理、K 键原生 GUI、Alt+左键槽位锁定在 Minecraft 26.3 干净无崩溃实测通过 |
 | 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入重构与红队严苛审查加固全面完成 ✅** |
 | 阻塞项 | 无 |
