@@ -12,18 +12,46 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | 见下方（本次：v1.0.1 发布前 P0 崩溃修复与文档/物料同步） |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.1.jar`（103,492 B ≈101KB）与 `neoforge/build/libs/onekey-neoforge-1.0.1.jar`（102,007 B ≈100KB） |
-| 单测状态 | ✅ 双端各 39 例（Fabric 39 + NeoForge 39 = **78 例全绿**，新增 6 项防污染与准星锁定单测） |
-| 版本状态 | ✅ `mod_version=1.0.1`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
-| 发布状态 | ✅ tag `v1.0.1` → `f98796e` 已推送；GitHub Release 已创建并上传 4 个产物：https://github.com/Roland114514/OneKey/releases/tag/v1.0.1 |
+| 最新提交 | 见下方（本次：v1.0.2 GUI 双开关 + 准星交互距离收紧 + 异常回滚加固） |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.2.jar`（111,003 B ≈108KB）与 `neoforge/build/libs/onekey-neoforge-1.0.2.jar`（109,634 B ≈107KB） |
+| 单测状态 | ✅ 双端各 40 例（Fabric 40 + NeoForge 40 = **80 例全绿**） |
+| 版本状态 | ✅ `mod_version=1.0.2`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
+| 协议版本 | ⚠️ `ProtocolVersion.CURRENT=2`（`QuickStackRequest` 新增目标坐标字段）→ 多人游戏必须双端同版本 |
+| 当前任务聚焦 | 🎯 v1.0.2 提交与推送、GitHub Release 物料就绪 |
+| 发布状态 | ✅ v1.0.1 已发布（tag + Release）；🕓 v1.0.2 待建 tag 与 Release |
 | 运行实测 | ✅ R 键整理、K 键原生 GUI、Alt+左键槽位锁定在 Minecraft 26.3 干净无崩溃实测通过 |
 | 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入重构与红队严苛审查加固全面完成 ✅** |
-| 当前任务聚焦 | 🎯 **准备 v1.0.2 双端发布与打包（准星看哪存哪 + 告示牌穿透 + 盲按零污染）** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，具备高质量发版与交付水准 |
 
 **接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，随后阅读第 14 次会话的 B 键存入重构与红队加固细节。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 15 次会话：v1.0.2 GUI 双开关、准星距离收紧与严苛自审）
+
+### 目标
+用户要求：① 检查队友完成的「B 键准星锁定 + 智能分类防污染」；② 补上 GUI 双开关；③ 做严苛自我审查找恶性 bug；④ 版本升 v1.0.2 并推送 GitHub。
+
+### 本次完成
+1. **GUI 双开关（需求④）**：
+   - `common/src/main/java/me/easan/onekey/common/config/OneKeyConfig.java` 的 `QuickStack` 新增 `crosshairPriority = true`、`smartMatching = true` 两个字段；
+   - 双端设置界面（`fabric/.../client/gui/OneKeySettingsScreen.java`、`neoforge/.../client/gui/OneKeySettingsScreen.java`）新增一行两个 `CycleButton.onOff`，并把「配置原版按键绑定」按钮下移到 y=162、两行提示下移到 186/200；
+   - 双端语言文件（4 个 lang json）新增 `onekey.settings.quickStack.crosshairPriority` / `.smartMatching` 文案；
+   - 客户端 `triggerQuickStack`：`crosshairPriority=false` 时不再射线检测（`Optional.empty()`）；服务端 `allowDumpAnywhere = stashMode && !smartMatching`，与 `isTargeted` 取或，恢复旧版「存入全部」行为。
+2. **自我审查发现并修复的问题**：
+   - **准星视距越权（P0 级作弊面）**：客户端原用「扫描半径 6 格」当射线长度、服务端用 `radius + 2` 校验，等价于允许「看得见但够不着」的容器隔空存入。已改为客户端 `player.blockInteractionRange()`、服务端 `player.isWithinBlockInteractionRange(pos, 1.0)`。
+   - **异常半写入导致幽灵物品（P1）**：`ServerQuickStackHandler.handle` 的 catch 只回执失败，未回滚界面；已补 `sendAllDataToRemote()`（NeoForge 侧用 `context.enqueueWork` 包住主线程执行）。
+   - **末影箱界面不绑定（P1 体验缺口）**：`getOpenMenuContainer` 能拿到 `PlayerEnderChestContainer`，但它不在世界方块扫描范围内，导致「开着末影箱按 B 无效」。已显式加入 `targetContainers`（`isTargeted=true`，仅当 stash 时允许倒空槽）。
+   - **协议版本未升（P1 兼容）**：codec 已从 3 字段变 4 字段，但 `ProtocolVersion.CURRENT` 仍是 1；已升 2（NeoForge `versioned("2")` 同步），并在 CHANGELOG/README 明确「双端必须同版本」。
+   - 新增 2 项配置单测（双开关往返 + 缺省为 true）。
+3. **验证**：`clean build` 绿；`:fabric:test :neoforge:test --rerun-tasks` 各 40 例、合计 **80 例全绿**；产物 111,003 B / 109,634 B，sha256 `93553f51…87d1` / `cdd94db2…607e`，jar 内版本均为 `1.0.2`。
+4. **文档**：CHANGELOG 新增 `## [1.0.2]` 小节（3 新增 + 3 修复 + 已知限制 + 兼容性）；README 快捷键表/设置项/已知限制/路线图更新；PLAN 发布清单改 40 例与 1.0.2 产物；`docs/release/GITHUB_RELEASE.md` 重写为 v1.0.2（新哈希/体积），`PUBLISHING_GUIDE.md` 同步；`docs/release/` 下 1.0.1 jar 已替换为 1.0.2 构建产物。
+
+### 待跟进（不阻塞本次发版）
+- `QuickStackEngine`（common 纯内核）仍只被单测引用，两端生产 handler 是等价镜像实现，单测未覆盖真实写回路径——建议 v1.1 合流；
+- 快速堆叠对**外部容器**的锁定槽位尚未豁免（整理已豁免），需配合 v1.1「按坐标锁定」一起改；
+- 「同类标签」匹配未实现（目前按 `ItemStack.isSameItemSameComponents` 严格同物品判定），若用户需要木种/羊毛色归为一类需另加规则。
 
 ---
 

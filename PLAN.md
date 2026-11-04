@@ -246,14 +246,14 @@
 
 ## 11. 发布清单（M8）
 
-- [x] `./gradlew build` 绿；`./gradlew test` 36 例绿（Fabric & NeoForge 双端各 36 例，合计 72 例全绿）
+- [x] `./gradlew build` 绿；`./gradlew test` 40 例绿（Fabric & NeoForge 双端各 40 例，合计 80 例全绿）
 - [x] `fabric.mod.json` 与 `neoforge.mods.toml` 依赖版本与实测一致（`minecraft ~26.3`、`java >=25`）
 - [x] jar 内含 `LICENSE_onekey`、图标、中英文语言文件、Mixin 配置
 - [x] Modrinth 发布物料：`docs/release/MODRINTH.md` 包含标题/简介/特性/双端版本表
 - [x] CurseForge 发布物料：`docs/release/CURSEFORGE.md` 同步就绪
 - [x] GitHub Release：`docs/release/GITHUB_RELEASE.md`，带 SHA-256 校验和与双端 jar
 - [x] CHANGELOG：`CHANGELOG.md` 完整记录 F1–F6 + F10 列表与注意事项
-- [x] 产物归档：`fabric/build/libs/onekey-fabric-1.0.1.jar` (100 KB) 与 `neoforge/build/libs/onekey-neoforge-1.0.1.jar` (97 KB)
+- [x] 产物归档：`fabric/build/libs/onekey-fabric-1.0.2.jar` (109 KB) 与 `neoforge/build/libs/onekey-neoforge-1.0.2.jar` (108 KB)
 
 ---
 

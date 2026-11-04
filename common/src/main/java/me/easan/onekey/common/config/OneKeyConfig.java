@@ -61,6 +61,10 @@ public final class OneKeyConfig {
         public List<String> itemWhitelist = new ArrayList<>();
         /** 排除的物品黑名单（物品 id，优先于白名单）。 */
         public List<String> itemBlacklist = new ArrayList<>();
+        /** true = 准星瞄准的容器优先成为本次唯一目标（看哪存哪）；false = 忽略准星，仅按距离扫描。 */
+        public boolean crosshairPriority = true;
+        /** true = 智能分类防污染（空槽只向已有同类物品的容器或焦点容器开放）；false = 恢复旧版「存入全部」。 */
+        public boolean smartMatching = true;
     }
 
     /** 纯客户端点击模拟（用于公共服务器）的开关，默认关闭。 */

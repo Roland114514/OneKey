@@ -5,7 +5,11 @@ package me.easan.onekey.common.net;
  */
 public final class ProtocolVersion {
 
-    public static final int CURRENT = 1;
+    /**
+     * 1.0.2 起 {@link QuickStackRequest} 增加 {@code Optional<TargetPos> targetPos} 字段，
+     * 旧版客户端/服务端无法解码新包，必须双端同版本，故升到 2。
+     */
+    public static final int CURRENT = 2;
 
     private ProtocolVersion() {
     }

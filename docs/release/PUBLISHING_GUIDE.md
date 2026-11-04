@@ -1,20 +1,20 @@
 # OneKey 模组全平台发布操作指南 (Publishing Guide)
 
-本指南汇总了将 **OneKey v1.0.1** 发布至 **GitHub Releases**、**Modrinth** 与 **CurseForge** 的现成物料与填报步骤。
+本指南汇总了将 **OneKey v1.0.2** 发布至 **GitHub Releases**、**Modrinth** 与 **CurseForge** 的现成物料与填报步骤。
 
 ---
 
-## 一、GitHub Releases（v1.0.1 待创建 Release tag）
+## 一、GitHub Releases（v1.0.2 待创建 Release tag）
 
-- **发布链接**：[https://github.com/Roland114514/OneKey/releases/tag/v1.0.1](https://github.com/Roland114514/OneKey/releases/tag/v1.0.1)
+- **发布链接**：[https://github.com/Roland114514/OneKey/releases/tag/v1.0.2](https://github.com/Roland114514/OneKey/releases/tag/v1.0.2)
 - **已挂载产物**：
-  - `onekey-fabric-1.0.1.jar` (100 KB)
-  - `onekey-fabric-1.0.1-sources.jar`
-  - `onekey-neoforge-1.0.1.jar` (100 KB)
-  - `onekey-neoforge-1.0.1-sources.jar`
+  - `onekey-fabric-1.0.2.jar` (108 KB)
+  - `onekey-fabric-1.0.2-sources.jar`
+  - `onekey-neoforge-1.0.2.jar` (107 KB)
+  - `onekey-neoforge-1.0.2-sources.jar`
 - **校验和**：
-  - Fabric: `5db68fa18af2afdac1afc72a308dc97c8e4be2de92f5fef6776d1e1a96e5b7f4`
-  - NeoForge: `a29766700d7dfadae988b6e203a14f79b9b594a7fb63d1b82ee295fd17ac7e81`
+  - Fabric: `93553f5152f278d7a4d5c9f93674af4dd4e5ee2bf0d6545fb31db840837f87d1`
+  - NeoForge: `cdd94db240882f694ea0e4c5acdbafa9023394d4c6e949d2b415b217d659607e`
 
 ---
 
@@ -38,8 +38,8 @@
 4. **提交审核与上传文件**：
    - 点击 **Submit** 完成项目创建（Modrinth 审核极快）；
    - 在项目页的 **Versions** 标签点击 **Create version**：
-     - 上传 [`docs/release/onekey-fabric-1.0.1.jar`](onekey-fabric-1.0.1.jar)，勾选 `Fabric`、MC 版本 `26.3`、Release Channel `Release`；
-     - 上传 [`docs/release/onekey-neoforge-1.0.1.jar`](onekey-neoforge-1.0.1.jar)，勾选 `NeoForge`、MC 版本 `26.3`、Release Channel `Release`。
+     - 上传 [`docs/release/onekey-fabric-1.0.2.jar`](onekey-fabric-1.0.2.jar)，勾选 `Fabric`、MC 版本 `26.3`、Release Channel `Release`；
+     - 上传 [`docs/release/onekey-neoforge-1.0.2.jar`](onekey-neoforge-1.0.2.jar)，勾选 `NeoForge`、MC 版本 `26.3`、Release Channel `Release`。
 
 ---
 
@@ -59,5 +59,5 @@ CurseForge 同样支持直接提交审核：
    - **Issues URL**：`https://github.com/Roland114514/OneKey/issues`
 3. **文件上传 (Files)**：
    - 审核通过后在 **Files** 页面上传：
-     - `onekey-fabric-1.0.1.jar`（勾选 Java 25、Minecraft 26.3、Fabric）
-     - `onekey-neoforge-1.0.1.jar`（勾选 Java 25、Minecraft 26.3、NeoForge）
+     - `onekey-fabric-1.0.2.jar`（勾选 Java 25、Minecraft 26.3、Fabric）
+     - `onekey-neoforge-1.0.2.jar`（勾选 Java 25、Minecraft 26.3、NeoForge）

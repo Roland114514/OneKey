@@ -23,6 +23,8 @@
   "onekey.settings.quickStack.stashMode": "存入模式",
   "onekey.settings.stashMode.matching": "补入已有",
   "onekey.settings.stashMode.all": "存入全部",
+  "onekey.settings.quickStack.crosshairPriority": "准星瞄准优先",
+  "onekey.settings.quickStack.smartMatching": "智能分类防污染",
   "onekey.settings.compat.enabled": "兼容模式（v1.1 生效）",
   "onekey.settings.openKeybinds": "配置原版按键绑定...",
   "onekey.settings.tip.locking": "提示：Alt + 鼠标左键点击槽位可锁定/解锁，锁定槽位不参与整理",

@@ -572,7 +572,7 @@ public final class OneKeyNeoForgeClient {
         return true;
     }
 
-    private static Optional<TargetPos> getCrosshairTarget(Minecraft client, double reachDistance) {
+    private static Optional<TargetPos> getCrosshairTarget(Minecraft client) {
         if (client.player == null) {
             return Optional.empty();
         }
@@ -581,7 +581,9 @@ public final class OneKeyNeoForgeClient {
             BlockPos pos = blockHit.getBlockPos();
             return Optional.of(TargetPos.of(pos.getX(), pos.getY(), pos.getZ()));
         }
-        double pickRange = Math.clamp(reachDistance, 4.5, 12.0);
+        // hitResult 未命中时，按「原版方块交互距离」补一次射线检测（生存 4.5 / 创造 5 格），
+        // 绝不使用扫描半径当视距，避免隔着几格凭空锁定远处箱子
+        double pickRange = client.player.blockInteractionRange();
         HitResult extendedHit = client.player.pick(pickRange, 1.0F, false);
         if (extendedHit.getType() == HitResult.Type.BLOCK && extendedHit instanceof BlockHitResult blockHit) {
             BlockPos pos = blockHit.getBlockPos();
@@ -600,7 +602,10 @@ public final class OneKeyNeoForgeClient {
         }
         int syncId = client.player.containerMenu != null ? client.player.containerMenu.containerId : -1;
         int radius = OneKeyNeoForge.config().quickStack.radius;
-        Optional<TargetPos> targetPos = getCrosshairTarget(client, radius);
+        // 「准星瞄准优先」关闭时不再做射线检测，退回纯范围扫描（看哪存哪失效）
+        Optional<TargetPos> targetPos = OneKeyNeoForge.config().quickStack.crosshairPriority
+                ? getCrosshairTarget(client)
+                : Optional.empty();
         ClientPacketDistributor.sendToServer(new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos)));
     }
 }

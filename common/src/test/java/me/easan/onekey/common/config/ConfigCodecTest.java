@@ -135,6 +135,22 @@ class ConfigCodecTest {
     }
 
     @Test
+    void quickStackGuiTogglesRoundTripAndDefaultToTrue() {
+        // 1.0.2 新增的两个 GUI 开关：默认必须为 true（保持准星锁定 + 智能防污染）
+        OneKeyConfig defaults = ConfigCodec.fromJson("{}");
+        assertTrue(defaults.quickStack.crosshairPriority);
+        assertTrue(defaults.quickStack.smartMatching);
+
+        OneKeyConfig config = new OneKeyConfig();
+        config.quickStack.crosshairPriority = false;
+        config.quickStack.smartMatching = false;
+        OneKeyConfig loaded = ConfigCodec.fromJson(ConfigCodec.toJson(config));
+
+        assertTrue(!loaded.quickStack.crosshairPriority);
+        assertTrue(!loaded.quickStack.smartMatching);
+    }
+
+    @Test
     void backupIfCorruptedMovesBrokenFileAndKeepsGoodOne(@TempDir Path tempDir) throws IOException {
         Path broken = tempDir.resolve("onekey.json");
         Files.writeString(broken, "{\"quickStack\":{\"radius\":");

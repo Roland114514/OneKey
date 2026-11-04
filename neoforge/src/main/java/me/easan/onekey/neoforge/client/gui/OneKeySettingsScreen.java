@@ -72,12 +72,22 @@ public final class OneKeySettingsScreen extends Screen {
                 .create(rightX, 112, btnWidth, btnHeight, Component.translatable("onekey.settings.compat.enabled"),
                         (button, value) -> config.compat.enabled = value));
 
-        // 第五行：原版按键绑定设置入口
+
+        // 第五行：准星瞄准优先 / 智能分类防污染
+        this.addRenderableWidget(CycleButton.onOffBuilder(config.quickStack.crosshairPriority)
+                .create(leftX, 136, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.crosshairPriority"),
+                        (button, value) -> config.quickStack.crosshairPriority = value));
+
+        this.addRenderableWidget(CycleButton.onOffBuilder(config.quickStack.smartMatching)
+                .create(rightX, 136, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.smartMatching"),
+                        (button, value) -> config.quickStack.smartMatching = value));
+
+        // 第六行：原版按键绑定设置入口
         this.addRenderableWidget(Button.builder(Component.translatable("onekey.settings.openKeybinds"), btn -> {
             if (this.minecraft != null) {
                 this.minecraft.setScreenAndShow(new KeyBindsScreen(this, this.minecraft.options));
             }
-        }).bounds(this.width / 2 - 100, 142, 200, btnHeight).build());
+        }).bounds(this.width / 2 - 100, 162, 200, btnHeight).build());
 
         // 底部：完成按钮
         this.addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, btn -> onClose())
@@ -91,8 +101,8 @@ public final class OneKeySettingsScreen extends Screen {
         extractor.centeredText(this.font, this.title, this.width / 2, 16, 0xFFFFFFFF);
 
         // 提示信息
-        extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.locking"), this.width / 2, 172, 0xFFFFB300);
-        extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.hotbar"), this.width / 2, 188, 0xFFAAAAAA);
+        extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.locking"), this.width / 2, 186, 0xFFFFB300);
+        extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.hotbar"), this.width / 2, 200, 0xFFAAAAAA);
     }
 
     @Override

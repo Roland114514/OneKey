@@ -26,6 +26,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.PlayerEnderChestContainer;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
@@ -72,8 +73,17 @@ public final class ServerQuickStackHandler {
         try {
             process(request, context);
         } catch (Throwable throwable) {
-            OneKeyFabric.LOGGER.error("[OneKey] 快速堆叠请求处理失败，已丢包", throwable);
-            context.responseSender().sendPacket(new QuickStackResultPayload(new QuickStackResult(0)));
+            OneKeyFabric.LOGGER.error("[OneKey] 快速堆叠请求处理失败，已回滚界面状态", throwable);
+            // 异常可能发生在「部分物品已写入」之后：立刻把权威界面状态推回客户端，避免幽灵物品/丢失
+            try {
+                ServerPlayer player = context.player();
+                if (player != null && player.containerMenu != null) {
+                    player.containerMenu.sendAllDataToRemote();
+                }
+                context.responseSender().sendPacket(new QuickStackResultPayload(new QuickStackResult(0)));
+            } catch (Throwable ignored) {
+                // 回执失败也不再抛出，避免打断网络线程
+            }
         }
     }
 
@@ -113,10 +123,10 @@ public final class ServerQuickStackHandler {
         BlockPos validTargetPos = null;
         if (request.targetPos().isPresent()) {
             TargetPos candidate = request.targetPos().get();
-            double maxAllowedDistSq = Math.pow(radius + 2.0, 2);
-            double distSq = player.getEyePosition().distanceToSqr(candidate.x() + 0.5, candidate.y() + 0.5, candidate.z() + 0.5);
-            if (distSq <= maxAllowedDistSq) {
-                validTargetPos = new BlockPos(candidate.x(), candidate.y(), candidate.z());
+            // 反作弊：准星目标必须落在「原版方块交互距离」内，禁止客户端伪造远处坐标实现隔空存入
+            BlockPos candidatePos = new BlockPos(candidate.x(), candidate.y(), candidate.z());
+            if (player.isWithinBlockInteractionRange(candidatePos, 1.0)) {
+                validTargetPos = candidatePos;
             }
         }
 
@@ -125,6 +135,15 @@ public final class ServerQuickStackHandler {
 
         // 1. 高性能区块检索附近纯存储容器并匹配准星目标（含告示牌穿透与大箱子归一化）
         List<ScannedContainer> targetContainers = findNearbyContainers(player, radius, config, validTargetPos, openMenuContainer, stashMode);
+
+        // 末影箱界面：容器是玩家个人存储，不在方块扫描范围内，显式绑定为当前 GUI 目标（需求③界面强绑定）
+        if (openMenuContainer instanceof PlayerEnderChestContainer enderChest
+                && targetContainers.stream().noneMatch(sc -> sc.container() == enderChest)) {
+            boolean allowDumpAnywhereForMenu = stashMode && !config.quickStack.smartMatching;
+            targetContainers.add(new ScannedContainer(enderChest, Set.of(), 0.0, true,
+                    allowDumpAnywhereForMenu || stashMode));
+        }
+
         if (targetContainers.isEmpty()) {
             context.responseSender().sendPacket(new QuickStackResultPayload(new QuickStackResult(0)));
             return;
@@ -321,6 +340,8 @@ public final class ServerQuickStackHandler {
         Set<BlockPos> visited = new HashSet<>();
         List<ScannedContainer> scanned = new ArrayList<>();
         Set<BlockPos> targetCandidates = resolveTargetPositions(level, clientTargetPos);
+        // 「智能分类防污染」关闭时，退回旧版行为：B 键可以把新物品倒进任意扫描到的容器
+        boolean allowDumpAnywhere = stashMode && !config.quickStack.smartMatching;
 
         for (int cx = minChunkX; cx <= maxChunkX; cx++) {
             for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
@@ -392,7 +413,7 @@ public final class ServerQuickStackHandler {
                         if (chestContainer != null && chestContainer.stillValid(player)) {
                             boolean isTargeted = (openMenuContainer != null && (chestContainer == openMenuContainer || chestContainer.equals(openMenuContainer)))
                                     || targetCandidates.stream().anyMatch(chestPositions::contains);
-                            boolean allowDumpNew = stashMode && isTargeted;
+                            boolean allowDumpNew = allowDumpAnywhere || (stashMode && isTargeted);
                             scanned.add(new ScannedContainer(chestContainer, chestPositions, distSq, isTargeted, allowDumpNew));
                         }
                     } else if (be instanceof BarrelBlockEntity barrel) {
@@ -400,7 +421,7 @@ public final class ServerQuickStackHandler {
                         if (barrel.stillValid(player) && barrel.canOpen(player)) {
                             boolean isTargeted = (openMenuContainer != null && (barrel == openMenuContainer || barrel.equals(openMenuContainer)))
                                     || targetCandidates.contains(pos);
-                            boolean allowDumpNew = stashMode && isTargeted;
+                            boolean allowDumpNew = allowDumpAnywhere || (stashMode && isTargeted);
                             scanned.add(new ScannedContainer(barrel, Set.of(pos.immutable()), distSq, isTargeted, allowDumpNew));
                         }
                     } else if (be instanceof ShulkerBoxBlockEntity shulker) {
@@ -408,7 +429,7 @@ public final class ServerQuickStackHandler {
                         if (shulker.stillValid(player) && shulker.canOpen(player)) {
                             boolean isTargeted = (openMenuContainer != null && (shulker == openMenuContainer || shulker.equals(openMenuContainer)))
                                     || targetCandidates.contains(pos);
-                            boolean allowDumpNew = stashMode && isTargeted;
+                            boolean allowDumpNew = allowDumpAnywhere || (stashMode && isTargeted);
                             scanned.add(new ScannedContainer(shulker, Set.of(pos.immutable()), distSq, isTargeted, allowDumpNew));
                         }
                     }
