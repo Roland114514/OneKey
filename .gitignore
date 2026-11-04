@@ -2,6 +2,7 @@
 .gradle/
 build/
 **/build/
+*.jar
 !gradle/wrapper/gradle-wrapper.jar
 
 # 本地 JDK 25 与 Gradle 用户目录（体积大，不入库）
