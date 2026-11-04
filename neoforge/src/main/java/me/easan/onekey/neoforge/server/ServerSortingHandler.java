@@ -202,7 +202,21 @@ public final class ServerSortingHandler {
     }
 
     public static String menuTypeKey(AbstractContainerMenu menu) {
-        Identifier menuType = BuiltInRegistries.MENU.getKey(menu.getType());
-        return menuType != null ? menuType.toString() : "generic_container";
+        if (menu == null) {
+            return "generic_container";
+        }
+        if (menu instanceof net.minecraft.world.inventory.InventoryMenu) {
+            return "player_inventory";
+        }
+        try {
+            MenuType<?> type = menu.getType();
+            if (type == null) {
+                return "generic_container";
+            }
+            Identifier menuType = BuiltInRegistries.MENU.getKey(type);
+            return menuType != null ? menuType.toString() : "generic_container";
+        } catch (Throwable ignored) {
+            return "generic_container";
+        }
     }
 }

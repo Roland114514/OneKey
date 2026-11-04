@@ -91,29 +91,37 @@ public final class OneKeyNeoForge {
     private void registerPayloadHandlers(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(MOD_ID).versioned("1");
 
-        // 一键整理通道
+        // 一键整理通道 (C2S)
         registrar.playToServer(SortRequestPayload.TYPE, SortRequestPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> ServerSortingHandler.handle(payload.request(), ctx)));
-        registrar.playToClient(SortResultPayload.TYPE, SortResultPayload.CODEC,
-                (payload, ctx) -> ctx.enqueueWork(() -> ClientSortingHandler.handle(payload.result(), ctx)));
 
-        // 快速堆叠与存入通道
+        // 快速堆叠与存入通道 (C2S)
         registrar.playToServer(QuickStackRequestPayload.TYPE, QuickStackRequestPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> ServerQuickStackHandler.handle(payload.request(), ctx)));
-        registrar.playToClient(QuickStackResultPayload.TYPE, QuickStackResultPayload.CODEC,
-                (payload, ctx) -> ctx.enqueueWork(() -> ClientQuickStackHandler.handle(payload.result(), ctx)));
 
-        // 鼠标滚轮单件微调通道
+        // 鼠标滚轮单件微调通道 (C2S)
         registrar.playToServer(ScrollItemTransferPayload.TYPE, ScrollItemTransferPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> ServerScrollHandler.handle(payload, ctx)));
 
-        // 槽位锁定通道
+        // 槽位锁定通道 (C2S)
         registrar.playToServer(RequestSlotLocksPayload.TYPE, RequestSlotLocksPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> handleRequestSlotLocks(payload, ctx)));
-        registrar.playToClient(SyncSlotLocksPayload.TYPE, SyncSlotLocksPayload.CODEC,
-                (payload, ctx) -> ctx.enqueueWork(() -> ClientLockedSlots.setLocks(payload.containerKey(), payload.lockedSlots())));
         registrar.playToServer(ToggleSlotLockPayload.TYPE, ToggleSlotLockPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> handleToggleSlotLock(payload, ctx)));
+
+        // 客户端专用回包 (S2C)：仅在物理客户端注册客户端处理器，专用服务端仅注册数据包结构避免类加载冲突
+        if (FMLEnvironment.getDist().isClient()) {
+            registrar.playToClient(SortResultPayload.TYPE, SortResultPayload.CODEC,
+                    (payload, ctx) -> ctx.enqueueWork(() -> ClientSortingHandler.handle(payload.result(), ctx)));
+            registrar.playToClient(QuickStackResultPayload.TYPE, QuickStackResultPayload.CODEC,
+                    (payload, ctx) -> ctx.enqueueWork(() -> ClientQuickStackHandler.handle(payload.result(), ctx)));
+            registrar.playToClient(SyncSlotLocksPayload.TYPE, SyncSlotLocksPayload.CODEC,
+                    (payload, ctx) -> ctx.enqueueWork(() -> ClientLockedSlots.setLocks(payload.containerKey(), payload.lockedSlots())));
+        } else {
+            registrar.playToClient(SortResultPayload.TYPE, SortResultPayload.CODEC);
+            registrar.playToClient(QuickStackResultPayload.TYPE, QuickStackResultPayload.CODEC);
+            registrar.playToClient(SyncSlotLocksPayload.TYPE, SyncSlotLocksPayload.CODEC);
+        }
     }
 
     private void handleRequestSlotLocks(RequestSlotLocksPayload payload, IPayloadContext context) {
