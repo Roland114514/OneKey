@@ -57,7 +57,7 @@ public final class OneKeySettingsScreen extends Screen {
                         (button, value) -> config.sort.cooldownMs = value));
 
         this.addRenderableWidget(CycleButton.<Integer>builder(val -> Component.literal(val + " 格"), () -> config.quickStack.radius)
-                .withValues(2, 4, 6, 8, 12, 16)
+                .withValues(2, 4, 6, 8)
                 .create(rightX, 88, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.radius"),
                         (button, value) -> config.quickStack.radius = value));
 
@@ -94,6 +94,13 @@ public final class OneKeySettingsScreen extends Screen {
         // 提示信息
         extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.locking"), this.width / 2, 172, 0xFFFFB300);
         extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.hotbar"), this.width / 2, 188, 0xFFAAAAAA);
+    }
+
+    @Override
+    public void removed() {
+        // 窗口关闭 / 直接切换界面不一定走 onClose，这里再落一次盘避免设置丢失
+        OneKeyFabric.saveConfig();
+        super.removed();
     }
 
     @Override

@@ -178,7 +178,8 @@ public final class OneKeyNeoForgeClient {
         if (!(event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) || client.player == null) {
             return;
         }
-        if (containerScreen.getMenu() == null || !ServerSortingHandler.isMenuSortable(containerScreen.getMenu().getType())) {
+        if (containerScreen.getMenu() == null
+                || !ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(containerScreen.getMenu()))) {
             return;
         }
         if (!containerScreen.getMenu().getCarried().isEmpty()) {
@@ -358,7 +359,7 @@ public final class OneKeyNeoForgeClient {
             int slotIndex = slot.getContainerSlot();
             return slotIndex >= 9 && slotIndex < 36;
         } else {
-            return ServerSortingHandler.isMenuSortable(screen.getMenu().getType());
+            return ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(screen.getMenu()));
         }
     }
 
@@ -528,7 +529,7 @@ public final class OneKeyNeoForgeClient {
             return clientPlayerMainInventorySlots(menu, player);
         }
 
-        if (ServerSortingHandler.isMenuSortable(menu.getType())) {
+        if (ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(menu))) {
             List<Slot> external = new ArrayList<>();
             for (Slot slot : menu.slots) {
                 if (slot.container != player.getInventory() && isSortableSlot(slot)) {

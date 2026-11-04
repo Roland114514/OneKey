@@ -49,6 +49,23 @@ public final class ServerSortingHandler {
         return menuType != null && SORTABLE_MENU_TYPES.contains(menuType);
     }
 
+    /**
+     * 安全获取菜单类型。玩家背包菜单（{@link InventoryMenu}）与创造模式物品选择菜单在构造时
+     * {@code menuType == null}，直接调用 {@link AbstractContainerMenu#getType()} 会抛
+     * {@code UnsupportedOperationException("Unable to construct this menu by type")}；
+     * 这里统一返回 {@code null}，让调用方按「非纯存储容器」处理。
+     */
+    public static MenuType<?> menuTypeOrNull(AbstractContainerMenu menu) {
+        if (menu == null || menu instanceof InventoryMenu) {
+            return null;
+        }
+        try {
+            return menu.getType();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
     public static void onPlayerDisconnect(UUID playerUuid) {
         if (playerUuid != null) {
             LAST_SORT_TIME.remove(playerUuid);
@@ -59,6 +76,27 @@ public final class ServerSortingHandler {
     }
 
     public static void handle(SortRequest request, ServerPlayNetworking.Context context) {
+        try {
+            process(request, context);
+        } catch (Throwable throwable) {
+            // 兜底隔离：任何未预期异常都不允许冒泡到服务端 tick（Fabric 不会替你吞异常）
+            OneKeyFabric.LOGGER.error("[OneKey] 整理请求处理失败，已回滚并回执失败", throwable);
+            try {
+                if (context.player() != null && context.player().containerMenu != null) {
+                    context.player().containerMenu.sendAllDataToRemote();
+                }
+                replyResult(context, false, 0);
+            } catch (Throwable ignored) {
+                // 连回执通道都异常时不再二次抛出，避免异常从 catch 里漏出去
+            }
+        }
+    }
+
+    private static void replyResult(ServerPlayNetworking.Context context, boolean success, int moved) {
+        context.responseSender().sendPacket(new SortResultPayload(new SortResult(success, moved)));
+    }
+
+    private static void process(SortRequest request, ServerPlayNetworking.Context context) {
         ServerPlayer player = context.player();
         if (player == null || player.isSpectator() || player.isDeadOrDying()) {
             return;
@@ -72,7 +110,7 @@ public final class ServerSortingHandler {
             if (disabledMenu != null) {
                 disabledMenu.sendAllDataToRemote();
             }
-            context.responseSender().sendPacket(new SortResultPayload(new SortResult(false, 0)));
+            replyResult(context, false, 0);
             return;
         }
 
@@ -82,6 +120,7 @@ public final class ServerSortingHandler {
             if (menu != null) {
                 menu.sendAllDataToRemote();
             }
+            replyResult(context, false, 0);
             return;
         }
 
@@ -90,6 +129,7 @@ public final class ServerSortingHandler {
         long lastTime = LAST_SORT_TIME.getOrDefault(player.getUUID(), 0L);
         if (now - lastTime < config.sort.cooldownMs) {
             menu.sendAllDataToRemote();
+            replyResult(context, false, 0);
             return;
         }
         LAST_SORT_TIME.put(player.getUUID(), now);
@@ -97,6 +137,7 @@ public final class ServerSortingHandler {
         // 若玩家光标当前正拿着物品，安全跳过整理，避免发生坐标错位或幽灵物品
         if (!menu.getCarried().isEmpty()) {
             menu.sendAllDataToRemote();
+            replyResult(context, false, 0);
             return;
         }
 
@@ -104,7 +145,7 @@ public final class ServerSortingHandler {
         List<Slot> slotsToSort = resolveSlotsToSort(menu, player, request.mode());
         if (slotsToSort.isEmpty()) {
             menu.sendAllDataToRemote();
-            context.responseSender().sendPacket(new SortResultPayload(new SortResult(false, 0)));
+            replyResult(context, false, 0);
             return;
         }
 
@@ -157,7 +198,7 @@ public final class ServerSortingHandler {
         }
 
         // 回包给客户端
-        context.responseSender().sendPacket(new SortResultPayload(new SortResult(true, moved)));
+        replyResult(context, true, moved);
     }
 
     private static List<Slot> resolveSlotsToSort(AbstractContainerMenu menu, ServerPlayer player, int mode) {
@@ -168,7 +209,7 @@ public final class ServerSortingHandler {
         }
 
         // 只在白名单内的纯存储容器上整理容器本体
-        if (SORTABLE_MENU_TYPES.contains(menu.getType())) {
+        if (isMenuSortable(menuTypeOrNull(menu))) {
             List<Slot> external = new ArrayList<>();
             for (Slot slot : menu.slots) {
                 if (slot.container != player.getInventory() && isSortableExternalSlot(slot)) {

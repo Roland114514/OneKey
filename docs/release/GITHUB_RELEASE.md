@@ -9,8 +9,8 @@
 
 | 加载器 (Loader) | Minecraft 版本 | 文件名 | 体积 |
 |---|---|---|---|
-| **Fabric** | 26.3 (Java 25) | `onekey-fabric-1.0.1.jar` | ~100 KB |
-| **NeoForge** | 26.3 (Java 25) | `onekey-neoforge-1.0.1.jar` | ~98 KB |
+| **Fabric** | 26.3 (Java 25) | `onekey-fabric-1.0.1.jar` | ~101 KB |
+| **NeoForge** | 26.3 (Java 25) | `onekey-neoforge-1.0.1.jar` | ~100 KB |
 
 ---
 
@@ -28,6 +28,7 @@
 - **滚轮微调服务端限流**：按玩家 40ms 最小间隔丢弃超频包，防止改包放大整容器广播。
 - **整理失败可见提示**：服务端关闭整理时提示 `onekey.sort.cannot_sort`，不再「按了没反应」。
 - **NeoForge 配置损坏同样留档**、`/reload` 刷新分类缓存、协议版本号统一取 `ProtocolVersion.CURRENT`，槽位锁定越界校验改为按当前菜单真实槽位范围。
+- **修复背包/创造物品栏必崩（P0）**：26.3 的 `AbstractContainerMenu.getType()` 在 `menuType == null`（玩家背包 `InventoryMenu`、创造物品栏选择菜单）时直接抛 `UnsupportedOperationException`。此前在背包里滚动滚轮、创造物品栏按 R/Alt+左键/滚轮都会崩溃，服务端收到这类包也会抛未捕获异常（可被远程打崩）。现统一走 `menuTypeOrNull()` 安全降级，并给三类服务端处理器加了 `try/catch(Throwable)` 异常隔离。
 - **测试**：公共内核单测 29 → 36，双加载器各跑一遍合计 **72 例全部通过**。
 
 ---
@@ -48,6 +49,6 @@
 ## 🛠️ 校验和 (SHA-256 Checksums)
 
 ```text
-9754120bda88022b9c03820fe145e6f7f887d962749dc7c9258fef09e7d6c319  onekey-fabric-1.0.1.jar
-9a5bb469c9d786ae9ce72004d2839cd2800e0ae034645e053c8e80532305dbfc  onekey-neoforge-1.0.1.jar
+5db68fa18af2afdac1afc72a308dc97c8e4be2de92f5fef6776d1e1a96e5b7f4  onekey-fabric-1.0.1.jar
+a29766700d7dfadae988b6e203a14f79b9b594a7fb63d1b82ee295fd17ac7e81  onekey-neoforge-1.0.1.jar
 ```

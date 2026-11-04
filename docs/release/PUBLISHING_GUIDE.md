@@ -10,11 +10,11 @@
 - **已挂载产物**：
   - `onekey-fabric-1.0.1.jar` (100 KB)
   - `onekey-fabric-1.0.1-sources.jar`
-  - `onekey-neoforge-1.0.1.jar` (98 KB)
+  - `onekey-neoforge-1.0.1.jar` (100 KB)
   - `onekey-neoforge-1.0.1-sources.jar`
 - **校验和**：
-  - Fabric: `9754120bda88022b9c03820fe145e6f7f887d962749dc7c9258fef09e7d6c319`
-  - NeoForge: `9a5bb469c9d786ae9ce72004d2839cd2800e0ae034645e053c8e80532305dbfc`
+  - Fabric: `5db68fa18af2afdac1afc72a308dc97c8e4be2de92f5fef6776d1e1a96e5b7f4`
+  - NeoForge: `a29766700d7dfadae988b6e203a14f79b9b594a7fb63d1b82ee295fd17ac7e81`
 
 ---
 

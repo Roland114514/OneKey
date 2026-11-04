@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import me.easan.onekey.neoforge.OneKeyNeoForge;
 import me.easan.onekey.neoforge.net.ScrollItemTransferPayload;
 import me.easan.onekey.neoforge.storage.LockedSlotsStorage;
 import net.minecraft.server.level.ServerPlayer;
@@ -31,6 +32,14 @@ public final class ServerScrollHandler {
     }
 
     public static void handle(ScrollItemTransferPayload payload, IPayloadContext context) {
+        try {
+            process(payload, context);
+        } catch (Throwable throwable) {
+            OneKeyNeoForge.LOGGER.error("[OneKey] 滚轮微调请求处理失败，已丢包", throwable);
+        }
+    }
+
+    private static void process(ScrollItemTransferPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player) || player.isSpectator() || player.isDeadOrDying()) {
             return;
         }
@@ -50,7 +59,7 @@ public final class ServerScrollHandler {
         LAST_SCROLL_TIME.put(player.getUUID(), now);
 
         // 仅在已打开且属于纯存储白名单的容器中生效，避免侵入工作台、铁砧、熔炉等特种界面
-        if (!ServerSortingHandler.isMenuSortable(menu.getType())) {
+        if (!ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(menu))) {
             return;
         }
 

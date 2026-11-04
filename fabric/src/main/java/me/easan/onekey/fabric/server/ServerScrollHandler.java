@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import me.easan.onekey.fabric.OneKeyFabric;
 import me.easan.onekey.fabric.net.ScrollItemTransferPayload;
 import me.easan.onekey.fabric.storage.LockedSlotsStorage;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -31,6 +32,14 @@ public final class ServerScrollHandler {
     }
 
     public static void handle(ScrollItemTransferPayload payload, ServerPlayNetworking.Context context) {
+        try {
+            process(payload, context);
+        } catch (Throwable throwable) {
+            OneKeyFabric.LOGGER.error("[OneKey] 滚轮微调请求处理失败，已丢包", throwable);
+        }
+    }
+
+    private static void process(ScrollItemTransferPayload payload, ServerPlayNetworking.Context context) {
         ServerPlayer player = context.player();
         if (player == null || player.isSpectator() || player.isDeadOrDying()) {
             return;
@@ -55,7 +64,7 @@ public final class ServerScrollHandler {
         LAST_SCROLL_TIME.put(player.getUUID(), now);
 
         // 仅在已打开且属于纯存储白名单的容器中生效，避免侵入工作台、铁砧、熔炉等特种界面
-        if (!ServerSortingHandler.isMenuSortable(menu.getType())) {
+        if (!ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(menu))) {
             return;
         }
 

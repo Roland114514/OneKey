@@ -98,6 +98,12 @@ bash scripts/with-jdk25.sh :neoforge:runClient
 
 ---
 
+## ⚠️ 已知限制
+
+- **槽位锁定按容器类型记录**：锁定键是菜单类型（如 `minecraft:generic_9x3`），因此同尺寸的箱子/木桶会共享同一组锁定槽位；按容器坐标隔离排在 v1.1。
+- **扫描半径上限**：快速堆叠受原版容器交互距离限制（`stillValidBlockEntity` 约 8.5 格），配置里填写更大半径不会生效，设置界面档位上限为 8。
+- **整理与滚轮只在纯存储容器生效**：箱子/木桶/末影箱/发射器/投掷器/漏斗/潜影盒；熔炉、工作台、铁砧、交易等界面一律只整理玩家背包，避免搬动结果槽。
+
 ## 🗺️ 发展路线 (Roadmap)
 
 - [x] **v1.0.0 (M0 ~ M8)**：
@@ -120,7 +126,9 @@ bash scripts/with-jdk25.sh :neoforge:runClient
   - [x] 快速堆叠黑白名单拆分为「容器方块」与「物品」两组，修复白名单静默失效
   - [x] 滚轮微调增加服务端限流，防止改包刷屏放大
   - [x] 整理失败给出可见提示（`onekey.sort.cannot_sort`）
+  - [x] 修复背包 / 创造物品栏场景下 `menu.getType()` 抛异常导致的崩溃（P0）
 - [ ] **v1.1.0**：
+  - [ ] 槽位锁定改为按容器坐标（维度 + BlockPos）记录，解决「同尺寸容器共享锁定」的体验限制
   - [ ] 吸收 [MouseTweaks](https://github.com/YaLTeR/MouseTweaks) 交互长处：Shift+左键拖拽扫掠连续转移（LMB Sweep，带快捷栏与锁定豁免保护）
   - [ ] 工作台/背包右键拖拽重复划动投放（RMB Drag Repeated Placement）
   - [ ] 滚轮自然方向反转开关（`sort.invertWheel`）与光标持物空槽微调

@@ -12,9 +12,10 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | 见下方（feat: 归档 B 键快速存入视线锁定与分类防污染需求与方案） |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.1.jar`（102KB）与 `neoforge/build/libs/onekey-neoforge-1.0.1.jar`（100KB） |
+| 最新提交 | 见下方（本次：v1.0.1 发布前 P0 崩溃修复与文档/物料同步） |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.1.jar`（103,492 B ≈101KB）与 `neoforge/build/libs/onekey-neoforge-1.0.1.jar`（102,007 B ≈100KB） |
 | 单测状态 | ✅ 双端各 36 例（Fabric 36 + NeoForge 36 = **72 例全绿**） |
+| 版本状态 | ✅ `mod_version=1.0.1`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
 | 运行实测 | ✅ R 键整理、K 键原生 GUI、Alt+左键槽位锁定在 Minecraft 26.3 干净无崩溃实测通过 |
 | 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入精准控制需求已立项归档 ← 下一步重点** |
 | 当前任务聚焦 | 🎯 **重构 B 键快速存入：实现「准星射线聚焦锁定（看哪存哪）」与「分类防异物污染规则」** |
@@ -109,11 +110,18 @@
 10. **NeoForge 配置损坏同样留档**（`OneKeyNeoForge` 启动路径）：`ConfigCodec.backupIfCorrupted(Path)` 提到公共内核，Fabric/NeoForge 启动前都先备份 `.corrupt` 再重建默认值；同时 NeoForge 数据包重载事件（`AddServerReloadListenersEvent`，含 `/reload`）触发 `ItemConversion.clearCache()`，与 Fabric 的 `START_DATA_PACK_RELOAD` 对齐。
 11. **反馈与校验收紧**：两端 `ClientSortingHandler` 在 `!success` 时提示 `onekey.sort.cannot_sort`；槽位锁定越界校验改为「必须落在当前打开菜单真实槽位范围」（两端上界统一，替换 Fabric 100 / NeoForge 300 的硬编码）；NeoForge `versioned(...)` 改用 `ProtocolVersion.CURRENT`。
 
+### 发布前二次深审发现并修复的 P0（崩溃）
+
+12. **`menu.getType()` 对 null menuType 抛异常**（两端口子代理独立复核 + `javap` 验证）：26.3 `AbstractContainerMenu.getType()` 在 `menuType == null` 时 `throw new UnsupportedOperationException("Unable to construct this menu by type")`，而 `InventoryMenu`（玩家背包）与创造物品栏的 `ItemPickerMenu` 构造时都传 `null`。受影响路径：客户端滚轮（`OneKeyFabricClient:167`）、客户端 Alt+左键加锁（`:339`）、客户端按 R 本地乐观排序（`:535`）、服务端滚轮（`ServerScrollHandler:58`）、服务端整理（`ServerSortingHandler:171`）——即「背包里滚轮/创造栏按 R」必崩，服务端被发包可远程打崩。修法：两端 `ServerSortingHandler` 新增 `public static MenuType<?> menuTypeOrNull(AbstractContainerMenu menu)`（`InventoryMenu` 直接返回 null + `catch (RuntimeException)` 兜底），全部调用点改用该 helper。
+13. **服务端三类处理器异常隔离**：`ServerSortingHandler` / `ServerQuickStackHandler` / `ServerScrollHandler`（两端共 6 个类）拆出 `process(...)`，`handle(...)` 外层 `try/catch (Throwable)`：记录日志 + 回滚 `sendAllDataToRemote()` + 回执失败，异常不再冒泡到服务端 tick（Fabric 的 `ServerPlayNetworkAddon.receive` 无 try/catch）。
+14. **整理请求静默拒绝补回执**：`syncId` 不符 / 冷却未到 / 光标持物三条 return 前补 `replyResult(context, false, 0)`（新增私有 `replyResult` 统一 Fabric `responseSender().sendPacket` 与 NeoForge `context.reply`）。
+15. **其它一致性**：快速堆叠补 `syncId` 校验；Fabric 玩家断线即 `LockedSlotsStorage.save(server)`；设置界面半径档位 `2/4/6/8/12/16` → `2/4/6/8`（12/16 超出 `stillValidBlockEntity` 交互距离约 8.5 格的上限），并在 `removed()` 时再落盘配置，避免窗口关闭丢设置。
+
 ### 验证
 
 - `bash scripts/with-jdk25.sh clean build` → **BUILD SUCCESSFUL**（18 任务全执行）。
 - 单测：`ConfigCodecTest` 由 9 → 12 例（损坏 JSON 回退、损坏文件加载回退、原子写无残留 `.tmp`、`isValidJson`、物品/方块过滤列表分行往返、旧配置缺新字段 null 归一、`backupIfCorrupted` 行为），公共内核 29 → 36；`fabric/test` 36 例 + `neoforge/test` 36 例 = **72 例 0 失败**。
-- 产物：`fabric/build/libs/onekey-fabric-1.0.1.jar` 102,315 B（sha256 `9754120bda88022b9c03820fe145e6f7f887d962749dc7c9258fef09e7d6c319`）、`neoforge/build/libs/onekey-neoforge-1.0.1.jar` 100,810 B（sha256 `9a5bb469c9d786ae9ce72004d2839cd2800e0ae034645e053c8e80532305dbfc`）；jar 内 `fabric.mod.json` / `neoforge.mods.toml` 的版本号已展开为 `1.0.1`。
+- 产物：`fabric/build/libs/onekey-fabric-1.0.1.jar` 103,492 B（sha256 `5db68fa18af2afdac1afc72a308dc97c8e4be2de92f5fef6776d1e1a96e5b7f4`）、`neoforge/build/libs/onekey-neoforge-1.0.1.jar` 102,007 B（sha256 `a29766700d7dfadae988b6e203a14f79b9b594a7fb63d1b82ee295fd17ac7e81`）；jar 内 `fabric.mod.json` / `neoforge.mods.toml` 的版本号已展开为 `1.0.1`。
 
 ### 文档与物料
 

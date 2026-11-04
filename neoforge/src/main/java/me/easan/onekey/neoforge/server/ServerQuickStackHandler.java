@@ -57,7 +57,22 @@ public final class ServerQuickStackHandler {
     }
 
     public static void handle(QuickStackRequest request, IPayloadContext context) {
+        try {
+            process(request, context);
+        } catch (Throwable throwable) {
+            OneKeyNeoForge.LOGGER.error("[OneKey] 快速堆叠请求处理失败，已丢包", throwable);
+            context.reply(new QuickStackResultPayload(new QuickStackResult(0)));
+        }
+    }
+
+    private static void process(QuickStackRequest request, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player) || player.isSpectator() || player.isDeadOrDying()) {
+            return;
+        }
+
+        // 校验容器同步 ID：拒绝过期/伪造请求，保证请求与玩家当前打开的菜单一一对应
+        net.minecraft.world.inventory.AbstractContainerMenu currentMenu = player.containerMenu;
+        if (currentMenu == null || currentMenu.containerId != request.syncId()) {
             return;
         }
 
