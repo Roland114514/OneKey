@@ -87,7 +87,6 @@ public final class OneKeySettingsScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor extractor, int mouseX, int mouseY, float partialTick) {
-        this.extractBackground(extractor, mouseX, mouseY, partialTick);
         super.extractRenderState(extractor, mouseX, mouseY, partialTick);
 
         extractor.centeredText(this.font, this.title, this.width / 2, 16, 0xFFFFFFFF);

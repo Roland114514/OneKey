@@ -30,6 +30,6 @@
 ## 🛠️ 校验和 (SHA-256 Checksums)
 
 ```text
-a73b9e8db15b0bcfa5308b3af2ddbab4ec5449f829068cd2751f3711be996aab  onekey-fabric-1.0.0.jar
-5429ca0f3dd4660051a127a6e287c979b49ef93bc1e654ace16f71d22c919af2  onekey-neoforge-1.0.0.jar
+2b9456ed280284a2fe83ad0f78bfa8936474219333d4288488f1d5ba4c53da92  onekey-fabric-1.0.0.jar
+d1270f2cd49aa495939ae6877764820868375f8be017058e7ef3a08fdf990142  onekey-neoforge-1.0.0.jar
 ```
