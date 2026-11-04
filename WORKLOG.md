@@ -12,15 +12,44 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | 待提交（feat: M7 NeoForge 适配落地——双加载器统一架构与完整功能对齐） |
+| 最新提交 | `50dfa59`（feat: M7 NeoForge 适配落地——双加载器统一架构与完整功能对齐） |
 | 构建状态 | ✅ `clean build` 通过，双产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar`（99KB）与 `neoforge/build/libs/onekey-neoforge-0.1.0-alpha.jar`（97KB） |
 | 单测状态 | ✅ 29/29 通过（Fabric 与 NeoForge 均全绿，排序 9 + 分类 3 + 动作 3 + 配置 5 + 快速堆叠 9） |
 | 运行验证 | ✅ NeoForge 端 ModDevGradle 2.0.148 + Java 25 构建链通畅，网络 Payload、服务端生命周期、事件总线、客户端按键/Mixin 完全对齐 |
-| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / M5 快速堆叠与存入 ✅ / M6 客户端手势与兼容 ✅ / **M7 NeoForge 适配 ✅** / **M8 发布准备 ← 下一步** |
+| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / M5 快速堆叠与存入 ✅ / M6 客户端手势与兼容 ✅ / **M7 NeoForge 适配 ✅** / **M8 发布准备 ← 当前任务** |
+| 未来演进 | 📌 v1.1 规划吸收 [MouseTweaks](https://github.com/YaLTeR/MouseTweaks) 的 Shift 拖拽扫掠、RMB 重复滑放、滚轮反转与纯净服降级 |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 双加载器独立构建、零第三方运行时依赖，共享 common 纯内核逻辑，完全具备发布形态 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 11 节 M8 发布清单。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 11 节 M8 发布清单与第 13 节 v1.1 迭代规划。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 9 次会话：MouseTweaks 交互调研与 v1.1 迭代规划归档）
+
+### 目标与背景
+
+用户提供了 Minecraft 著名手势模组 [MouseTweaks](https://github.com/YaLTeR/MouseTweaks)（作者 YaLTeR）的参考，并指示：
+1. 深入调研其核心机制与设计长处；
+2. 保持当前节奏先完成 v1.0（M8 发布）；
+3. 将 MouseTweaks 的优秀手势体验整理为 v1.1 迭代路线，入库 `PLAN.md` 与 `WORKLOG.md`，方便后续协作智能体无缝对接开发。
+
+### 调研与改进点提炼
+
+通过对 [MouseTweaks (https://github.com/YaLTeR/MouseTweaks)](https://github.com/YaLTeR/MouseTweaks) 核心特性的深度分析，提炼出 4 个在 v1.0 完成后接入 v1.1 的升级方向：
+
+1. **Shift + 左键拖拽扫掠连续转移（LMB Drag Sweep）**：
+   - *机制*：按住 Shift 并在背包或容器内按住左键拖拽滑过，经过的所有格子自动连续触发 Shift-Click 飞入对侧容器（指哪飞哪，无需逐格点按）；
+   - *OneKey 独特护城河*：在滑过过程中**严格跳过锁定槽位**与**严格跳过底部 0..8 快捷栏**，彻底消除原生 MouseTweaks 会把玩家随身剑、镐子不慎滑入箱子的致命痛点。
+2. **RMB 划动重复投放（RMB Drag Repeated Placement）**：
+   - *机制*：在工作台或背包右键拖拽时，允许鼠标多次滑过同一个槽位继续重复投入 1 件物品（如绕圈 8 次即每个槽位各放 8 件，极大便利大批量合成）。
+3. **滚轮体验深度打磨（Wheel Tweaks Plus）**：
+   - *自然滚动反转*：配置增加 `sort.invertWheel`，设置界面提供可视化开关，完美适配 macOS 触控板自然滚动与不同玩家的直觉习惯；
+   - *光标持物空槽投放*：手持物品悬停在空槽上时，滚轮向下可连续单件点入，滚轮向上可收回。
+4. **客户端降级模拟模式（Vanilla Click Fallback）**：
+   - *机制*：进服检测到未安装 OneKey 服务端时，手势操作自动降级为调用原版 `gameMode.handleInventoryMouseClick` 发送原版点击包，保证在纯净服务器/无模组服上依然可用。
+
+---
 
 ---
 

@@ -63,6 +63,7 @@
 | F8 | 排序预设 | 多套排序方案（按分类/按稀有度/自定义分组）切换 | v1.1 |
 | F9 | 服务器白名单同步 | 服务端下发允许的整理规则 | v1.1 |
 | F10 | NeoForge 端 | 同一 `common` 内核 + NeoForge 壳 | v1.0（M7） |
+| F11 | 鼠标手势进阶（学习 [MouseTweaks](https://github.com/YaLTeR/MouseTweaks)） | Shift+左键划选转移（LMB Sweep）、RMB 重复滑放、滚轮反转开关、纯客户端点击模拟降级 | v1.1 |
 
 ---
 
@@ -288,3 +289,24 @@
 **下一步（按顺序）**
 
 1. M8：发布准备与全平台打包（GitHub Release、Modrinth/CurseForge 文档物料、最终端到端双加载器发布归档）
+
+---
+
+## 13. v1.1 迭代规划（MouseTweaks 手势增强吸收与深度演进）
+
+> 参考项目：[MouseTweaks (by YaLTeR)](https://github.com/YaLTeR/MouseTweaks)
+> 定位原则：在完成 v1.0 稳定发布（M8）后启动；在吸收其丝滑手势的同时，保持 OneKey 独有的「底部快捷栏绝对保护」、「槽位加锁安全屏障」和「防作弊物品守恒」。
+
+### 拟吸收与改进的 4 大核心特性
+
+1. **Shift + 左键拖拽扫掠连续转移（LMB Drag Sweep）**：
+   - 机制：按住 Shift，按住左键在背包/箱子上滑过，经过的所有槽位按顺序自动执行快速移动（Shift-Click）到对侧容器；
+   - 增强：**严格跳过处于锁定状态的槽位**，且**严格跳过底部 0..8 快捷栏**，彻底解决 MouseTweaks 会误把随身剑/工具滑入箱子的痛点。
+2. **RMB 划动重复投放（RMB Drag Repeated Placement）**：
+   - 机制：合成台/背包右键拖拽时，允许鼠标多次滑过同一个槽位继续重复投入 1 件物品（如绕圈 8 次即每个槽位各放 8 件，极大便利大批量合成）。
+3. **滚轮体验深度打磨（Wheel Tweaks Plus）**：
+   - 自然滚动反转：配置增加 `sort.invertWheel`（默认 false），设置界面提供开关，完美适配 macOS 触控板与习惯反转的玩家；
+   - 空槽交互微调：手持物品悬停空槽时，滚轮可单件连续分发或收回。
+4. **客户端降级模拟模式（Vanilla Click Fallback）**：
+   - 机制：当进入未安装 OneKey 服务端的第三方/原版服务器时，手势操作自动降级为调用原版 `gameMode.handleInventoryMouseClick` 发送原版容器点击包，保证在任何纯净服务器上依然能享受完整手势增强。
+
