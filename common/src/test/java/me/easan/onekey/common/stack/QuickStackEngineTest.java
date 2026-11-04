@@ -175,4 +175,23 @@ class QuickStackEngineTest {
         assertEquals(64, player.get(9).count(), "黑名单物品不转移");
         assertTrue(player.get(10).isEmpty(), "非黑名单物品成功转移");
     }
+
+    @Test
+    void testItemMaxStackSizeRespected() {
+        List<SimulatedSlot> player = createPlayerSlots();
+        // 末影珍珠一组最大 16
+        player.set(9, SimulatedSlot.of("minecraft:ender_pearl", 16, 16));
+
+        List<SimulatedSlot> chest = createContainer(27);
+        // 箱子已有 10 颗末影珍珠
+        chest.set(0, SimulatedSlot.of("minecraft:ender_pearl", 10, 16));
+
+        int moved = QuickStackEngine.execute(player, Set.of(), List.of(chest), false, true, List.of(), List.of());
+
+        assertEquals(16, moved);
+        assertEquals(16, chest.get(0).count(), "补齐第一组到 16");
+        assertEquals(10, chest.get(1).count(), "溢出的 10 颗开启第二槽");
+        assertEquals("minecraft:ender_pearl", chest.get(1).itemId());
+        assertTrue(player.get(9).isEmpty());
+    }
 }

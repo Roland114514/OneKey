@@ -54,7 +54,7 @@ public final class SimulatedSlot {
         }
 
         if (target.isEmpty()) {
-            int toMove = Math.min(this.count, target.maxStackSize);
+            int toMove = Math.min(this.count, Math.min(this.maxStackSize, target.maxStackSize));
             target.itemId = this.itemId;
             target.count = toMove;
             this.count -= toMove;

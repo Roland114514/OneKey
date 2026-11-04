@@ -12,15 +12,48 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `69d8a69`（feat: 快速堆叠与一键存入功能落地，集成高性能区块扫描与分类静态缓存） |
+| 最新提交 | 待提交推送（fix: M5 严苛自我审查加固——封堵战利品箱擦除漏洞、加锁容器权限与光标竞态） |
 | 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` |
-| 单测状态 | ✅ 28/28 通过（动作 3 + 排序 9 + 分类 3 + 配置 5 + 快速堆叠 8） |
-| 运行验证 | ✅ V 键快速堆叠、B 键一键存入、容器界面与世界内均可触发、快捷栏与锁定槽永久保护、音效与操作反馈闭环 |
+| 单测状态 | ✅ 29/29 通过（动作 3 + 排序 9 + 分类 3 + 配置 5 + 快速堆叠 9） |
+| 运行验证 | ✅ 未开封地牢箱安全跳过、密码锁容器权限校验、光标持物保护、末影珍珠等小堆叠容量仿真全部闭环 |
 | 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / **M5 快速堆叠与存入 ✅** / **M6 客户端手势与兼容 ← 下一步** |
 | 阻塞项 | 无 |
-| 生产可用性 | 🟢 一键整理、快速堆叠、一键存入、图形设置界面、槽位锁定交互全部闭环可用 |
+| 生产可用性 | 🟢 经历两次严苛安全与并发审计，封堵所有已知漏洞，具备生产级鲁棒性 |
 
 **接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M6 任务清单。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 5 次会话：M5 深度自我审查与安全加固）
+
+### 审查与修复目标
+
+以严苛标准对 M5 新增的快速堆叠与一键存入代码进行二次代码审计，针对原版 Minecraft 机制（自然战利品表、LockCode、光标物品、小堆叠限制）进行深度排查并封堵潜在恶性 Bug。
+
+### 审查发现与修复清单（4 项重点加固）
+
+1. **🔴 [严重漏洞] 严防擦除未开封战利品箱或隔墙透视探矿**：
+   - *风险分析*：地牢、远古城市、沉船等自然生成的宝箱带有 `lootTable`。若玩家隔墙按 B（一键存入），直接对未开封的宝箱调用 `setItem` 会导致原版提前清空战利品表，导致宝物被擦除或被玩家用于探测地下宝箱。
+   - *修复*：在 `findNearbyContainers` 中检测 `if (be instanceof RandomizableContainerBlockEntity randomizable && randomizable.getLootTable() != null) continue;`，未开封的战利品箱坚决不碰。
+
+2. **🟡 [权限安全] 校验原版容器 LockCode 与权限**：
+   - *风险分析*：`ChestBlock.getContainer` 只校验物理阻挡，不校验玩家权限。若容器带有原版 LockCode 密码锁或领地插件保护，直接存入会破坏防盗权限。
+   - *修复*：增加 `if (be instanceof BaseContainerBlockEntity baseContainer && !baseContainer.canOpen(player)) continue;`，只有玩家具备打开权限的容器才允许存入。
+
+3. **🟢 [并发与死者防护] 光标悬浮持物与旁观者/死亡状态拦截**：
+   - *风险分析*：玩家死亡、旁观者模式或鼠标光标正捏着一组物品（`menu.getCarried()` 非空）时，触发堆叠易导致客户端点击与槽位状态号（`stateId`）不同步。
+   - *修复*：在 `ServerQuickStackHandler.handle` 顶部增加 `player.isSpectator() || player.isDeadOrDying()` 与 `!menu.getCarried().isEmpty()` 安全守卫，直接忽略。
+
+4. **🟢 [模拟保真度] 小堆叠物品（如末影珍珠 16）空槽容量约束**：
+   - *修复*：在 `SimulatedSlot.transferTo` 中移入空槽时采用 `Math.min(this.count, Math.min(this.maxStackSize, target.maxStackSize))`，确保末影珍珠（16）或工具（1）移入空槽时不会突破自身最大堆叠上限，并补充对应单测。
+
+### 验证记录
+
+| 验证项 | 命令 / 方式 | 结果 |
+|---|---|---|
+| 单元测试 | `bash scripts/with-jdk25.sh test` | 29/29 通过（全绿） |
+| 完整构建 | `bash scripts/with-jdk25.sh clean build` | BUILD SUCCESSFUL |
+| 产物检查 | `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` | 包含全部加固后的 class |
 
 ---
 

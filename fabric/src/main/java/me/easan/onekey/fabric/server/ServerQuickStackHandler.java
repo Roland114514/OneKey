@@ -27,7 +27,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
+import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
@@ -56,7 +58,12 @@ public final class ServerQuickStackHandler {
 
     public static void handle(QuickStackRequest request, ServerPlayNetworking.Context context) {
         ServerPlayer player = context.player();
-        if (player == null) {
+        if (player == null || player.isSpectator() || player.isDeadOrDying()) {
+            return;
+        }
+
+        // 若玩家光标当前正拿着物品，安全跳过，防止发生坐标与点击同步错位
+        if (player.containerMenu != null && !player.containerMenu.getCarried().isEmpty()) {
             return;
         }
 
@@ -213,6 +220,17 @@ public final class ServerQuickStackHandler {
                     }
 
                     BlockEntity be = entry.getValue();
+
+                    // 严禁接触尚未开封的战利品箱（地牢、遗迹等），防止破坏战利品生成机制或通过隔墙探矿作弊
+                    if (be instanceof RandomizableContainerBlockEntity randomizable && randomizable.getLootTable() != null) {
+                        continue;
+                    }
+
+                    // 玩家无权开启的已加锁容器（如 LockCode 密码锁），严禁存入
+                    if (be instanceof BaseContainerBlockEntity baseContainer && !baseContainer.canOpen(player)) {
+                        continue;
+                    }
+
                     BlockState state = be.getBlockState();
                     Block block = state.getBlock();
                     Identifier blockId = BuiltInRegistries.BLOCK.getKey(block);
