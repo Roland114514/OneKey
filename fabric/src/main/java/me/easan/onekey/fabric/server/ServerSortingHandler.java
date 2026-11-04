@@ -22,6 +22,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -32,6 +33,17 @@ import net.minecraft.world.item.ItemStack;
 public final class ServerSortingHandler {
 
     private static final Map<UUID, Long> LAST_SORT_TIME = new ConcurrentHashMap<>();
+
+    /**
+     * 允许「整理容器本体」的菜单类型白名单：只放行纯存储容器。
+     * 箱子/木桶/末影箱 = GENERIC_9x*；发射器/投掷器 = GENERIC_3x3；漏斗 = HOPPER；潜影盒 = SHULKER_BOX。
+     * 熔炉/铁砧/交易/信标/酿造/工作台/切石机/附魔等一律不放行——它们的结果槽/专用槽不继承 ResultSlot，
+     * 直接搬动会绕过经验结算、交易校验或造成物品复制。
+     */
+    private static final Set<MenuType<?>> SORTABLE_MENU_TYPES = Set.of(
+            MenuType.GENERIC_9x1, MenuType.GENERIC_9x2, MenuType.GENERIC_9x3,
+            MenuType.GENERIC_9x4, MenuType.GENERIC_9x5, MenuType.GENERIC_9x6,
+            MenuType.GENERIC_3x3, MenuType.HOPPER, MenuType.SHULKER_BOX);
 
     private ServerSortingHandler() {
     }
@@ -68,9 +80,17 @@ public final class ServerSortingHandler {
             return;
         }
 
-        // 获取锁定槽位（针对当前容器类型与世界独立存档）
-        String containerKey = getContainerKey(menu, request.mode());
-        Set<Integer> lockedIndices = LockedSlotsStorage.getLockedSlots(player.getUUID(), containerKey);
+        // 锁定槽位：槽位集合是同质的（要么全是玩家背包、要么全是外部容器），据此决定锁定作用域
+        boolean playerScope = slotsToSort.get(0).container == player.getInventory();
+        String containerKey = playerScope ? "player_inventory" : menuTypeKey(menu);
+        Set<Integer> lockedKeys = LockedSlotsStorage.getLockedSlots(player.getUUID(), containerKey);
+
+        // 把每个视图槽位的「锁定键」换算成视图下标，再交给 Sorter（修复容器槽位号与视图下标的错位）
+        List<Integer> slotLockKeys = new ArrayList<>(slotsToSort.size());
+        for (Slot slot : slotsToSort) {
+            slotLockKeys.add(lockIndexFor(player, slot));
+        }
+        Set<Integer> lockedPositions = Sorter.resolveLockedPositions(slotLockKeys, lockedKeys);
 
         // 转换为纯逻辑 StackView
         List<StackView> views = new ArrayList<>(slotsToSort.size());
@@ -79,7 +99,7 @@ public final class ServerSortingHandler {
         }
 
         // 计算排序置换（Sorter 保证为空格置后、锁定槽不动、且恒为双射）
-        int[] permutation = Sorter.permutation(views, lockedIndices, config.sort.toRule());
+        int[] permutation = Sorter.permutation(views, lockedPositions, config.sort.toRule());
 
         // 计算发生移动的槽位数量
         int moved = 0;
@@ -113,35 +133,37 @@ public final class ServerSortingHandler {
     }
 
     private static List<Slot> resolveSlotsToSort(AbstractContainerMenu menu, ServerPlayer player, int mode) {
-        List<Slot> result = new ArrayList<>();
         boolean isPlayerOnly = (mode == SortRequest.MODE_PLAYER) || (menu instanceof InventoryMenu);
 
         if (isPlayerOnly) {
-            // 整理玩家背包：底部 9 格快捷栏（0..8）严格不参与整理，只整理主背包 27 格（9..35）
-            for (Slot slot : menu.slots) {
-                if (slot.container == player.getInventory()) {
-                    int slotIndex = slot.getContainerSlot();
-                    if (slotIndex >= 9 && slotIndex < 36) {
-                        result.add(slot);
-                    }
-                }
-            }
-        } else {
-            // 整理外部容器槽位（例如箱子、木桶、潜影盒、发射器、漏斗等）
+            return playerMainInventorySlots(menu, player);
+        }
+
+        // 只在白名单内的纯存储容器上整理容器本体
+        if (SORTABLE_MENU_TYPES.contains(menu.getType())) {
+            List<Slot> external = new ArrayList<>();
             for (Slot slot : menu.slots) {
                 if (slot.container != player.getInventory() && isSortableExternalSlot(slot)) {
-                    result.add(slot);
+                    external.add(slot);
                 }
             }
-            // 如果该界面没有可排序的外部容器槽位，降级为整理玩家主背包
-            if (result.isEmpty()) {
-                for (Slot slot : menu.slots) {
-                    if (slot.container == player.getInventory()) {
-                        int slotIndex = slot.getContainerSlot();
-                        if (slotIndex >= 9 && slotIndex < 36) {
-                            result.add(slot);
-                        }
-                    }
+            if (!external.isEmpty()) {
+                return external;
+            }
+        }
+
+        // 不支持整理本容器（或本容器无可排序槽位）→ 降级整理玩家主背包
+        return playerMainInventorySlots(menu, player);
+    }
+
+    /** 玩家主背包 27 格（容器槽位号 9..35），快捷栏 0..8 严格不参与。 */
+    private static List<Slot> playerMainInventorySlots(AbstractContainerMenu menu, ServerPlayer player) {
+        List<Slot> result = new ArrayList<>();
+        for (Slot slot : menu.slots) {
+            if (slot.container == player.getInventory()) {
+                int slotIndex = slot.getContainerSlot();
+                if (slotIndex >= 9 && slotIndex < 36) {
+                    result.add(slot);
                 }
             }
         }
@@ -158,10 +180,18 @@ public final class ServerSortingHandler {
         return true;
     }
 
-    private static String getContainerKey(AbstractContainerMenu menu, int mode) {
-        if (mode == SortRequest.MODE_PLAYER || menu instanceof InventoryMenu) {
-            return "player_inventory";
+    /**
+     * 槽位在锁定存储中的键：玩家背包用容器槽位号（0..35，跨界面稳定）；
+     * 外部容器用菜单槽位号（{@code Slot.index}，同菜单类型下稳定）。
+     */
+    private static int lockIndexFor(ServerPlayer player, Slot slot) {
+        if (slot.container == player.getInventory()) {
+            return slot.getContainerSlot();
         }
+        return slot.index;
+    }
+
+    private static String menuTypeKey(AbstractContainerMenu menu) {
         Identifier menuType = BuiltInRegistries.MENU.getKey(menu.getType());
         return menuType != null ? menuType.toString() : "generic_container";
     }

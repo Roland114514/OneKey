@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -131,5 +132,40 @@ class SorterTest {
         // 验证快捷栏保持不变
         assertEquals("minecraft:diamond_sword", hotbar.get(0).itemId());
         assertEquals("minecraft:torch", hotbar.get(1).itemId());
+    }
+
+    @Test
+    void resolveLockedPositionsMapsContainerIndicesToViewPositions() {
+        // 玩家主背包 27 格视图，对应容器槽位号 9..35（差 9 的偏移）
+        List<Integer> slotLockKeys = List.of(9, 10, 11, 12);
+        Set<Integer> lockedKeys = Set.of(10, 12);
+
+        Set<Integer> positions = Sorter.resolveLockedPositions(slotLockKeys, lockedKeys);
+
+        assertEquals(Set.of(1, 3), positions);
+    }
+
+    @Test
+    void permutationKeepsItemAtMappedLockedPosition() {
+        // 27 格主背包视图（索引 0..26 对应容器槽位号 9..35）
+        List<StackView> slots = new ArrayList<>();
+        for (int i = 0; i < 27; i++) {
+            slots.add(StackView.EMPTY);
+        }
+        slots.set(0, stack("minecraft:diamond_sword", 1, SortCategory.TOOL));
+        slots.set(3, stack("minecraft:diamond", 5, SortCategory.MISC)); // 容器槽位号 12
+        slots.set(4, stack("minecraft:apple", 3, SortCategory.FOOD));
+
+        // 视图 0..26 对应的容器槽位号为 9..35
+        List<Integer> slotLockKeys = new ArrayList<>();
+        for (int i = 9; i < 36; i++) {
+            slotLockKeys.add(i);
+        }
+
+        Set<Integer> lockedPositions = Sorter.resolveLockedPositions(slotLockKeys, Set.of(12));
+        List<StackView> sorted = Sorter.apply(slots, Sorter.permutation(slots, lockedPositions, new SortRule()));
+
+        // 容器槽位号 12 → 视图 3 被锁定，物品保持原位
+        assertEquals("minecraft:diamond", sorted.get(3).itemId());
     }
 }

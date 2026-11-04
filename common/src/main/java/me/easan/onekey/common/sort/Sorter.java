@@ -2,6 +2,7 @@ package me.easan.onekey.common.sort;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -78,6 +79,26 @@ public final class Sorter {
             result.add(slots.get(source));
         }
         return result;
+    }
+
+    /**
+     * 把「锁定键」映射成视图下标集合（纯逻辑，供平台层把容器槽位号换算为视图下标）。
+     *
+     * @param slotLockKeys 与待排序视图一一对应：第 i 个元素是第 i 个视图槽位在锁定存储中的键
+     * @param lockedKeys   当前容器类型下已锁定的键集合，可为 null
+     * @return 应传给 {@link #permutation} 的视图下标集合
+     */
+    public static Set<Integer> resolveLockedPositions(List<Integer> slotLockKeys, Set<Integer> lockedKeys) {
+        Objects.requireNonNull(slotLockKeys, "slotLockKeys");
+        Set<Integer> effective = lockedKeys == null ? Set.of() : lockedKeys;
+        Set<Integer> positions = new HashSet<>();
+        for (int i = 0; i < slotLockKeys.size(); i++) {
+            Integer key = slotLockKeys.get(i);
+            if (key != null && effective.contains(key)) {
+                positions.add(i);
+            }
+        }
+        return positions;
     }
 
     private static Comparator<Integer> comparator(List<StackView> slots, SortRule rule) {
