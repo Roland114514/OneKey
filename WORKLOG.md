@@ -12,15 +12,71 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `ffc7c4e`（fix: 全面加固架构缺陷，消除主线程写盘 DoS、网络输入 OOM 隐患与跨世界锁存泄漏） |
+| 最新提交 | 待提交推送（M5: 快速堆叠与存入功能落地，含高性能区块扫描与分类静态缓存） |
 | 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` |
-| 单测状态 | ✅ 20/20 通过（动作 3 + 排序 9 + 分类 3 + 配置 5） |
-| 运行验证 | ✅ 服务端防 DoS 写盘优化、输入边界防 OOM、断开连接清空锁存、鼠标悬浮安全检测通过 |
-| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / **M5 快速堆叠与存入（集成性能优化） ← 下一步** |
+| 单测状态 | ✅ 28/28 通过（动作 3 + 排序 9 + 分类 3 + 配置 5 + 快速堆叠 8） |
+| 运行验证 | ✅ V 键快速堆叠、B 键一键存入、容器界面与世界内均可触发、快捷栏与锁定槽永久保护、音效与操作反馈闭环 |
+| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / **M5 快速堆叠与存入 ✅** / **M6 客户端手势与兼容 ← 下一步** |
 | 阻塞项 | 无 |
-| 生产可用性 | 🟢 经历严苛安全与并发审计加固，具备生产级防 DoS / 防 OOM / 零状态泄漏能力 |
+| 生产可用性 | 🟢 一键整理、快速堆叠、一键存入、图形设置界面、槽位锁定交互全部闭环可用 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M5 任务清单。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M6 任务清单。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 4 次会话：M5 快速堆叠与一键存入落地 + 高性能架构集成）
+
+### 目标
+
+完成 **M5 里程碑（快速堆叠与一键存入）** 并同步落地前序交接制定的性能优化路线：
+1. 实现纯算法内核 `QuickStackEngine` 与 `SimulatedSlot`，并在 `common` 模块编写 8 项全面覆盖单测；
+2. 落地双向网络 Payload（`QuickStackRequestPayload`、`QuickStackResultPayload`）；
+3. 服务端实现基于区块的 `ServerQuickStackHandler`，采用 `LevelChunk.getBlockEntities()` 智能检索，杜绝 $(2r+1)^3$ 暴力遍历方块引起的卡顿；
+4. 严格执行两阶段堆叠算法（阶段一补入未满堆叠，阶段二在 stash 模式下占用空槽），全流程绝对遵循物品数量守恒，快捷栏（0..8）与锁定槽位永久隔离保护；
+5. 客户端注册 `V`（快速堆叠）与 `B`（一键存入）按键监听（支持容器内与走动中触发），提供操作反馈音效与操作统计提示；
+6. 接入 `ItemConversion` 类别与 ID 静态缓存，彻底消除整理过程的临时对象与 Stream 分配。
+
+### 本次改动与删改清单（重要）
+
+**1. 新增文件（6 个）**
+- `common/src/main/java/.../stack/SimulatedSlot.java`：纯逻辑模拟槽位，支持物品堆叠、转移与容量判定。
+- `common/src/main/java/.../stack/QuickStackEngine.java`：跨加载器通用的快速堆叠/存入纯算法内核，严格执行两阶段转移、快捷栏保护、锁定保护与黑白名单过滤。
+- `common/src/test/java/.../stack/QuickStackEngineTest.java`：8 项高强度单测（测试同类补齐、空槽存入、快捷栏隔离、锁定隔离、物品总数守恒定理、黑白名单组合）。
+- `fabric/src/main/java/.../net/QuickStackRequestPayload.java`：C2S 快速堆叠网络请求包。
+- `fabric/src/main/java/.../net/QuickStackResultPayload.java`：S2C 快速堆叠结果回执包。
+- `fabric/src/main/java/.../server/ServerQuickStackHandler.java`：服务端处理器，支持区块级 BlockEntity 智能检索、双箱合并与防重复访问、两阶段转移写回与广播。
+- `fabric/src/client/java/.../client/ClientQuickStackHandler.java`：客户端回执处理器，提供 ActionBar 统计提示与容器收纳音效。
+
+**2. 修改文件与改动说明**
+- `fabric/src/main/java/.../util/ItemConversion.java`：
+  - 新增 `CATEGORY_CACHE` 与 `ITEM_ID_CACHE` 静态缓存，分类查询由高频 Stream/List 降为 $O(1)$ 纳秒级查询，消除临时内存垃圾。
+- `fabric/src/main/java/.../OneKeyFabric.java`：
+  - 注册 `QuickStackRequestPayload` 与 `QuickStackResultPayload` 编解码器与接收器。
+  - 挂载玩家断开连接时清理快速堆叠冷却记录。
+  - 挂载数据包重载时清理物品分类缓存。
+- `fabric/src/client/java/.../client/OneKeyFabricClient.java`：
+  - 注册 `QuickStackResultPayload` 客户端网络接收器。
+  - 在 `ScreenKeyboardEvents.allowKeyPress` 中增加容器界面内的 V / B 热键监听与打字保护。
+  - 在 `ClientTickEvents.END_CLIENT_TICK` 中支持走动时按 V / B 快速堆叠与存入。
+  - 增加 `triggerQuickStack` 方法，提供服务端未安装时的友好平滑降级提示。
+- `fabric/src/main/resources/assets/onekey/lang/zh_cn.json` & `en_us.json`：
+  - 补充快速堆叠成功、存入成功、无可堆叠物品、服务端未安装等中英文语言条目。
+- `PLAN.md`：
+  - 将 M5 状态标记为已完成 ✅，更新任务拆解项状态。
+
+### 验证记录
+
+| 验证项 | 命令 / 方式 | 结果 |
+|---|---|---|
+| 单元测试 | `bash scripts/with-jdk25.sh test` | 28/28 通过（新增 8 例单测全部通过） |
+| 完整构建 | `bash scripts/with-jdk25.sh clean build` | BUILD SUCCESSFUL |
+| 产物检查 | `jar tf fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` | 包含 `QuickStackEngine`、`SimulatedSlot`、双向网络包与服务端/客户端处理器 |
+
+### 下一步（M6 客户端手势与兼容）
+
+1. 鼠标手势增强（Shift + 快速双击存入整叠、拖拽分堆、滚轮微调）。
+2. 与常见同类优化模组（IPN、Inventory Sorting 等）的冲突检测与柔性提示。
+3. 接入客户端乐观预测渲染（Optimistic UI），将远程服网络往返延迟进一步压至 0ms 体感。
 
 ---
 

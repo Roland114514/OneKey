@@ -3,10 +3,13 @@ package me.easan.onekey.fabric.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import me.easan.onekey.common.action.ActionId;
 import me.easan.onekey.common.action.ActionRegistry;
+import me.easan.onekey.common.net.QuickStackRequest;
 import me.easan.onekey.common.net.SortRequest;
 import me.easan.onekey.fabric.OneKeyFabric;
 import me.easan.onekey.fabric.client.gui.OneKeySettingsScreen;
 import me.easan.onekey.fabric.client.mixin.AbstractContainerScreenAccessor;
+import me.easan.onekey.fabric.net.QuickStackRequestPayload;
+import me.easan.onekey.fabric.net.QuickStackResultPayload;
 import me.easan.onekey.fabric.net.RequestSlotLocksPayload;
 import me.easan.onekey.fabric.net.SortRequestPayload;
 import me.easan.onekey.fabric.net.SortResultPayload;
@@ -62,6 +65,10 @@ public final class OneKeyFabricClient implements ClientModInitializer {
             ClientSortingHandler.handle(payload.result(), context);
         });
 
+        ClientPlayNetworking.registerGlobalReceiver(QuickStackResultPayload.TYPE, (payload, context) -> {
+            ClientQuickStackHandler.handle(payload.result(), context);
+        });
+
         ClientPlayNetworking.registerGlobalReceiver(SyncSlotLocksPayload.TYPE, (payload, context) -> {
             ClientLockedSlots.setLocks(payload.containerKey(), payload.lockedSlots());
         });
@@ -87,11 +94,25 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                 // 键盘快捷键监听
                 ScreenKeyboardEvents.allowKeyPress(screen).register((scr, event) -> {
                     if (sortKey.matches(event)) {
-                        // 正在文本输入框内打字时（如搜索框、配方书），不拦截 R 键
+                        // 正在文本输入框内打字时（如搜索框、配方书），不拦截热键
                         if (scr.getFocused() instanceof EditBox editBox && editBox.canConsumeInput()) {
                             return true;
                         }
                         triggerScreenSort(client, containerScreen);
+                        return false;
+                    }
+                    if (quickStackKey.matches(event)) {
+                        if (scr.getFocused() instanceof EditBox editBox && editBox.canConsumeInput()) {
+                            return true;
+                        }
+                        triggerQuickStack(client, false);
+                        return false;
+                    }
+                    if (quickStashKey.matches(event)) {
+                        if (scr.getFocused() instanceof EditBox editBox && editBox.canConsumeInput()) {
+                            return true;
+                        }
+                        triggerQuickStack(client, true);
                         return false;
                     }
                     if (settingsKey.matches(event)) {
@@ -120,21 +141,21 @@ public final class OneKeyFabricClient implements ClientModInitializer {
             }
         });
 
-        // 3. 客户端 Tick 事件：未开 GUI 时按 R 整理主背包、按 K 打开设置界面
+        // 3. 客户端 Tick 事件：未开 GUI 时按热键触发整理、快速堆叠、一键存入与设置界面
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.gui != null && client.gui.screen() == null && client.player != null) {
                 while (sortKey.consumeClick()) {
                     triggerSort(client, client.player.inventoryMenu.containerId, SortRequest.MODE_PLAYER);
                 }
+                while (quickStackKey.consumeClick()) {
+                    triggerQuickStack(client, false);
+                }
+                while (quickStashKey.consumeClick()) {
+                    triggerQuickStack(client, true);
+                }
                 while (settingsKey.consumeClick()) {
                     client.setScreenAndShow(new OneKeySettingsScreen(null));
                 }
-            }
-            while (quickStackKey.consumeClick()) {
-                OneKeyFabric.LOGGER.info("[OneKey] 快速堆叠：待实现（M5）");
-            }
-            while (quickStashKey.consumeClick()) {
-                OneKeyFabric.LOGGER.info("[OneKey] 一键存入：待实现（M5）");
             }
         });
 
@@ -225,6 +246,22 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         }
 
         ClientPlayNetworking.send(new SortRequestPayload(new SortRequest(syncId, mode)));
+    }
+
+    private static void triggerQuickStack(Minecraft client, boolean stash) {
+        if (client.player == null) {
+            return;
+        }
+
+        if (!ClientPlayNetworking.canSend(QuickStackRequestPayload.TYPE)) {
+            client.player.sendOverlayMessage(
+                    Component.translatable("onekey.quick_stack.server_not_installed"));
+            return;
+        }
+
+        int syncId = client.player.containerMenu != null ? client.player.containerMenu.containerId : -1;
+        int radius = OneKeyFabric.config().quickStack.radius;
+        ClientPlayNetworking.send(new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash)));
     }
 
     private static KeyMapping register(String translationKey, int defaultKey) {
