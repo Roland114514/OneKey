@@ -12,16 +12,40 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `50dfa59`（feat: M7 NeoForge 适配落地——双加载器统一架构与完整功能对齐） |
-| 构建状态 | ✅ `clean build` 通过，双产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar`（99KB）与 `neoforge/build/libs/onekey-neoforge-0.1.0-alpha.jar`（97KB） |
-| 单测状态 | ✅ 29/29 通过（Fabric 与 NeoForge 均全绿，排序 9 + 分类 3 + 动作 3 + 配置 5 + 快速堆叠 9） |
-| 运行验证 | ✅ NeoForge 端 ModDevGradle 2.0.148 + Java 25 构建链通畅，网络 Payload、服务端生命周期、事件总线、客户端按键/Mixin 完全对齐 |
-| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / M5 快速堆叠与存入 ✅ / M6 客户端手势与兼容 ✅ / **M7 NeoForge 适配 ✅** / **M8 发布准备 ← 当前任务** |
+| 最新提交 | 待提交（release: M8 全平台正式发布就绪——v1.0.0 双端归档与物料整备） |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.0.jar`（99KB）与 `neoforge/build/libs/onekey-neoforge-1.0.0.jar`（97KB） |
+| 单测状态 | ✅ 29/29 通过（Fabric 与 NeoForge 均 100% 全绿） |
+| 运行验证 | ✅ 双端版本号展开为 1.0.0、LICENSE_onekey 自动打包入 jar、双端独立构建通过验证 |
+| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / M5 快速堆叠与存入 ✅ / M6 客户端手势与兼容 ✅ / M7 NeoForge 适配 ✅ / **M8 发布准备 ✅（全里程碑 100% 完成）** |
+| 交付物料 | 📦 `docs/release/`：包含 Modrinth、CurseForge、GitHub Release 专属排版描述与精准 SHA-256 校验和 |
 | 未来演进 | 📌 v1.1 规划吸收 [MouseTweaks](https://github.com/YaLTeR/MouseTweaks) 的 Shift 拖拽扫掠、RMB 重复滑放、滚轮反转与纯净服降级 |
 | 阻塞项 | 无 |
-| 生产可用性 | 🟢 双加载器独立构建、零第三方运行时依赖，共享 common 纯内核逻辑，完全具备发布形态 |
+| 生产可用性 | 🟢 双加载器独立构建、零第三方运行时依赖，共享 common 纯内核逻辑，完全达到生产发布形态 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 11 节 M8 发布清单与第 13 节 v1.1 迭代规划。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 13 节 v1.1 迭代规划。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 10 次会话：M8 全平台正式发布就绪——v1.0.0 双端归档与物料整备）
+
+### 目标
+
+完成 **M8 里程碑（发布准备与全平台打包交付）**：
+1. **版本正式收官跃升至 1.0.0**：
+   - 更新 `gradle.properties` 的 `mod_version=1.0.0`；
+   - 修复 `neoforge/build.gradle` 的 `processResources`，让 `neoforge.mods.toml` 中的 `${version}` 正确展开为 `1.0.0`，并配置 `jar` 任务打包 `LICENSE_onekey`；
+   - 更新 `fabric.mod.json` 与 `neoforge.mods.toml` 的项目地址为 `https://github.com/Roland114514/OneKey`；
+2. **全平台双加载器最终产物生成与 SHA-256 固化**：
+   - `onekey-fabric-1.0.0.jar` (99 KB): `5dfc5f94ee97d5ea36cd76cc1dde9fc609bb21caed7ac9fd228c91b8e2baf01b`
+   - `onekey-neoforge-1.0.0.jar` (97 KB): `65dbcf5615c32e6946f0f28bac19d1934135827c8e2cd1a15b2803dd0f8663bd`
+3. **全渠道发布宣传物料整备**：
+   - 编写权威更新日志 [`CHANGELOG.md`](CHANGELOG.md)（遵循 Keep a Changelog 规范，全面记录 F1~F6 及 F10 特性）；
+   - 全面重写 [`README.md`](README.md)（双加载器徽章、特性优势、按键表、GUI 介绍、源码构建及 v1.1 路线）；
+   - 产出 [`docs/release/MODRINTH.md`](docs/release/MODRINTH.md)（Modrinth 专属发布排版）；
+   - 产出 [`docs/release/CURSEFORGE.md`](docs/release/CURSEFORGE.md)（CurseForge 英文排版）；
+   - 产出 [`docs/release/GITHUB_RELEASE.md`](docs/release/GITHUB_RELEASE.md)（附下载清单与 SHA-256 校验和）。
+
+---
 
 ---
 

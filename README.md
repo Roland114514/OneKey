@@ -1,65 +1,122 @@
-# OneKey · 我的世界操作优化
+# OneKey · 我的世界操作优化模组 (Minecraft 26.3)
 
-面向 **Minecraft 26.3（Java 25）** 的轻量操作优化模组：一键整理背包、统一快捷键框架、快速堆叠与存入附近容器。
+<p align="center">
+  <img src="fabric/src/main/resources/assets/onekey/icon.png" width="128" height="128" alt="OneKey Logo" />
+</p>
 
-- 零第三方运行时依赖，不引入 UI 库，不与同类整理 mod 抢热键冲突逻辑
-- 纯逻辑内核（排序 / 配置 / 协议）与加载器解耦，Fabric 先行，NeoForge 排期适配
-- 只做操作优化，不改方块、不改数值，可用于原版服务器（服务端未装时自动降级）
+<p align="center">
+  <strong>让收纳更简单，装完就能少点几百次鼠标。</strong><br>
+  面向 Minecraft 26.3（Java 25）的超轻量、零第三方运行时依赖操作优化模组。<br>
+  原生支持 <strong>Fabric</strong> 与 <strong>NeoForge</strong> 双加载器。
+</p>
 
-> 详细的里程碑、排期与验收标准见 [PLAN.md](PLAN.md)；每天收工的工作日志（含交接信息与踩坑记录）见 [WORKLOG.md](WORKLOG.md)。
+<p align="center">
+  <a href="https://github.com/Roland114514/OneKey/releases"><img src="https://img.shields.io/github/v/release/Roland114514/OneKey?color=brightgreen&label=Release" alt="Release"></a>
+  <img src="https://img.shields.io/badge/Minecraft-26.3-informational" alt="Minecraft 26.3">
+  <img src="https://img.shields.io/badge/Java-25-orange" alt="Java 25">
+  <img src="https://img.shields.io/badge/Loaders-Fabric%20%7C%20NeoForge-blue" alt="Loaders">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"></a>
+</p>
 
-当前产物（2026-11-04 验证）：`bash scripts/with-jdk25.sh clean build` 通过、19 例单测全绿、开发客户端可进入标题界面并呼出设置菜单、开发服务端可正常启动并生成 `config/onekey.json`。
+---
 
-## 当前状态
+## 💡 为什么选择 OneKey？
 
-| 阶段 | 内容 | 状态 |
-| --- | --- | --- |
-| M0 | 工具链（JDK 25 + Gradle 9.8.2 + Loom 1.19） | ✅ 完成 |
-| M1 | 双源集项目骨架、资源与语言文件 | ✅ 完成 |
-| M2 | 纯逻辑内核：排序、分类、配置、协议 DTO + 13 例单测 | ✅ 完成 |
-| M3 | 一键整理（客户端请求 / 服务端执行） | ✅ 完成 |
-| M4 | 统一热键框架 + 图形设置界面 + 槽位锁定交互 | ✅ 完成 |
-| M5 | 快速堆叠 / 存入附近容器 | ⬜ 未开始 |
-| M6 | 客户端点击模拟与容器手势增强 | ⬜ 未开始 |
-| M7 | NeoForge 适配 | ⬜ 未开始 |
-| M8 | 发布（Modrinth / CurseForge / GitHub Release） | ⬜ 未开始 |
+1. **零第三方运行时依赖**：不捆绑庞大的配置库（如 Cloth Config），不依赖复杂的统一抽象层，体积不到 100 KB，纯净启动零开销。
+2. **双加载器原生对齐**：使用相同的核心逻辑内核，在 Fabric 与 NeoForge 平台上享受 100% 完全一致的性能与交互。
+3. **0ms 乐观 UI 响应**：按下整理按键瞬间，客户端即刻通过射线置换展现整理效果并播放音效，服务端权威异步校准，告别网络卡顿感。
+4. **快捷栏绝对保护**：底部 9 格快捷栏（0..8）严格**不参与**背包整理与批量堆叠，随身工具、武器与图腾永远保持在熟悉的位置。
+5. **槽位锁定与视觉高亮**：按住 `Alt + 左键` 即可随时锁定珍贵物品槽位，锁定槽位在整理与存入时受到绝对保护，数据按世界存档独立持久化。
+6. **周围容器快速堆叠与存入**：无需一个个手动开启箱子，一键即可将背包战利品智能并入周围 6 格范围内的对应容器。
 
-## 快捷键（默认）
+---
 
-| 按键 | 功能 | 说明 |
-| --- | --- | --- |
-| `R` | 一键整理 | 鼠标悬停槽位/锁定槽位不参与排序 |
-| `V` | 快速堆叠 | 把背包内物品堆叠进附近容器 |
-| `B` | 存入附近容器 | 整叠存入，可按白/黑名单过滤 |
-| `K` | OneKey 设置 | 图形界面修改热键与规则 |
+## 🎮 默认快捷键与手势
 
-所有按键均可在「选项 → 控制 → 按键绑定 → OneKey」中重绑，配置文件为 `config/onekey.json`。
+| 快捷键 / 手势 | 动作名称 | 适用场景 | 功能说明 |
+|:---:|:---:|:---:|---|
+| <kbd>R</kbd> | **一键整理** | 容器/背包打开时 | 按「分类 → 名称 → 数量」排序物品，空格后置，快捷栏与锁定格不动 |
+| <kbd>V</kbd> | **快速堆叠** | 靠近容器或任何时候 | 自动将背包内物品并入周围 6 格内容器的现有同类堆叠中 |
+| <kbd>B</kbd> | **一键存入** | 靠近容器或任何时候 | 将背包内整叠符合条件的物品存入周围容器，空槽智能填充 |
+| <kbd>K</kbd> | **打开设置** | 任何游戏界面 | 呼出 OneKey 原生配置界面，直观调整各项开关与参数 |
+| <kbd>Alt</kbd> + **左键** | **槽位锁定** | 悬停任意槽位 | 切换槽位锁定状态；锁定后显示高亮红框，免受一切整理与存入操作影响 |
+| <kbd>Shift</kbd> + **双击** | **批量同类转移** | 悬停任意槽位 | 300ms 内双击某槽位，自动搜寻同侧所有同类未锁定物品移入对侧容器 |
+| **滚轮上滚 / 下滚** | **单件微调进出** | 悬停任意槽位 | 向上滚动从对侧抓取 1 件补充当前格；向下滚动移出 1 件到对侧 |
 
-## 从源码构建
+> 提示：所有快捷键均可在原版「选项 → 控制 → 按键绑定 → OneKey」中自由修改。
 
-需要 JDK 25（仓库自带脚本会复用 `.jdk/temurin-25`，并把 Gradle 缓存放到项目内 `.gradle-home/`）：
+---
+
+## ⚙️ 图形设置界面
+
+按下 <kbd>K</kbd> 键即可呼出游戏内原生设置界面（完全基于 Minecraft 原生 UI 构建，无需额外安装任何库）：
+
+- **整理开关与规则**：可自由切换「分类排序」、「名称排序」与「数量降序」；
+- **快速堆叠参数**：自由调整容器扫描半径（默认 6 格，可在 0~16 格之间滑动配置）；
+- **操作冷却时间**：内置防连击冷却（默认 250ms），保障服务器性能；
+- **黑白名单配置**：支持在 `config/onekey.json` 中配置容器黑白名单。
+
+---
+
+## 📦 安装与要求
+
+### 运行环境
+- **游戏版本**：Minecraft 26.3
+- **运行环境**：Java 25（Temurin 25 / Oracle 25 / OpenJDK 25）
+- **加载器支持**：
+  - **Fabric**：Fabric Loader >= 0.20.1，Fabric API >= 0.165.2+26.3
+  - **NeoForge**：NeoForge >= 26.3.0.101
+
+### 服务端与多人游戏支持
+- **单人模式**：完全开箱即用，所有功能完整生效。
+- **多人服务器**：推荐在服务端与客户端**双端同时安装**。服务端权威保证物品绝对守恒，杜绝任何刷物与丢物漏洞；客户端乐观预测提供 0ms 顺滑手感。
+
+---
+
+## 🛠️ 从源码构建
+
+本项目采用 Gradle 多模块架构（`common` 纯逻辑内核 + `fabric` 平台壳 + `neoforge` 平台壳），构建依赖仓库内建脚本：
 
 ```bash
-# 构建（含单元测试）
-bash scripts/with-jdk25.sh build
+# 克隆代码仓库
+git clone https://github.com/Roland114514/OneKey.git
+cd OneKey
 
-# 启动带模组的客户端
+# 执行全量多模块编译与单测（使用自带 JDK 25 脚本）
+bash scripts/with-jdk25.sh clean build
+
+# 单独启动 Fabric 客户端测试
 bash scripts/with-jdk25.sh :fabric:runClient
+
+# 单独启动 NeoForge 客户端测试
+bash scripts/with-jdk25.sh :neoforge:runClient
 ```
 
-产物：`fabric/build/libs/onekey-fabric-<version>.jar`。
+构建成功后产物位于：
+- `fabric/build/libs/onekey-fabric-1.0.0.jar`
+- `neoforge/build/libs/onekey-neoforge-1.0.0.jar`
 
-## 目录结构
+---
 
-```
-common/src/main/java/      纯逻辑内核（排序、分类、配置、协议），不引用 Minecraft
-common/src/test/java/      内核单元测试（JUnit 5 + Gson）
-fabric/src/main/java/      Fabric 入口与（后续）服务端逻辑
-fabric/src/client/java/    Fabric 客户端入口、热键与界面
-fabric/src/main/resources/ fabric.mod.json、mixin 配置、语言文件、图标
-scripts/with-jdk25.sh      JDK 25 + 项目内 Gradle 缓存的构建包装脚本
-```
+## 🗺️ 发展路线 (Roadmap)
 
-## 许可证
+- [x] **v1.0.0 (M0 ~ M8)**：
+  - [x] 双加载器（Fabric + NeoForge）原生支持
+  - [x] 0ms 乐观 UI 一键背包整理
+  - [x] Alt+左键槽位锁定与红框高亮（存档世界独立持久化）
+  - [x] 底部 0..8 快捷栏严格隔离保护
+  - [x] 附近多容器快速堆叠与一键存入（两阶段贪心算法与物品守恒校验）
+  - [x] Shift 双击批量同类转移与滚轮单件进出微调
+  - [x] 智能同类背包模组冲突检测
+  - [x] 原生纯净无依赖设置 GUI
+- [ ] **v1.1.0**：
+  - [ ] 吸收 [MouseTweaks](https://github.com/YaLTeR/MouseTweaks) 交互长处：Shift+左键拖拽扫掠连续转移（LMB Sweep，带快捷栏与锁定豁免保护）
+  - [ ] 工作台/背包右键拖拽重复划动投放（RMB Drag Repeated Placement）
+  - [ ] 滚轮自然方向反转开关（`sort.invertWheel`）与光标持物空槽微调
+  - [ ] 纯客户端降级模式（Vanilla Click Fallback，未装服务端时自动走原版点击交互）
 
-[MIT](LICENSE)
+---
+
+## 📄 开源许可证
+
+本项目基于 [MIT 许可证](LICENSE) 开源。欢迎 Star、提交 Issue 或发起 Pull Request！

@@ -8,8 +8,9 @@
 		"easan"
 	],
 	"contact": {
-		"homepage": "https://github.com/easan/onekey",
-		"sources": "https://github.com/easan/onekey"
+		"homepage": "https://github.com/Roland114514/OneKey",
+		"sources": "https://github.com/Roland114514/OneKey",
+		"issues": "https://github.com/Roland114514/OneKey/issues"
 	},
 	"license": "MIT",
 	"icon": "assets/onekey/icon.png",

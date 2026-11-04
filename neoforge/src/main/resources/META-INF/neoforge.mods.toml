@@ -2,6 +2,7 @@ modLoader = "javafml"
 loaderVersion = "[1,)"
 license = "MIT"
 issueTrackerURL = "https://github.com/Roland114514/OneKey/issues"
+displayURL = "https://github.com/Roland114514/OneKey"
 
 [[mods]]
 modId = "onekey"

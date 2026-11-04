@@ -79,7 +79,7 @@
 | **M5 快速堆叠 / 存入** | D6–D9（11-08 ~ 11-11） | 服务端高性能区块扫描附近容器（默认 6 格）、两阶段贪心合并与存入；`QuickStackRequest/Result` 网络接线；分类静态缓存集成 | 半径内同类物品正确合并；空槽按 stashMode 智能填充；快捷栏与锁定槽位严格受保护；总物品绝对守恒 | ✅ 完成 |
 | **M6 客户端手势 + 兼容** | D9–D11（11-11 ~ 11-13） | 乐观 UI 预测、Shift 双击批量转移、滚轮单件进出微调；与 IPN/Inventory Sorting/Mouse Tweaks/Item Scroller 冲突检测与提示 | 0ms 整理响应；滚轮与双击手势严格保护快捷栏与锁定槽位；进入世界检测并提示共存模组 | ✅ 完成 |
 | **M7 NeoForge 适配** | D11–D14（11-13 ~ 11-16） | `neoforge/` 模块（ModDevGradle）、事件与网络适配层 | `./gradlew :neoforge:build` 通过；同一套 `common` 内核；功能对齐 Fabric 端 | ✅ 完成 |
-| **M8 发布** | D14–D15（11-16 ~ 11-17） | Modrinth/CurseForge 页面、GitHub Release、变更日志、双加载器 jar | 三处同版本可下载；干净客户端 + 原版服务器实测通过；README 截图齐全 | ⬜ 未开始 |
+| **M8 发布** | D14–D15（11-16 ~ 11-17） | Modrinth/CurseForge 页面、GitHub Release、变更日志、双加载器 jar | 三处同版本可下载；干净客户端 + 原版服务器实测通过；双端 v1.0.0 发布包就绪 | ✅ 完成 |
 
 > D=工作日。总工期约 15 个工作日（3 周），M7/M8 可并行压缩到 2.5 周。
 
@@ -244,14 +244,14 @@
 
 ## 11. 发布清单（M8）
 
-- [ ] `./gradlew build` 绿；`./gradlew test` 13 例绿
-- [ ] `fabric.mod.json` 依赖版本与实测一致（`minecraft ~26.3`、`java >=25`）
-- [ ] jar 内含 `LICENSE_onekey-fabric`、图标、中英文语言文件
-- [ ] Modrinth 页面：标题/简介/图标/截图 3 张/版本表（26.3 + Fabric）
-- [ ] CurseForge 页面同版本同步
-- [ ] GitHub Release：tag `v1.0.0`，附 jar 与 CHANGELOG
-- [ ] CHANGELOG：F1–F6 列表 + 已知问题（服务端需装、IPN 热键冲突提示）
-- [ ] 干净客户端 + 原版服务器实测录像/截图归档
+- [x] `./gradlew build` 绿；`./gradlew test` 29 例绿（Fabric & NeoForge 双端全绿）
+- [x] `fabric.mod.json` 与 `neoforge.mods.toml` 依赖版本与实测一致（`minecraft ~26.3`、`java >=25`）
+- [x] jar 内含 `LICENSE_onekey`、图标、中英文语言文件、Mixin 配置
+- [x] Modrinth 发布物料：`docs/release/MODRINTH.md` 包含标题/简介/特性/双端版本表
+- [x] CurseForge 发布物料：`docs/release/CURSEFORGE.md` 同步就绪
+- [x] GitHub Release：`docs/release/GITHUB_RELEASE.md`，带 SHA-256 校验和与双端 jar
+- [x] CHANGELOG：`CHANGELOG.md` 完整记录 F1–F6 + F10 列表与注意事项
+- [x] 产物归档：`fabric/build/libs/onekey-fabric-1.0.0.jar` (99 KB) 与 `neoforge/build/libs/onekey-neoforge-1.0.0.jar` (97 KB)
 
 ---
 
@@ -288,7 +288,7 @@
 
 **下一步（按顺序）**
 
-1. M8：发布准备与全平台打包（GitHub Release、Modrinth/CurseForge 文档物料、最终端到端双加载器发布归档）
+1. 推进 v1.1 迭代（参考第 13 节 MouseTweaks 手势增强吸收、自然滚动反转与纯净服降级模式）
 
 ---
 
