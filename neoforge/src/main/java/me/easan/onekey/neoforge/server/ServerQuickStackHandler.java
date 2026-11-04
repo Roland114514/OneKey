@@ -23,9 +23,14 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.WallHangingSignBlock;
+import net.minecraft.world.level.block.WallSignBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -39,7 +44,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 /**
  * 服务端快速堆叠与一键存入处理器（NeoForge）：
  * 采用区块 BlockEntity 智能检索（常数级耗时，彻底杜绝暴力遍历方块造成的卡顿）。
- * 支持准星视线射线锁定目标容器，以及跨容器全局双阶段防污染流水线。
+ * 支持准星视线射线锁定目标容器、附着告示牌穿透解析、以及跨容器全局双阶段防污染流水线。
  */
 public final class ServerQuickStackHandler {
 
@@ -78,13 +83,13 @@ public final class ServerQuickStackHandler {
         }
 
         // 校验容器同步 ID：拒绝过期/伪造请求，保证请求与玩家当前打开的菜单一一对应
-        net.minecraft.world.inventory.AbstractContainerMenu currentMenu = player.containerMenu;
+        AbstractContainerMenu currentMenu = player.containerMenu;
         if (currentMenu == null || currentMenu.containerId != request.syncId()) {
             return;
         }
 
         // 若玩家光标当前正拿着物品，安全跳过，防止发生坐标与点击同步错位
-        if (player.containerMenu != null && !player.containerMenu.getCarried().isEmpty()) {
+        if (!currentMenu.getCarried().isEmpty()) {
             return;
         }
 
@@ -114,8 +119,11 @@ public final class ServerQuickStackHandler {
             }
         }
 
-        // 1. 高性能区块检索附近纯存储容器并匹配准星目标
-        List<ScannedContainer> targetContainers = findNearbyContainers(player, radius, config, validTargetPos, stashMode);
+        // 提取玩家当前打开的界面对应的容器（若处于箱子 GUI 内，该容器天然具备锁定优先级）
+        Container openMenuContainer = getOpenMenuContainer(currentMenu);
+
+        // 1. 高性能区块检索附近纯存储容器并匹配准星目标（含告示牌穿透与大箱子归一化）
+        List<ScannedContainer> targetContainers = findNearbyContainers(player, radius, config, validTargetPos, openMenuContainer, stashMode);
         if (targetContainers.isEmpty()) {
             context.reply(new QuickStackResultPayload(new QuickStackResult(0)));
             return;
@@ -202,6 +210,39 @@ public final class ServerQuickStackHandler {
         context.reply(new QuickStackResultPayload(new QuickStackResult(totalMoved)));
     }
 
+    private static Container getOpenMenuContainer(AbstractContainerMenu menu) {
+        if (menu == null || menu instanceof InventoryMenu) {
+            return null;
+        }
+        for (Slot slot : menu.slots) {
+            if (slot.container != null && !(slot.container instanceof Inventory)) {
+                return slot.container;
+            }
+        }
+        return null;
+    }
+
+    private static Set<BlockPos> resolveTargetPositions(ServerLevel level, BlockPos targetPos) {
+        if (targetPos == null) {
+            return Set.of();
+        }
+        Set<BlockPos> candidates = new HashSet<>();
+        candidates.add(targetPos);
+
+        // 告示牌穿透：若准星指向贴在箱子正面的告示牌，自动解析其附着的背后容器
+        BlockState state = level.getBlockState(targetPos);
+        Block block = state.getBlock();
+        if (block instanceof WallSignBlock && state.hasProperty(WallSignBlock.FACING)) {
+            Direction facing = state.getValue(WallSignBlock.FACING);
+            candidates.add(targetPos.relative(facing.getOpposite()));
+        } else if (block instanceof WallHangingSignBlock && state.hasProperty(WallHangingSignBlock.FACING)) {
+            Direction facing = state.getValue(WallHangingSignBlock.FACING);
+            candidates.add(targetPos.relative(facing.getOpposite()));
+        }
+
+        return candidates;
+    }
+
     private static boolean containsSameItem(Container target, ItemStack playerStack) {
         for (int c = 0; c < target.getContainerSize(); c++) {
             ItemStack cStack = target.getItem(c);
@@ -219,15 +260,17 @@ public final class ServerQuickStackHandler {
                 break;
             }
             ItemStack cStack = target.getItem(c);
-            if (!cStack.isEmpty() && ItemStack.isSameItemSameComponents(cStack, playerStack)) {
+            if (!cStack.isEmpty() && ItemStack.isSameItemSameComponents(cStack, playerStack) && target.canPlaceItem(c, playerStack)) {
                 int maxStack = Math.min(target.getMaxStackSize(cStack), cStack.getMaxStackSize());
                 int available = maxStack - cStack.getCount();
                 if (available > 0) {
                     int toMove = Math.min(playerStack.getCount(), available);
-                    cStack.grow(toMove);
-                    playerStack.shrink(toMove);
-                    moved += toMove;
-                    modifiedContainers.add(target);
+                    if (toMove > 0) {
+                        cStack.grow(toMove);
+                        playerStack.shrink(toMove);
+                        moved += toMove;
+                        modifiedContainers.add(target);
+                    }
                 }
             }
         }
@@ -244,6 +287,9 @@ public final class ServerQuickStackHandler {
             if (cStack.isEmpty() && target.canPlaceItem(c, playerStack)) {
                 int maxStack = Math.min(target.getMaxStackSize(playerStack), playerStack.getMaxStackSize());
                 int toMove = Math.min(playerStack.getCount(), maxStack);
+                if (toMove <= 0) {
+                    continue;
+                }
                 target.setItem(c, playerStack.copyWithCount(toMove));
                 playerStack.shrink(toMove);
                 moved += toMove;
@@ -258,6 +304,7 @@ public final class ServerQuickStackHandler {
             int radius,
             OneKeyConfig config,
             BlockPos clientTargetPos,
+            Container openMenuContainer,
             boolean stashMode
     ) {
         ServerLevel level = player.level();
@@ -272,6 +319,7 @@ public final class ServerQuickStackHandler {
         double radiusSq = radius * radius;
         Set<BlockPos> visited = new HashSet<>();
         List<ScannedContainer> scanned = new ArrayList<>();
+        Set<BlockPos> targetCandidates = resolveTargetPositions(level, clientTargetPos);
 
         for (int cx = minChunkX; cx <= maxChunkX; cx++) {
             for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
@@ -323,28 +371,42 @@ public final class ServerQuickStackHandler {
                         if (chestType == ChestType.LEFT || chestType == ChestType.RIGHT) {
                             Direction connected = ChestBlock.getConnectedDirection(state);
                             BlockPos otherHalf = pos.relative(connected).immutable();
-                            chestPositions.add(otherHalf);
                             visited.add(otherHalf);
+
+                            // 对大箱子另一半也进行安全性与锁状态复核
+                            BlockEntity otherBe = level.getBlockEntity(otherHalf);
+                            if (otherBe instanceof RandomizableContainerBlockEntity rand && rand.getLootTable() != null) {
+                                continue;
+                            }
+                            if (otherBe instanceof BaseContainerBlockEntity base && !base.canOpen(player)) {
+                                continue;
+                            }
+
+                            chestPositions.add(otherHalf);
+                            distSq = Math.min(distSq, otherHalf.distToCenterSqr(player.position()));
                         }
                         visited.add(pos);
 
                         Container chestContainer = ChestBlock.getContainer(chestBlock, state, level, pos, false);
                         if (chestContainer != null && chestContainer.stillValid(player)) {
-                            boolean isTargeted = clientTargetPos != null && chestPositions.contains(clientTargetPos);
+                            boolean isTargeted = (openMenuContainer != null && (chestContainer == openMenuContainer || chestContainer.equals(openMenuContainer)))
+                                    || targetCandidates.stream().anyMatch(chestPositions::contains);
                             boolean allowDumpNew = stashMode && isTargeted;
                             scanned.add(new ScannedContainer(chestContainer, chestPositions, distSq, isTargeted, allowDumpNew));
                         }
                     } else if (be instanceof BarrelBlockEntity barrel) {
                         visited.add(pos);
                         if (barrel.stillValid(player) && barrel.canOpen(player)) {
-                            boolean isTargeted = clientTargetPos != null && pos.equals(clientTargetPos);
+                            boolean isTargeted = (openMenuContainer != null && (barrel == openMenuContainer || barrel.equals(openMenuContainer)))
+                                    || targetCandidates.contains(pos);
                             boolean allowDumpNew = stashMode && isTargeted;
                             scanned.add(new ScannedContainer(barrel, Set.of(pos.immutable()), distSq, isTargeted, allowDumpNew));
                         }
                     } else if (be instanceof ShulkerBoxBlockEntity shulker) {
                         visited.add(pos);
                         if (shulker.stillValid(player) && shulker.canOpen(player)) {
-                            boolean isTargeted = clientTargetPos != null && pos.equals(clientTargetPos);
+                            boolean isTargeted = (openMenuContainer != null && (shulker == openMenuContainer || shulker.equals(openMenuContainer)))
+                                    || targetCandidates.contains(pos);
                             boolean allowDumpNew = stashMode && isTargeted;
                             scanned.add(new ScannedContainer(shulker, Set.of(pos.immutable()), distSq, isTargeted, allowDumpNew));
                         }
