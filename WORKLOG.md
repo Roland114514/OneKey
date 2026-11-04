@@ -12,15 +12,52 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `86ff0f2`（M3: 一键整理落地，打通双向网络通信与服务端安全排序） |
+| 最新提交 | `8a5bffa`（fix: 修正锁定槽位坐标错位并限制外部容器白名单，P0×2） |
 | 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` |
-| 单测状态 | ✅ 14/14 通过（排序 7 + 分类 3 + 配置 4） |
-| 运行验证 | ✅ 开发服务端正常加载锁定槽位；开发客户端注入 accessor mixin 正常 |
+| 单测状态 | ✅ 16/16 通过（排序 9 + 分类 3 + 配置 4） |
+| 运行验证 | ✅ 开发服务端正常加载锁定槽位；P0 修复后 clean build 通过、单测 16/16 |
 | 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / **M3 一键整理 ✅** / **M4 热键与设置界面 ← 下一步** |
 | 阻塞项 | 无（用户已拍板 3 项产品决策：R键保持、快捷栏不参与、锁定槽位存档级隔离） |
 | 生产可用性 | 🟡 核心一键整理网络与执行链路已全通，待 M4 设置界面与 M5 堆叠逻辑 |
 
 **接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M4 任务清单。
+
+---
+
+## 2026-11-04（第 2 个工作日 · P0 安全修复）
+
+### 目标
+
+按用户要求（"先修，记得存到git"）修复审查中发现的 2 个 P0 隐患，补充单测，构建通过后提交推送。
+
+### 修复内容
+
+**P0-1 锁定槽位坐标错位**（`Sorter.permutation` 的 `locked.contains(i)` 用过滤后视图下标，而 `LockedSlotsStorage` 存容器槽位号；玩家背包视图 27 格对应容器槽 9..35 差 9，越界静默失效；且 `setSlotLocked` 无任何调用者）。
+
+- 新增纯函数 `Sorter.resolveLockedPositions(List<Integer> slotLockKeys, Set<Integer> lockedKeys)`，把「锁定键」换算成视图下标。
+- `ServerSortingHandler` 读取侧：为每个待排序槽位生成 `lockIndexFor(player, slot)`（玩家背包 = `slot.getContainerSlot()` 0..35；外部容器 = `slot.index` 菜单槽位号），统一喂给 `resolveLockedPositions`，再交给 `permutation`。
+- 锁定作用域改为按「实际排序的槽位」判定（`slotsToSort[0].container == player.getInventory()`），避免在熔炉等界面降级整理背包时错读 `minecraft:furnace` 键下的锁。
+- `LockedSlotsStorage` javadoc 补充坐标约定。
+
+**P0-2 外部容器排序会搬动加工/结果槽**（`isSortableExternalSlot` 只排除 `ResultSlot`/`CraftingContainer`/`isFake`；26.3 里 `FurnaceResultSlot`/`NonInteractiveResultSlot` 直接 extends `Slot`，熔炉产物/交易/信标/酿造/铁砧专用槽不排除 → 搬动会绕过经验结算、可复制）。
+
+- 新增菜单类型白名单 `SORTABLE_MENU_TYPES`：`GENERIC_9x1..9x6` + `GENERIC_3x3`（发射器/投掷器）+ `HOPPER` + `SHULKER_BOX`，只整理纯存储容器。
+- 不在白名单内的容器界面（熔炉/工作台/铁砧/交易/信标/酿造/切石机/附魔等）降级为整理玩家主背包，绝不碰容器本体。
+
+### 新增单测（`SorterTest`，2 例）
+
+- `resolveLockedPositionsMapsContainerIndicesToViewPositions`：容器槽位号 9..12 映射锁定键 {10,12} → 视图下标 {1,3}。
+- `permutationKeepsItemAtMappedLockedPosition`：27 格背包视图锁定容器槽 12（视图 3），排序后该物品原位不动。
+
+### 验证记录
+
+| 验证项 | 命令 / 方式 | 结果 |
+|---|---|---|
+| 完整构建 + 单测 | `bash scripts/with-jdk25.sh clean build` | BUILD SUCCESSFUL，单测 16/16（排序 9 + 分类 3 + 配置 4） |
+
+### 下一步
+
+进入 **M4 热键框架 + 设置界面**（`ActionRegistry`、原版风格设置界面、`Alt+左键` 槽位锁定切换与高亮渲染，接入 `LockedSlotsStorage.setSlotLocked` 给 P0-1 补上写入入口）。
 
 ---
 
