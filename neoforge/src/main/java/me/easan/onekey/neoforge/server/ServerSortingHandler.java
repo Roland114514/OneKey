@@ -59,6 +59,13 @@ public final class ServerSortingHandler {
 
         OneKeyConfig config = OneKeyNeoForge.config();
         if (!config.sort.enabled) {
+            // 服务端关闭整理时必须把权威状态推回客户端：客户端已做乐观排序，
+            // 静默 return 会留下「界面整齐、服务端没动」的幽灵状态。
+            AbstractContainerMenu disabledMenu = player.containerMenu;
+            if (disabledMenu != null) {
+                disabledMenu.sendAllDataToRemote();
+            }
+            context.reply(new SortResultPayload(new SortResult(false, 0)));
             return;
         }
 

@@ -73,11 +73,17 @@ public final class OneKeyFabricClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        // 基于 ActionRegistry 统一管理默认热键映射
-        sortKey = register(ActionRegistry.get(ActionId.SORT).orElseThrow().translationKey(), InputConstants.KEY_R);
-        quickStackKey = register(ActionRegistry.get(ActionId.QUICK_STACK).orElseThrow().translationKey(), InputConstants.KEY_V);
-        quickStashKey = register(ActionRegistry.get(ActionId.QUICK_STASH).orElseThrow().translationKey(), InputConstants.KEY_B);
-        settingsKey = register(ActionRegistry.get(ActionId.SETTINGS).orElseThrow().translationKey(), InputConstants.KEY_K);
+        // 默认键位来自 config/onekey.json 的 hotkeys 段（非法键名自动回退到内置默认值），
+        // 真正的按键重绑仍走原版「选项 → 控制 → 按键绑定」，此处只负责首次注册的默认值。
+        var hotkeys = OneKeyFabric.config().hotkeys;
+        sortKey = register(ActionRegistry.get(ActionId.SORT).orElseThrow().translationKey(),
+                configuredKey(hotkeys.sort, InputConstants.KEY_R));
+        quickStackKey = register(ActionRegistry.get(ActionId.QUICK_STACK).orElseThrow().translationKey(),
+                configuredKey(hotkeys.quickStack, InputConstants.KEY_V));
+        quickStashKey = register(ActionRegistry.get(ActionId.QUICK_STASH).orElseThrow().translationKey(),
+                configuredKey(hotkeys.quickStash, InputConstants.KEY_B));
+        settingsKey = register(ActionRegistry.get(ActionId.SETTINGS).orElseThrow().translationKey(),
+                configuredKey(hotkeys.settings, InputConstants.KEY_K));
 
         // 1. 注册客户端整理结果与锁定槽位网络接收器
         ClientPlayNetworking.registerGlobalReceiver(SortResultPayload.TYPE, (payload, context) -> {
@@ -586,5 +592,21 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                 InputConstants.Type.KEYBOARD,
                 defaultKey,
                 CATEGORY));
+    }
+
+    /**
+     * 把配置里的键名（如 {@code key.keyboard.g}）解析成 GLFW 键码；
+     * 配置缺失、为空或写了非法键名时回退到内置默认键，绝不让手改配置导致客户端启动失败。
+     */
+    private static int configuredKey(String configured, int fallback) {
+        if (configured == null || configured.isBlank()) {
+            return fallback;
+        }
+        try {
+            return InputConstants.getKey(configured).getValue();
+        } catch (RuntimeException exception) {
+            OneKeyFabric.LOGGER.warn("[OneKey] 无法识别的按键配置 \"{}\"，回退默认键位", configured);
+            return fallback;
+        }
     }
 }

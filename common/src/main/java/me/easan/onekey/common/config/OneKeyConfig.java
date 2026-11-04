@@ -53,8 +53,14 @@ public final class OneKeyConfig {
         public int radius = 6;
         /** true = 全部存入（stash），false = 只补已有物品（quick stack）。 */
         public boolean stashMode = false;
+        /** 容器方块白名单（方块 id，如 {@code minecraft:chest}）；空 = 允许所有可识别容器。 */
         public List<String> whitelist = new ArrayList<>();
+        /** 容器方块黑名单（方块 id，优先于白名单）。 */
         public List<String> blacklist = new ArrayList<>();
+        /** 参与堆叠/存入的物品白名单（物品 id，如 {@code minecraft:diamond}）；空 = 不限制物品。 */
+        public List<String> itemWhitelist = new ArrayList<>();
+        /** 排除的物品黑名单（物品 id，优先于白名单）。 */
+        public List<String> itemBlacklist = new ArrayList<>();
     }
 
     /** 纯客户端点击模拟（用于公共服务器）的开关，默认关闭。 */
@@ -83,6 +89,12 @@ public final class OneKeyConfig {
         }
         if (quickStack.blacklist == null) {
             quickStack.blacklist = new ArrayList<>();
+        }
+        if (quickStack.itemWhitelist == null) {
+            quickStack.itemWhitelist = new ArrayList<>();
+        }
+        if (quickStack.itemBlacklist == null) {
+            quickStack.itemBlacklist = new ArrayList<>();
         }
         // 数值上下限约束，防止异常配置引发计算暴涨或失去冷却保护
         sort.cooldownMs = Math.clamp(sort.cooldownMs, 50, 5000);

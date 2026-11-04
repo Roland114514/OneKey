@@ -209,8 +209,10 @@
 | `sort.lockedSlots` | map | `{}` | 按容器类型记录的锁定槽位 |
 | `quickStack.radius` | int | 6 | 容器扫描半径（0–16，越界钳制） |
 | `quickStack.stashMode` | bool | false | false=只并入同类堆叠（快速堆叠）；true=整叠存入（一键存入） |
-| `quickStack.whitelist` | list | `[]` | 允许的容器；空 = 不限制 |
-| `quickStack.blacklist` | list | `[]` | 禁止的容器（优先于白名单） |
+| `quickStack.whitelist` | list | `[]` | 允许的容器方块 id；空 = 不限制 |
+| `quickStack.blacklist` | list | `[]` | 禁止的容器方块 id（优先于白名单） |
+| `quickStack.itemWhitelist` | list | `[]` | 参与堆叠的物品 id；空 = 不限制 |
+| `quickStack.itemBlacklist` | list | `[]` | 排除的物品 id（优先于物品白名单） |
 | `compat.enabled` | bool | false | 点击模拟兼容层开关 |
 | `compat.clickDelayMs` | int | 60 | 模拟点击间隔 |
 
@@ -244,14 +246,14 @@
 
 ## 11. 发布清单（M8）
 
-- [x] `./gradlew build` 绿；`./gradlew test` 29 例绿（Fabric & NeoForge 双端全绿）
+- [x] `./gradlew build` 绿；`./gradlew test` 36 例绿（Fabric & NeoForge 双端各 36 例，合计 72 例全绿）
 - [x] `fabric.mod.json` 与 `neoforge.mods.toml` 依赖版本与实测一致（`minecraft ~26.3`、`java >=25`）
 - [x] jar 内含 `LICENSE_onekey`、图标、中英文语言文件、Mixin 配置
 - [x] Modrinth 发布物料：`docs/release/MODRINTH.md` 包含标题/简介/特性/双端版本表
 - [x] CurseForge 发布物料：`docs/release/CURSEFORGE.md` 同步就绪
 - [x] GitHub Release：`docs/release/GITHUB_RELEASE.md`，带 SHA-256 校验和与双端 jar
 - [x] CHANGELOG：`CHANGELOG.md` 完整记录 F1–F6 + F10 列表与注意事项
-- [x] 产物归档：`fabric/build/libs/onekey-fabric-1.0.0.jar` (99 KB) 与 `neoforge/build/libs/onekey-neoforge-1.0.0.jar` (97 KB)
+- [x] 产物归档：`fabric/build/libs/onekey-fabric-1.0.1.jar` (100 KB) 与 `neoforge/build/libs/onekey-neoforge-1.0.1.jar` (97 KB)
 
 ---
 
@@ -309,4 +311,9 @@
    - 空槽交互微调：手持物品悬停空槽时，滚轮可单件连续分发或收回。
 4. **客户端降级模拟模式（Vanilla Click Fallback）**：
    - 机制：当进入未安装 OneKey 服务端的第三方/原版服务器时，手势操作自动降级为调用原版 `gameMode.handleInventoryMouseClick` 发送原版容器点击包，保证在任何纯净服务器上依然能享受完整手势增强。
+5. **B 键快速存入精准控制重构（准星视线锁定优先 + 智能分类防污染）**：
+   - 痛点：目前采用以玩家为中心的纯几何距离扫描，多个并排箱子时无法控制存入哪一个，距离最近的箱子会成为黑洞吸走所有异物，打乱玩家分类；
+   - 准星视线锁定（Crosshair Raycast）：准星对准有效容器时目标唯一锁定为该容器，实现“看哪存哪”；未对准容器时退化为范围广播；
+   - 智能分类防污染（Smart Matching）：范围广播存入时，严禁向空槽存入该容器原本没有的陌生物品，分类箱受绝对保护；
+   - 容器界面强绑定：在打开某容器 GUI 时按 B，目标强制锁定为当前打开的容器。
 

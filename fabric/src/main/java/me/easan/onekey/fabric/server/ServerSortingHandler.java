@@ -66,6 +66,13 @@ public final class ServerSortingHandler {
 
         OneKeyConfig config = OneKeyFabric.config();
         if (!config.sort.enabled) {
+            // 服务端关闭整理时必须把权威状态推回客户端：客户端发包瞬间已做乐观排序，
+            // 这里若静默 return 会留下「界面看着整齐、服务端没动」的幽灵状态。
+            AbstractContainerMenu disabledMenu = player.containerMenu;
+            if (disabledMenu != null) {
+                disabledMenu.sendAllDataToRemote();
+            }
+            context.responseSender().sendPacket(new SortResultPayload(new SortResult(false, 0)));
             return;
         }
 

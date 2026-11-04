@@ -76,7 +76,9 @@ public final class ServerQuickStackHandler {
         }
         LAST_QUICK_STACK_TIME.put(player.getUUID(), now);
 
-        int radius = Math.clamp(request.radius() > 0 ? request.radius() : config.quickStack.radius, 1, 32);
+        // 半径以「服务端配置」为硬上限：客户端可自填 1..32，若直接采信就能绕过服主调小的扫描范围
+        int requestedRadius = request.radius() > 0 ? request.radius() : config.quickStack.radius;
+        int radius = Math.clamp(Math.min(requestedRadius, config.quickStack.radius), 1, 32);
         boolean stashMode = request.stash() || config.quickStack.stashMode;
 
         // 1. 高性能区块检索附近纯存储容器
@@ -104,10 +106,12 @@ public final class ServerQuickStackHandler {
 
             Identifier itemId = BuiltInRegistries.ITEM.getKey(playerStack.getItem());
             String itemIdStr = itemId != null ? itemId.toString() : "";
-            if (!config.quickStack.blacklist.isEmpty() && config.quickStack.blacklist.contains(itemIdStr)) {
+            // 物品维度用 itemWhitelist/itemBlacklist；whitelist/blacklist 专指容器方块，
+            // 不可混用（旧实现把物品 id 与方块 id 塞进同一列表，白名单填物品会让所有容器被过滤）。
+            if (!config.quickStack.itemBlacklist.isEmpty() && config.quickStack.itemBlacklist.contains(itemIdStr)) {
                 continue;
             }
-            if (!config.quickStack.whitelist.isEmpty() && !config.quickStack.whitelist.contains(itemIdStr)) {
+            if (!config.quickStack.itemWhitelist.isEmpty() && !config.quickStack.itemWhitelist.contains(itemIdStr)) {
                 continue;
             }
 

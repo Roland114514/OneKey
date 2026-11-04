@@ -29,6 +29,7 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -77,14 +78,17 @@ public final class OneKeyNeoForgeClient {
     }
 
     private static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
+        // 默认键位来自 config/onekey.json 的 hotkeys 段（非法键名自动回退内置默认值），
+        // 真正的按键重绑仍在原版「选项 → 控制 → 按键绑定」中完成。
+        var hotkeys = OneKeyNeoForge.config().hotkeys;
         sortKey = new KeyMapping(ActionRegistry.get(ActionId.SORT).orElseThrow().translationKey(),
-                InputConstants.Type.KEYBOARD, InputConstants.KEY_R, CATEGORY);
+                InputConstants.Type.KEYBOARD, configuredKey(hotkeys.sort, InputConstants.KEY_R), CATEGORY);
         quickStackKey = new KeyMapping(ActionRegistry.get(ActionId.QUICK_STACK).orElseThrow().translationKey(),
-                InputConstants.Type.KEYBOARD, InputConstants.KEY_V, CATEGORY);
+                InputConstants.Type.KEYBOARD, configuredKey(hotkeys.quickStack, InputConstants.KEY_V), CATEGORY);
         quickStashKey = new KeyMapping(ActionRegistry.get(ActionId.QUICK_STASH).orElseThrow().translationKey(),
-                InputConstants.Type.KEYBOARD, InputConstants.KEY_B, CATEGORY);
+                InputConstants.Type.KEYBOARD, configuredKey(hotkeys.quickStash, InputConstants.KEY_B), CATEGORY);
         settingsKey = new KeyMapping(ActionRegistry.get(ActionId.SETTINGS).orElseThrow().translationKey(),
-                InputConstants.Type.KEYBOARD, InputConstants.KEY_K, CATEGORY);
+                InputConstants.Type.KEYBOARD, configuredKey(hotkeys.settings, InputConstants.KEY_K), CATEGORY);
 
         event.register(sortKey);
         event.register(quickStackKey);
@@ -92,9 +96,37 @@ public final class OneKeyNeoForgeClient {
         event.register(settingsKey);
     }
 
+    /**
+     * 把配置里的键名（如 {@code key.keyboard.g}）解析成 GLFW 键码；非法值回退内置默认键，
+     * 不让手改配置导致按键注册阶段抛异常。
+     */
+    private static int configuredKey(String configured, int fallback) {
+        if (configured == null || configured.isBlank()) {
+            return fallback;
+        }
+        try {
+            return InputConstants.getKey(configured).getValue();
+        } catch (RuntimeException exception) {
+            OneKeyNeoForge.LOGGER.warn("[OneKey-NeoForge] 无法识别的按键配置 \"{}\"，回退默认键位", configured);
+            return fallback;
+        }
+    }
+
+    /**
+     * 判断当前连接是否与服务端协商过某个 OneKey 通道。
+     * 服务端未安装模组时该通道不会被协商，据此做友好降级提示（与 Fabric 端 canSend 行为对齐）。
+     */
+    private static boolean serverSupports(CustomPacketPayload.Type<?> type) {
+        var connection = Minecraft.getInstance().getConnection();
+        return connection != null && connection.hasChannel(type);
+    }
+
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) {
+            if (!serverSupports(RequestSlotLocksPayload.TYPE)) {
+                return; // 服务端未装 OneKey：不发锁定请求，避免无意义的未知通道包
+            }
             ClientPacketDistributor.sendToServer(new RequestSlotLocksPayload("player_inventory"));
             if (containerScreen.getMenu() != null) {
                 String menuKey = ClientLockedSlots.getMenuTypeKey(containerScreen.getMenu());
@@ -187,6 +219,9 @@ public final class OneKeyNeoForgeClient {
         }
         lastScrollTime = now;
 
+        if (!serverSupports(ScrollItemTransferPayload.TYPE)) {
+            return;
+        }
         boolean scrollUp = vertical > 0;
         ClientPacketDistributor.sendToServer(new ScrollItemTransferPayload(containerScreen.getMenu().containerId, hovered.index, scrollUp));
         client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, scrollUp ? 1.4F : 1.1F));
@@ -342,6 +377,9 @@ public final class OneKeyNeoForgeClient {
             slotIndex = slot.index;
         }
 
+        if (!serverSupports(ToggleSlotLockPayload.TYPE)) {
+            return;
+        }
         boolean nowLocked = ClientLockedSlots.toggle(containerKey, slotIndex);
         client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, nowLocked ? 1.4F : 0.9F));
         ClientPacketDistributor.sendToServer(new ToggleSlotLockPayload(containerKey, slotIndex));
@@ -411,6 +449,12 @@ public final class OneKeyNeoForgeClient {
 
     private static void triggerSort(Minecraft client, int syncId, int mode) {
         if (client.player == null || !OneKeyNeoForge.config().sort.enabled) {
+            return;
+        }
+
+        // 服务端兼容性检测：未装 OneKey 的服务器会静默丢弃我们的包，此处必须提示而不是「按了没反应」
+        if (!serverSupports(SortRequestPayload.TYPE)) {
+            client.player.sendOverlayMessage(Component.translatable("onekey.sort.server_not_installed"));
             return;
         }
 
@@ -524,6 +568,10 @@ public final class OneKeyNeoForgeClient {
 
     private static void triggerQuickStack(Minecraft client, boolean stash) {
         if (client.player == null) {
+            return;
+        }
+        if (!serverSupports(QuickStackRequestPayload.TYPE)) {
+            client.player.sendOverlayMessage(Component.translatable("onekey.quick_stack.server_not_installed"));
             return;
         }
         int syncId = client.player.containerMenu != null ? client.player.containerMenu.containerId : -1;

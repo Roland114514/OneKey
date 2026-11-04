@@ -2,6 +2,9 @@ package me.easan.onekey.neoforge.server;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import me.easan.onekey.neoforge.net.ScrollItemTransferPayload;
 import me.easan.onekey.neoforge.storage.LockedSlotsStorage;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,6 +21,12 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  */
 public final class ServerScrollHandler {
 
+    /** 滚轮微调的服务端最小间隔（毫秒）：低于此间隔的包直接丢弃（客户端 40ms 节流可被改包绕过）。 */
+    private static final long SCROLL_COOLDOWN_MS = 40L;
+
+    /** 每个玩家的上次滚轮处理时间。 */
+    private static final Map<UUID, Long> LAST_SCROLL_TIME = new ConcurrentHashMap<>();
+
     private ServerScrollHandler() {
     }
 
@@ -30,6 +39,15 @@ public final class ServerScrollHandler {
         if (menu == null || menu.containerId != payload.syncId() || !menu.stillValid(player)) {
             return;
         }
+
+        // 服务端限流：每个滚轮包都会触发一次 menu.broadcastChanges()（等价回发整份容器内容），
+        // 若只靠客户端 40ms 节流，恶意客户端可用滚轮包把服务器刷爆。
+        long now = System.currentTimeMillis();
+        Long lastScroll = LAST_SCROLL_TIME.get(player.getUUID());
+        if (lastScroll != null && now - lastScroll < SCROLL_COOLDOWN_MS) {
+            return;
+        }
+        LAST_SCROLL_TIME.put(player.getUUID(), now);
 
         // 仅在已打开且属于纯存储白名单的容器中生效，避免侵入工作台、铁砧、熔炉等特种界面
         if (!ServerSortingHandler.isMenuSortable(menu.getType())) {

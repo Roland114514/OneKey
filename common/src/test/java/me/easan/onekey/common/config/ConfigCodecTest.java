@@ -2,6 +2,7 @@ package me.easan.onekey.common.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -69,5 +70,92 @@ class ConfigCodecTest {
 
         assertTrue(Files.exists(file));
         assertTrue(ConfigCodec.load(file).compat.enabled);
+    }
+
+    @Test
+    void corruptedJsonFallsBackToDefaultsInsteadOfThrowing() {
+        // 截断的 JSON（断电/磁盘写满的典型产物）不能让游戏启动崩溃
+        OneKeyConfig truncated = ConfigCodec.fromJson("{\"sort\":{\"enabled\":tr");
+        OneKeyConfig garbage = ConfigCodec.fromJson("not json at all");
+        OneKeyConfig wrongType = ConfigCodec.fromJson("{\"sort\":\"应该是对象\"}");
+
+        assertEquals(250, truncated.sort.cooldownMs);
+        assertTrue(truncated.sort.enabled);
+        assertEquals("key.keyboard.r", garbage.hotkeys.sort);
+        assertTrue(wrongType.sort.enabled);
+        assertEquals(6, wrongType.quickStack.radius);
+    }
+
+    @Test
+    void loadOfCorruptedFileReturnsDefaults(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("onekey.json");
+        Files.writeString(file, "{\"hotkeys\":{\"sort\":");
+
+        OneKeyConfig loaded = ConfigCodec.load(file);
+
+        assertEquals("key.keyboard.r", loaded.hotkeys.sort);
+        assertEquals(250, loaded.sort.cooldownMs);
+    }
+
+    @Test
+    void saveLeavesNoTemporaryFileBehind(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("onekey.json");
+        ConfigCodec.save(file, new OneKeyConfig());
+
+        assertTrue(Files.exists(file));
+        assertTrue(Files.notExists(tempDir.resolve("onekey.json.tmp")));
+        assertEquals(1, Files.list(tempDir).count());
+    }
+
+    @Test
+    void itemAndBlockFiltersRoundTripSeparately() {
+        OneKeyConfig config = new OneKeyConfig();
+        config.quickStack.whitelist.add("minecraft:chest");
+        config.quickStack.blacklist.add("minecraft:barrel");
+        config.quickStack.itemWhitelist.add("minecraft:diamond");
+        config.quickStack.itemBlacklist.add("minecraft:dirt");
+
+        OneKeyConfig loaded = ConfigCodec.fromJson(ConfigCodec.toJson(config));
+
+        assertEquals(List.of("minecraft:chest"), loaded.quickStack.whitelist);
+        assertEquals(List.of("minecraft:barrel"), loaded.quickStack.blacklist);
+        assertEquals(List.of("minecraft:diamond"), loaded.quickStack.itemWhitelist);
+        assertEquals(List.of("minecraft:dirt"), loaded.quickStack.itemBlacklist);
+    }
+
+    @Test
+    void missingItemFilterFieldsAreNormalizedToEmptyLists() {
+        // 旧版配置文件没有 itemWhitelist/itemBlacklist 字段，必须补成空列表而不是 null
+        OneKeyConfig loaded = ConfigCodec.fromJson("{\"quickStack\":{\"radius\":6}}");
+
+        assertNotNull(loaded.quickStack.itemWhitelist);
+        assertNotNull(loaded.quickStack.itemBlacklist);
+        assertTrue(loaded.quickStack.itemWhitelist.isEmpty());
+        assertTrue(loaded.quickStack.itemBlacklist.isEmpty());
+    }
+
+    @Test
+    void backupIfCorruptedMovesBrokenFileAndKeepsGoodOne(@TempDir Path tempDir) throws IOException {
+        Path broken = tempDir.resolve("onekey.json");
+        Files.writeString(broken, "{\"quickStack\":{\"radius\":");
+        Path backup = ConfigCodec.backupIfCorrupted(broken);
+
+        assertNotNull(backup);
+        assertTrue(backup.getFileName().toString().endsWith(".corrupt"));
+        assertTrue(Files.exists(backup));
+        assertTrue(Files.notExists(broken));
+
+        Path healthy = tempDir.resolve("healthy.json");
+        ConfigCodec.save(healthy, new OneKeyConfig());
+        assertNull(ConfigCodec.backupIfCorrupted(healthy));
+        assertTrue(Files.exists(healthy));
+    }
+
+    @Test
+    void isValidJsonDetectsBrokenInput() {
+        assertTrue(ConfigCodec.isValidJson(ConfigCodec.toJson(new OneKeyConfig())));
+        assertTrue(!ConfigCodec.isValidJson("{\"sort\":"));
+        assertTrue(!ConfigCodec.isValidJson(""));
+        assertTrue(!ConfigCodec.isValidJson(null));
     }
 }

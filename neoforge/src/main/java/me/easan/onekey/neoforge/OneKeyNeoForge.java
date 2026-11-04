@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.Set;
 import me.easan.onekey.common.config.ConfigCodec;
 import me.easan.onekey.common.config.OneKeyConfig;
+import me.easan.onekey.common.net.ProtocolVersion;
 import me.easan.onekey.neoforge.client.ClientLockedSlots;
 import me.easan.onekey.neoforge.client.ClientQuickStackHandler;
 import me.easan.onekey.neoforge.client.ClientSortingHandler;
@@ -20,12 +21,14 @@ import me.easan.onekey.neoforge.server.ServerQuickStackHandler;
 import me.easan.onekey.neoforge.server.ServerScrollHandler;
 import me.easan.onekey.neoforge.server.ServerSortingHandler;
 import me.easan.onekey.neoforge.storage.LockedSlotsStorage;
+import me.easan.onekey.neoforge.util.ItemConversion;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -51,6 +54,12 @@ public final class OneKeyNeoForge {
     public OneKeyNeoForge(IEventBus modEventBus) {
         configPath = FMLPaths.CONFIGDIR.get().resolve("onekey.json");
         try {
+            // 与 Fabric 端对齐：损坏配置先留档为 onekey.json.corrupt，再重建默认值，
+            // 否则容错的 fromJson 会让玩家原始配置被默认值静默覆盖、事后无从恢复。
+            Path corruptedBackup = ConfigCodec.backupIfCorrupted(configPath);
+            if (corruptedBackup != null) {
+                LOGGER.warn("[OneKey-NeoForge] 配置文件内容损坏，已备份为 {} 并重建默认配置", corruptedBackup);
+            }
             config = ConfigCodec.load(configPath);
             ConfigCodec.save(configPath, config);
             LOGGER.info("[OneKey-NeoForge] 模组已加载，配置路径：{}", configPath);
@@ -72,6 +81,8 @@ public final class OneKeyNeoForge {
         NeoForge.EVENT_BUS.addListener(this::onLevelSave);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedOut);
+        // 数据包重载（含 /reload）时刷新物品分类缓存，与 Fabric 端 START_DATA_PACK_RELOAD 行为对齐
+        NeoForge.EVENT_BUS.addListener((AddServerReloadListenersEvent reloadEvent) -> ItemConversion.clearCache());
     }
 
     public static OneKeyConfig config() {
@@ -89,7 +100,8 @@ public final class OneKeyNeoForge {
     }
 
     private void registerPayloadHandlers(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar(MOD_ID).versioned("1");
+        // 协议版本号与 common 的协议常量保持单一来源，避免将来升降协议时只改一端
+        PayloadRegistrar registrar = event.registrar(MOD_ID).versioned(Integer.toString(ProtocolVersion.CURRENT));
 
         // 一键整理通道 (C2S)
         registrar.playToServer(SortRequestPayload.TYPE, SortRequestPayload.CODEC,
@@ -139,10 +151,15 @@ public final class OneKeyNeoForge {
         if (!(context.player() instanceof ServerPlayer player) || player.isSpectator() || player.isDeadOrDying()) {
             return;
         }
-        if (payload.containerKey() == null || payload.containerKey().length() > 64 || payload.slotIndex() < 0 || payload.slotIndex() > 300) {
+        if (payload.containerKey() == null || payload.containerKey().length() > 64 || payload.slotIndex() < 0) {
             return;
         }
-        if ("player_inventory".equals(payload.containerKey()) && (payload.slotIndex() < 9 || payload.slotIndex() >= 36)) {
+        if ("player_inventory".equals(payload.containerKey())) {
+            if (payload.slotIndex() < 9 || payload.slotIndex() >= 36) {
+                return;
+            }
+        } else if (player.containerMenu == null || payload.slotIndex() >= player.containerMenu.slots.size()) {
+            // 外部容器：槽位号必须落在当前打开菜单的真实槽位范围内（与 Fabric 端同一契约）
             return;
         }
 

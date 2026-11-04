@@ -24,6 +24,9 @@ public final class ClientSortingHandler {
             } else {
                 player.sendOverlayMessage(Component.translatable("onekey.sort.already_sorted"));
             }
+        } else {
+            // 服务端拒绝（如服主关闭了 sort.enabled）：必须给出可见反馈，否则玩家只看到"按了没反应"
+            player.sendOverlayMessage(Component.translatable("onekey.sort.cannot_sort"));
         }
     }
 }

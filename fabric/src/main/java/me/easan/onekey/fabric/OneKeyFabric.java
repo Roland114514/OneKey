@@ -55,14 +55,31 @@ public final class OneKeyFabric implements ModInitializer {
         }
     }
 
+    /**
+     * 配置 JSON 损坏时先把原文件备份为 onekey.json.corrupt 再重建默认配置，
+     * 避免玩家的原始内容被默认值静默覆盖、事后无从排查。
+     */
+    private static void backupCorruptedConfig(Path configPath) {
+        try {
+            Path backup = ConfigCodec.backupIfCorrupted(configPath);
+            if (backup != null) {
+                LOGGER.warn("[OneKey] 配置文件内容损坏，已备份为 {} 并重建默认配置", backup);
+            }
+        } catch (Exception exception) {
+            LOGGER.warn("[OneKey] 检查配置文件时出错，将直接使用默认配置", exception);
+        }
+    }
+
     @Override
     public void onInitialize() {
         Path configPath = FabricLoader.getInstance().getConfigDir().resolve(MOD_ID + ".json");
         try {
+            backupCorruptedConfig(configPath);
             config = ConfigCodec.load(configPath);
             ConfigCodec.save(configPath, config);
             LOGGER.info("[OneKey] 配置已加载：{}", configPath);
-        } catch (IOException exception) {
+        } catch (Exception exception) {
+            // 配置解析/读写异常绝不允许冒泡到模组入口，否则整个游戏启动失败
             LOGGER.warn("[OneKey] 配置读取失败，使用默认值", exception);
             config = new OneKeyConfig();
         }
@@ -110,16 +127,22 @@ public final class OneKeyFabric implements ModInitializer {
                 if (payload.slotIndex() < 9 || payload.slotIndex() > 35) {
                     return;
                 }
-            } else if (payload.slotIndex() < 0 || payload.slotIndex() > 100) {
+            } else if (payload.slotIndex() < 0
+                    || player.containerMenu == null
+                    || payload.slotIndex() >= player.containerMenu.slots.size()) {
+                // 外部容器：槽位号必须落在当前打开菜单的真实槽位范围内（不再用宽泛硬编码上界）
                 return;
             }
 
             boolean current = LockedSlotsStorage.isSlotLocked(player.getUUID(), payload.containerKey(), payload.slotIndex());
             boolean changed = LockedSlotsStorage.setSlotLocked(player.getUUID(), payload.containerKey(), payload.slotIndex(), !current);
-            if (changed) {
-                Set<Integer> locks = LockedSlotsStorage.getLockedSlots(player.getUUID(), payload.containerKey());
-                context.responseSender().sendPacket(new SyncSlotLocksPayload(payload.containerKey(), new ArrayList<>(locks)));
+            if (!changed && !current) {
+                LOGGER.warn("[OneKey] 槽位锁定写入被拒绝（可能已达存储上限）：{}#{}", payload.containerKey(), payload.slotIndex());
             }
+            // 无论写入成功与否都回发权威快照：客户端本地是乐观锁存，若因上限被拒不回包，
+            // 玩家会看到「高亮已锁定、实际没保存」的长期不一致状态。
+            Set<Integer> locks = LockedSlotsStorage.getLockedSlots(player.getUUID(), payload.containerKey());
+            context.responseSender().sendPacket(new SyncSlotLocksPayload(payload.containerKey(), new ArrayList<>(locks)));
         });
 
         // 4. 注册存档生命周期（每个世界存档独立持久化锁定槽位；采用脏标记与周期写盘，消除主线程 I/O DoS）

@@ -39,7 +39,7 @@
 | <kbd>V</kbd> | **快速堆叠** | 靠近容器或任何时候 | 自动将背包内物品并入周围 6 格内容器的现有同类堆叠中 |
 | <kbd>B</kbd> | **一键存入** | 靠近容器或任何时候 | 将背包内整叠符合条件的物品存入周围容器，空槽智能填充 |
 | <kbd>K</kbd> | **打开设置** | 任何游戏界面 | 呼出 OneKey 原生配置界面，直观调整各项开关与参数 |
-| <kbd>Alt</kbd> + **左键** | **槽位锁定** | 悬停任意槽位 | 切换槽位锁定状态；锁定后显示高亮红框，免受一切整理与存入操作影响 |
+| <kbd>Alt</kbd> + **左键** | **槽位锁定** | 悬停任意槽位 | 切换槽位锁定状态；锁定后显示琥珀色描边高亮，免受一切整理与存入操作影响 |
 | <kbd>Shift</kbd> + **双击** | **批量同类转移** | 悬停任意槽位 | 300ms 内双击某槽位，自动搜寻同侧所有同类未锁定物品移入对侧容器 |
 | **滚轮上滚 / 下滚** | **单件微调进出** | 悬停任意槽位 | 向上滚动从对侧抓取 1 件补充当前格；向下滚动移出 1 件到对侧 |
 
@@ -93,8 +93,8 @@ bash scripts/with-jdk25.sh :neoforge:runClient
 ```
 
 构建成功后产物位于：
-- `fabric/build/libs/onekey-fabric-1.0.0.jar`
-- `neoforge/build/libs/onekey-neoforge-1.0.0.jar`
+- `fabric/build/libs/onekey-fabric-1.0.1.jar`
+- `neoforge/build/libs/onekey-neoforge-1.0.1.jar`
 
 ---
 
@@ -103,12 +103,23 @@ bash scripts/with-jdk25.sh :neoforge:runClient
 - [x] **v1.0.0 (M0 ~ M8)**：
   - [x] 双加载器（Fabric + NeoForge）原生支持
   - [x] 0ms 乐观 UI 一键背包整理
-  - [x] Alt+左键槽位锁定与红框高亮（存档世界独立持久化）
+  - [x] Alt+左键槽位锁定与琥珀色描边高亮（存档世界独立持久化）
   - [x] 底部 0..8 快捷栏严格隔离保护
   - [x] 附近多容器快速堆叠与一键存入（两阶段贪心算法与物品守恒校验）
   - [x] Shift 双击批量同类转移与滚轮单件进出微调
   - [x] 智能同类背包模组冲突检测
   - [x] 原生纯净无依赖设置 GUI
+- [x] **v1.0.1 (维护版)**：
+  - [x] 配置损坏自动留档为 `onekey.json.corrupt` 并回退默认值，不再导致启动失败
+  - [x] 配置写盘改为临时文件 + 原子替换，杜绝半截 JSON
+  - [x] `config/onekey.json` 的 `hotkeys` 段真正作为默认键位生效
+  - [x] NeoForge 端补齐「服务器未安装 OneKey」友好降级与通道能力守卫
+  - [x] 服务端关闭整理时回发权威容器快照，消除乐观排序幽灵态
+  - [x] 快速堆叠扫描半径以服务端配置为硬上限
+  - [x] Fabric 端槽位锁定状态回发补全，避免本地与服务端长期不一致
+  - [x] 快速堆叠黑白名单拆分为「容器方块」与「物品」两组，修复白名单静默失效
+  - [x] 滚轮微调增加服务端限流，防止改包刷屏放大
+  - [x] 整理失败给出可见提示（`onekey.sort.cannot_sort`）
 - [ ] **v1.1.0**：
   - [ ] 吸收 [MouseTweaks](https://github.com/YaLTeR/MouseTweaks) 交互长处：Shift+左键拖拽扫掠连续转移（LMB Sweep，带快捷栏与锁定豁免保护）
   - [ ] 工作台/背包右键拖拽重复划动投放（RMB Drag Repeated Placement）

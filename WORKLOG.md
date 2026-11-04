@@ -12,17 +12,121 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | 待提交（release: M8 全平台正式发布就绪——v1.0.0 双端归档与物料整备） |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.0.jar`（99KB）与 `neoforge/build/libs/onekey-neoforge-1.0.0.jar`（97KB） |
-| 单测状态 | ✅ 29/29 通过（Fabric 与 NeoForge 均 100% 全绿） |
-| 运行验证 | ✅ 双端版本号展开为 1.0.0、LICENSE_onekey 自动打包入 jar、双端独立构建通过验证 |
-| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / M5 快速堆叠与存入 ✅ / M6 客户端手势与兼容 ✅ / M7 NeoForge 适配 ✅ / **M8 发布准备 ✅（全里程碑 100% 完成）** |
-| 交付物料 | 📦 `docs/release/`：包含 Modrinth、CurseForge、GitHub Release 专属排版描述与精准 SHA-256 校验和 |
-| 未来演进 | 📌 v1.1 规划吸收 [MouseTweaks](https://github.com/YaLTeR/MouseTweaks) 的 Shift 拖拽扫掠、RMB 重复滑放、滚轮反转与纯净服降级 |
+| 最新提交 | 见下方（feat: 归档 B 键快速存入视线锁定与分类防污染需求与方案） |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.1.jar`（102KB）与 `neoforge/build/libs/onekey-neoforge-1.0.1.jar`（100KB） |
+| 单测状态 | ✅ 双端各 36 例（Fabric 36 + NeoForge 36 = **72 例全绿**） |
+| 运行实测 | ✅ R 键整理、K 键原生 GUI、Alt+左键槽位锁定在 Minecraft 26.3 干净无崩溃实测通过 |
+| 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入精准控制需求已立项归档 ← 下一步重点** |
+| 当前任务聚焦 | 🎯 **重构 B 键快速存入：实现「准星射线聚焦锁定（看哪存哪）」与「分类防异物污染规则」** |
 | 阻塞项 | 无 |
-| 生产可用性 | 🟢 双加载器独立构建、零第三方运行时依赖，共享 common 纯内核逻辑，完全达到生产发布形态 |
+| 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，具备高质量发版与交付水准 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 13 节 v1.1 迭代规划。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，随后阅读第 12 次会话的 B 键存入重构方案设计与 `PLAN.md`。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 12 次会话：B 键快速存入交互痛点归档与目标选择重构方案设计）
+
+### 目标与用户反馈
+
+用户在实际游戏环境（Minecraft 26.3 + Fabric）中实测验证：
+- **R 键背包一键整理**：运行正常，排序逻辑顺畅；
+- **K 键图形设置界面**：之前发生的背景重复模糊崩溃（`Can only blur once per frame`）已彻底修复，界面呼出流畅无异常；
+- **核心交互痛点反馈**：
+  在尝试使用 **B 键（一键存入 / 快速存放）** 功能时发现体验不佳。具体场景：
+  > 玩家面前独立摆放了 3 个箱子（例如左边是矿石箱、中间是食物箱、右边是杂物箱）。玩家想要使用快速存放功能，但无法自主控制将物品放入哪一个具体的箱子，导致箱子原有的分类被乱塞打乱。
+
+### 现状实现与缺陷机制剖析
+
+在当前的 `ServerQuickStackHandler` 实现中：
+1. **全局球形盲目扫描**：以玩家脚下坐标为中心，扫描周围半径（默认 6 格）内的所有容器；
+2. **纯物理几何距离排序**：
+   ```java
+   scanned.sort(Comparator.comparingDouble(ScannedContainer::distSq));
+   ```
+3. **Stash Mode 贪心灌装**：先填补未满同类堆叠；随后只要有空槽，**按照距离玩家由近及远的顺序，将背包物品强行分割塞进最近箱子的空槽中**。
+
+#### 为什么会导致体验严重失控？
+- **“几何距离最近”完全不等于“玩家的心理意图目标”**：
+  当多个箱子并排时，玩家准星明明正对着中间的【食物箱】，但只要站位稍微往左偏了 0.1 格，左边的【矿石箱】距离脚底最近，算法就会像黑洞一样把玩家背包里的面包、牛肉全部分解塞入矿石箱的空槽，彻底摧毁玩家原有的分类布局，产生极强的失控与挫败感。
+
+### 重构技术方案（三大核心支柱）
+
+后续协作智能体在推进该功能迭代时，需按照以下架构落地：
+
+1. **🎯 准星视线锁定优先（Crosshair Raycast Target Priority，最高优先级）**：
+   - 客户端在触发 B 键（或 V 键）时，通过玩家当前视线执行射线检测（Raycast，检测原版触及距离 4.5~5.0 格）；
+   - 在数据包 `QuickStackRequestPayload` 中增加可选目标方块坐标字段 `targetedBlockPos`；
+   - 服务端校验：若玩家视线正对一个合法的存储容器（箱子/木桶/潜影盒），**将本次操作的目标唯一锁定为该容器**！周围其他箱子 100% 隔离不参与，实现 **“看哪存哪、指哪打哪”**；
+   - 若准星对准空气或普通方块，才退化为周围范围扫描广播。
+2. **🛡️ 智能分类防异物污染（Smart Matching）**：
+   - 在多容器广播存入时，**严格禁止向容器空槽存入该容器中原本不存在的陌生物品**；
+   - 规则：容器内必须原本已经存在至少 1 个同类物品（或同类标签），才允许向该容器的空槽存入背包中多余的该类物品；
+   - 效果：即使周围有 10 个箱子，矿石箱永远不会被塞进苹果，木材箱永远不会被塞进圆石，分类箱绝对受保护。
+3. **🖥️ 打开容器界面时的上下文绑定**：
+   - 当玩家已经右键打开某个容器 GUI 时按下快捷键，存入目标强制且唯一绑定为当前正在交互的容器。
+4. **⚙️ GUI 设置项配套**：
+   - 在 `OneKeySettingsScreen` 中提供“准星瞄准优先”开关及“智能分类防污染”开关供玩家自定义。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 11 次会话：v1.0.1 全仓审查与健壮性修复）
+
+### 目标
+
+用户要求在正式发布后做一次全仓体检，找出重大问题直接修复，并把版本升到 **v1.0.1**。
+
+### 审查方法
+
+- `git fetch origin` 核对：本地 `main` = `origin/main` = `2c9c81d`，工作区干净，先看清协作智能体 M4–M8 的全部改动（71 文件 +5511/−151）。
+- 直读关键路径：`ServerSortingHandler` / `ServerQuickStackHandler` / `ServerScrollHandler` / `LockedSlotsStorage` / 两端客户端入口 / 设置界面 / 两个 Mixin / 两份资源元数据。
+- 反编译核验（不靠猜）：`fabric-networking-api-v1-6.4.1` 的 `AbstractChanneledNetworkAddon` 确认非接收线程会抛 `RunningOnDifferentThreadException` 由原版重排 → 服务端接收器直接改背包安全；javap 26.3 client jar 确认 `AbstractContainerScreen.extractSlot(...)` / `GuiGraphicsExtractor.fill/outline` 存在 → 客户端高亮 Mixin 目标有效。
+- 另派 2 个只读审查子代理（Fabric / NeoForge 模块）出 P0/P1/P2 报告做交叉验证。
+
+### 审查结论
+
+- **没有发现刷物/吞物类 P0**：三处写回路径均为「快照 copy → 逐槽 set」或「grow/shrink 严格对称」。
+- 真正的问题集中在三类：**配置健壮性**（损坏 JSON 会让 Fabric 端启动崩溃）、**多人环境状态一致性**、**文档与实现不符**。
+
+### 并行只读审查报告的交叉验证
+
+另派 2 个只读审查子代理（Fabric / NeoForge 模块）独立出 P0/P1/P2 报告。NeoForge 报告确认了最有价值的一条：**`ClientPacketDistributor.sendToServer` 不做通道校验，而服务端 `NetworkRegistry#handleModdedPayload` 对未协商通道的 modded payload 直接 `disconnect("multiplayer.disconnect.incompatible")`** —— 即 1.0.0 的 NeoForge 玩家在**未装 OneKey 的服务器上开箱子/按 R 就会被踢下线**（本条已由本轮第 7 项修复消除）。报告同时指出 3 个 P1，已在本轮一并修掉（见下）。
+
+### 本次修复（7 + 4 项）
+
+1. **配置损坏不再炸启动**（`common/.../config/ConfigCodec.java`、`fabric/.../OneKeyFabric.java`）：`fromJson` 捕获 `RuntimeException` 回退默认值；新增 `isValidJson`；Fabric 启动前把损坏文件留档为 `config/onekey.json.corrupt`；`onInitialize` 由 `catch (IOException)` 放宽为 `catch (Exception)`。
+2. **配置原子写**（同上 `ConfigCodec.save`）：写 `.tmp` 后 `Files.move(..., REPLACE_EXISTING, ATOMIC_MOVE)`，捕获 `AtomicMoveNotSupportedException` 降级普通 move。
+3. **`hotkeys` 配置真正生效**（两端客户端）：新增 `configuredKey(String, int)`，用 `InputConstants.getKey(configured).getValue()` 解析 `key.keyboard.*`，非法值告警并回退内置默认 R/V/B/K。
+4. **服务端关闭整理时的界面一致性**（两端 `ServerSortingHandler`）：`sort.enabled=false` 时先 `menu.sendAllDataToRemote()` 再返回 `SortResult(false, 0)`，消除客户端乐观排序的幽灵态。
+5. **快速堆叠半径硬上限**（两端 `ServerQuickStackHandler`）：`Math.clamp(Math.min(requested, config.quickStack.radius), 1, 32)`。
+6. **Fabric 锁定状态同步补全**（`OneKeyFabric` 的 ToggleSlotLock 接收器）：不再因 `changed==false` 跳过回发，写入被上限拒绝时也回发服务端权威快照 + 告警。
+7. **NeoForge 端补齐未装模组降级**（`OneKeyNeoForgeClient`）：新增 `serverSupports(CustomPacketPayload.Type<?>)`（`connection.hasChannel(type)`），在整理 / 快速堆叠 / 滚轮 / 锁定 / 容器界面初始化五处加守卫，提示文案与 Fabric 端对齐。
+
+### 审查报告驱动的追加修复（P1）
+
+8. **快速堆叠黑白名单语义拆分**（`common/.../config/OneKeyConfig.java` + 两端 `ServerQuickStackHandler`）：`whitelist`/`blacklist` 此前既比物品 id 又比容器方块 id，白名单填 `minecraft:diamond` 会让所有容器被过滤、填方块 id 会让所有物品被过滤 —— 两种用法都静默失效。现在 `whitelist`/`blacklist` 只匹配容器方块（与文档一致），新增 `quickStack.itemWhitelist` / `itemBlacklist` 匹配物品，`normalized()` 对两个新字段做 null 归一（旧配置缺字段自动补空列表）。
+9. **滚轮微调服务端限流**（两端 `ServerScrollHandler`）：新增 `SCROLL_COOLDOWN_MS = 40` 与 `Map<UUID, Long> LAST_SCROLL_TIME`，超频包静默丢弃；此前只有客户端 40ms 节流，改包可让每包触发一次整容器 `broadcastChanges()`。
+10. **NeoForge 配置损坏同样留档**（`OneKeyNeoForge` 启动路径）：`ConfigCodec.backupIfCorrupted(Path)` 提到公共内核，Fabric/NeoForge 启动前都先备份 `.corrupt` 再重建默认值；同时 NeoForge 数据包重载事件（`AddServerReloadListenersEvent`，含 `/reload`）触发 `ItemConversion.clearCache()`，与 Fabric 的 `START_DATA_PACK_RELOAD` 对齐。
+11. **反馈与校验收紧**：两端 `ClientSortingHandler` 在 `!success` 时提示 `onekey.sort.cannot_sort`；槽位锁定越界校验改为「必须落在当前打开菜单真实槽位范围」（两端上界统一，替换 Fabric 100 / NeoForge 300 的硬编码）；NeoForge `versioned(...)` 改用 `ProtocolVersion.CURRENT`。
+
+### 验证
+
+- `bash scripts/with-jdk25.sh clean build` → **BUILD SUCCESSFUL**（18 任务全执行）。
+- 单测：`ConfigCodecTest` 由 9 → 12 例（损坏 JSON 回退、损坏文件加载回退、原子写无残留 `.tmp`、`isValidJson`、物品/方块过滤列表分行往返、旧配置缺新字段 null 归一、`backupIfCorrupted` 行为），公共内核 29 → 36；`fabric/test` 36 例 + `neoforge/test` 36 例 = **72 例 0 失败**。
+- 产物：`fabric/build/libs/onekey-fabric-1.0.1.jar` 102,315 B（sha256 `9754120bda88022b9c03820fe145e6f7f887d962749dc7c9258fef09e7d6c319`）、`neoforge/build/libs/onekey-neoforge-1.0.1.jar` 100,810 B（sha256 `9a5bb469c9d786ae9ce72004d2839cd2800e0ae034645e053c8e80532305dbfc`）；jar 内 `fabric.mod.json` / `neoforge.mods.toml` 的版本号已展开为 `1.0.1`。
+
+### 文档与物料
+
+- `CHANGELOG.md` 新增 `## [1.0.1] - 2026-11-04` 小节（7 项修复 + 兼容性说明），并订正 1.0.0 两处描述不符：锁定高亮实为琥珀色描边 + 半透明底色（非红色暗化）、快速堆叠是逐槽对称增减（不存在「物品总数快照强校验」）。
+- `README.md` 产物路径与路线图、`PLAN.md` 发布清单、`docs/release/{GITHUB_RELEASE,PUBLISHING_GUIDE,MODRINTH}.md` 全部更新为 v1.0.1；三份物料里原本互相矛盾的旧 SHA-256 全部替换为本次实测哈希。
+- `docs/release/` 下的 1.0.0 jar 已被 1.0.1 构建产物替换（jar 受 `.gitignore` 的 `*.jar` 规则约束不入库，只提交 md 物料）。
+
+### 遗留与下一步
+
+- NeoForge 端 `hasChannel` 在**单人存档**下依赖 integrated server 的通道协商（NeoForge 自身配置同步走同一套机制，实测正常；若后续收到误报再改为失败放行）。
+- 已知架构漂移（未在 1.0.1 处理）：`common/.../stack/QuickStackEngine.java` 被单测覆盖但生产路径仍各自实现，建议 v1.1 合流到公共内核。
+- 下一迭代 v1.1：吸收 MouseTweaks 的 Shift 拖拽扫掠与 RMB 重复滑放、滚轮方向反转开关、纯客户端点击降级模式。
+- 审查报告里已确认但仍留在 v1.1 的项（不影响安全性，不阻塞 1.0.1）：`compat.enabled` / `compat.clickDelayMs` 目前只是配置占位、双击批量转移仍在同 tick 连续 `slotClicked`；设置界面的 cooldown/radius 选项档位窄于配置允许范围；锁定命名空间=菜单类型（同尺寸箱子共享锁定）；`common/.../stack/QuickStackEngine.java` 与生产 handler 尚未合流。
 
 ---
 
