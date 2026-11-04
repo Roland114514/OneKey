@@ -194,4 +194,81 @@ class QuickStackEngineTest {
         assertEquals("minecraft:ender_pearl", chest.get(1).itemId());
         assertTrue(player.get(9).isEmpty());
     }
+
+    @Test
+    void testAntiContaminationWhenUntargeted() {
+        List<SimulatedSlot> player = createPlayerSlots();
+        player.set(9, SimulatedSlot.of("minecraft:iron_ingot", 10, 64));
+        player.set(10, SimulatedSlot.of("minecraft:rotten_flesh", 15, 64)); // 杂物，未在任何箱子分类中
+
+        List<SimulatedSlot> oreChest = createContainer(27);
+        oreChest.set(0, SimulatedSlot.of("minecraft:iron_ingot", 20, 64));
+
+        List<SimulatedSlot> foodChest = createContainer(27);
+        foodChest.set(0, SimulatedSlot.of("minecraft:apple", 5, 64));
+
+        // 玩家未准星瞄准任何箱子（盲按 B 键）：所有箱子 allowDumpNewItem == false
+        var ctxOre = QuickStackEngine.ContainerContext.of(oreChest, false, false);
+        var ctxFood = QuickStackEngine.ContainerContext.of(foodChest, false, false);
+
+        int moved = QuickStackEngine.executeContextAware(player, Set.of(), List.of(ctxOre, ctxFood), true, List.of(), List.of());
+
+        assertEquals(10, moved, "仅转移已有的铁锭");
+        assertTrue(player.get(9).isEmpty(), "铁锭归位成功");
+        assertEquals(15, player.get(10).count(), "腐肉未被乱塞，仍在玩家背包中");
+        assertEquals(30, oreChest.get(0).count());
+        assertTrue(oreChest.get(1).isEmpty(), "矿石箱空槽未被腐肉污染");
+        assertTrue(foodChest.get(1).isEmpty(), "食物箱空槽未被腐肉污染");
+    }
+
+    @Test
+    void testTargetedContainerReceivesNewItemsWhileUntargetedAreProtected() {
+        List<SimulatedSlot> player = createPlayerSlots();
+        player.set(9, SimulatedSlot.of("minecraft:iron_ingot", 10, 64));
+        player.set(10, SimulatedSlot.of("minecraft:rotten_flesh", 15, 64));
+
+        List<SimulatedSlot> oreChest = createContainer(27);
+        oreChest.set(0, SimulatedSlot.of("minecraft:iron_ingot", 20, 64));
+
+        List<SimulatedSlot> miscChest = createContainer(27); // 杂物箱，原本为空
+
+        // 玩家准星瞄准杂物箱并按 B 键：miscChest 是 targeted 且 allowDumpNewItem == true
+        var ctxOre = QuickStackEngine.ContainerContext.of(oreChest, false, false);
+        var ctxMisc = QuickStackEngine.ContainerContext.of(miscChest, true, true);
+
+        int moved = QuickStackEngine.executeContextAware(player, Set.of(), List.of(ctxOre, ctxMisc), true, List.of(), List.of());
+
+        assertEquals(25, moved, "全部成功转移");
+        assertTrue(player.get(9).isEmpty());
+        assertTrue(player.get(10).isEmpty());
+
+        // 铁锭优先归位到矿石箱
+        assertEquals(30, oreChest.get(0).count(), "铁锭归位到矿石箱");
+        assertTrue(oreChest.get(1).isEmpty(), "矿石箱未被腐肉污染");
+
+        // 腐肉在 Pass 2 精准倾倒进准星锁定的杂物箱
+        assertEquals("minecraft:rotten_flesh", miscChest.get(0).itemId());
+        assertEquals(15, miscChest.get(0).count());
+    }
+
+    @Test
+    void testAntiCutoffDistantMatchingContainerWins() {
+        List<SimulatedSlot> player = createPlayerSlots();
+        player.set(9, SimulatedSlot.of("minecraft:cobblestone", 32, 64));
+
+        List<SimulatedSlot> nearEmptyChest = createContainer(27); // 近处空箱
+        List<SimulatedSlot> farCobbleChest = createContainer(27); // 远处已有圆石箱
+        farCobbleChest.set(0, SimulatedSlot.of("minecraft:cobblestone", 20, 64));
+
+        var ctxNear = QuickStackEngine.ContainerContext.of(nearEmptyChest, false, true);
+        var ctxFar = QuickStackEngine.ContainerContext.of(farCobbleChest, false, false);
+
+        // 列表按距离顺序：near 在前，far 在后
+        int moved = QuickStackEngine.executeContextAware(player, Set.of(), List.of(ctxNear, ctxFar), true, List.of(), List.of());
+
+        assertEquals(32, moved);
+        assertTrue(player.get(9).isEmpty());
+        assertEquals(52, farCobbleChest.get(0).count(), "远处圆石箱成功合并，未被近处空箱截胡");
+        assertTrue(nearEmptyChest.get(0).isEmpty(), "近处空箱保持为空");
+    }
 }

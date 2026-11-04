@@ -14,16 +14,49 @@
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
 | 最新提交 | 见下方（本次：v1.0.1 发布前 P0 崩溃修复与文档/物料同步） |
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.1.jar`（103,492 B ≈101KB）与 `neoforge/build/libs/onekey-neoforge-1.0.1.jar`（102,007 B ≈100KB） |
-| 单测状态 | ✅ 双端各 36 例（Fabric 36 + NeoForge 36 = **72 例全绿**） |
+| 单测状态 | ✅ 双端各 39 例（Fabric 39 + NeoForge 39 = **78 例全绿**，新增 6 项防污染与准星锁定单测） |
 | 版本状态 | ✅ `mod_version=1.0.1`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
 | 发布状态 | ✅ tag `v1.0.1` → `f98796e` 已推送；GitHub Release 已创建并上传 4 个产物：https://github.com/Roland114514/OneKey/releases/tag/v1.0.1 |
 | 运行实测 | ✅ R 键整理、K 键原生 GUI、Alt+左键槽位锁定在 Minecraft 26.3 干净无崩溃实测通过 |
-| 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入精准控制需求已立项归档 ← 下一步重点** |
-| 当前任务聚焦 | 🎯 **重构 B 键快速存入：实现「准星射线聚焦锁定（看哪存哪）」与「分类防异物污染规则」** |
+| 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入准星视线锁定与全局双阶段防污染重构全面完成 ✅** |
+| 当前任务聚焦 | 🎯 **准备 v1.0.2 发布验证与打包（包含 B 键指哪打哪 + 盲按零污染）** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，具备高质量发版与交付水准 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，随后阅读第 12 次会话的 B 键存入重构方案设计与 `PLAN.md`。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，随后阅读第 14 次会话的 B 键存入重构实现细节与 `PLAN.md`。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 14 次会话：B 键快速存入准星视线锁定与防污染重构实现）
+
+### 目标与背景
+接续第 12、13 次会话中用户反馈的核心交互痛点（独立摆放矿石箱、食物箱、杂物箱时，B 键存入无法自主控制，且会把杂物乱塞污染分类箱），并经 `gemini-4-argon` 深度推导论证，完成 B 键快速存入与堆叠功能的全面重构：
+1. **准星视线射线检测（看哪存哪）**：按键瞬间客户端射线捕获目标坐标，服务端零信任校验并置顶排序；
+2. **大箱子双半区归一化**：解决大箱子被跳过半区无法命中的物理坐标匹配缺陷；
+3. **全局双阶段流水线（Pass 1 同类归位 $\rightarrow$ Pass 2 焦点开荒）**：
+   - 彻底消灭近处空箱截胡远处分类箱物品的几何漏洞；
+   - 准星锁定容器享有 Pass 2 开荒倾倒权；周边未锁定容器严格防污染，严禁塞入新种类物品；
+   - 盲按（未瞄准任何箱子）时自动全面降级防污染，仅补齐扩展既有分类，身上杂物安全保留背包。
+
+### 完成工作
+1. **协议层与数据载体**：
+   - 创建 `common/.../net/TargetPos.java`（纯数据三维坐标 record，无 Minecraft 依赖）；
+   - 更新 `QuickStackRequest.java` 引入 `Optional<TargetPos> targetPos`；
+   - 在 Fabric 与 NeoForge 中同步更新 `QuickStackRequestPayload.java` 的 `StreamCodec`，使用复合编解码器无缝支持 `Optional<TargetPos>`。
+2. **纯算法内核 `QuickStackEngine.java` 升级**：
+   - 引入 `ContainerContext(List<SimulatedSlot> slots, boolean isTargeted, boolean allowDumpNewItem)`；
+   - 重构为 `executeContextAware` 全局 Pass 1（同类归位）与 Pass 2（特权开荒）流水线；保留原 `execute` 接口向下兼容。
+   - 新增 3 组严谨单元测试（未瞄准防污染、准星锁定开荒保护、远处同类容器防截胡），双端 78 例单测 100% 全绿！
+3. **客户端拾取射线检测**：
+   - 更新 `OneKeyFabricClient.java` 与 `OneKeyNeoForgeClient.java`：
+   - 在按键瞬间优先读取当前帧 `client.hitResult`，若未命中则通过 `player.pick(...)` 延长射线检测，提取目标方块坐标随包上报。
+4. **服务端处理器与大箱子归一化**：
+   - 更新 Fabric 与 NeoForge 端的 `ServerQuickStackHandler.java`；
+   - 建立 `ScannedContainer` 记录 `Set<BlockPos> positions`（大箱子包含两半物理坐标），实现精准锁定匹配；
+   - 服务端施加眼部距离防作弊校验；
+   - 落地 Pass 1 同类归位 + Pass 2 焦点容器开荒物品流。
+5. **完整构建与验证**：
+   - 执行 `scripts/with-jdk25.sh build`，Fabric 与 NeoForge 双端构建、打包、单测全部无报错通过。
 
 ---
 

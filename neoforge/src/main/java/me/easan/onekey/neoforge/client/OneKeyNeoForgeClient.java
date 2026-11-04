@@ -3,11 +3,13 @@ package me.easan.onekey.neoforge.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import me.easan.onekey.common.action.ActionId;
 import me.easan.onekey.common.action.ActionRegistry;
 import me.easan.onekey.common.net.QuickStackRequest;
 import me.easan.onekey.common.net.SortRequest;
+import me.easan.onekey.common.net.TargetPos;
 import me.easan.onekey.common.sort.Sorter;
 import me.easan.onekey.common.sort.StackView;
 import me.easan.onekey.neoforge.OneKeyNeoForge;
@@ -28,6 +30,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
@@ -39,6 +42,8 @@ import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
@@ -567,6 +572,24 @@ public final class OneKeyNeoForgeClient {
         return true;
     }
 
+    private static Optional<TargetPos> getCrosshairTarget(Minecraft client, double reachDistance) {
+        if (client.player == null) {
+            return Optional.empty();
+        }
+        HitResult hit = client.hitResult;
+        if (hit != null && hit.getType() == HitResult.Type.BLOCK && hit instanceof BlockHitResult blockHit) {
+            BlockPos pos = blockHit.getBlockPos();
+            return Optional.of(TargetPos.of(pos.getX(), pos.getY(), pos.getZ()));
+        }
+        double pickRange = Math.clamp(reachDistance, 4.5, 12.0);
+        HitResult extendedHit = client.player.pick(pickRange, 1.0F, false);
+        if (extendedHit.getType() == HitResult.Type.BLOCK && extendedHit instanceof BlockHitResult blockHit) {
+            BlockPos pos = blockHit.getBlockPos();
+            return Optional.of(TargetPos.of(pos.getX(), pos.getY(), pos.getZ()));
+        }
+        return Optional.empty();
+    }
+
     private static void triggerQuickStack(Minecraft client, boolean stash) {
         if (client.player == null) {
             return;
@@ -577,6 +600,7 @@ public final class OneKeyNeoForgeClient {
         }
         int syncId = client.player.containerMenu != null ? client.player.containerMenu.containerId : -1;
         int radius = OneKeyNeoForge.config().quickStack.radius;
-        ClientPacketDistributor.sendToServer(new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash)));
+        Optional<TargetPos> targetPos = getCrosshairTarget(client, radius);
+        ClientPacketDistributor.sendToServer(new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos)));
     }
 }

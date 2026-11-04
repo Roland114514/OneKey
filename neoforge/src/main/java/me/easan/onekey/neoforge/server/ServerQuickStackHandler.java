@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import me.easan.onekey.common.config.OneKeyConfig;
 import me.easan.onekey.common.net.QuickStackRequest;
 import me.easan.onekey.common.net.QuickStackResult;
+import me.easan.onekey.common.net.TargetPos;
 import me.easan.onekey.neoforge.OneKeyNeoForge;
 import me.easan.onekey.neoforge.net.QuickStackResultPayload;
 import me.easan.onekey.neoforge.storage.LockedSlotsStorage;
@@ -38,13 +39,19 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 /**
  * 服务端快速堆叠与一键存入处理器（NeoForge）：
  * 采用区块 BlockEntity 智能检索（常数级耗时，彻底杜绝暴力遍历方块造成的卡顿）。
- * 两阶段算法严格保护底部 9 格快捷栏与玩家锁定槽位，全流程总物品数量守恒。
+ * 支持准星视线射线锁定目标容器，以及跨容器全局双阶段防污染流水线。
  */
 public final class ServerQuickStackHandler {
 
     private static final Map<UUID, Long> LAST_QUICK_STACK_TIME = new ConcurrentHashMap<>();
 
-    private record ScannedContainer(Container container, BlockPos pos, double distSq) {
+    private record ScannedContainer(
+            Container container,
+            Set<BlockPos> positions,
+            double distSq,
+            boolean isTargeted,
+            boolean allowDumpNewItem
+    ) {
     }
 
     private ServerQuickStackHandler() {
@@ -96,8 +103,19 @@ public final class ServerQuickStackHandler {
         int radius = Math.clamp(Math.min(requestedRadius, config.quickStack.radius), 1, 32);
         boolean stashMode = request.stash() || config.quickStack.stashMode;
 
-        // 1. 高性能区块检索附近纯存储容器
-        List<Container> targetContainers = findNearbyContainers(player, radius, config);
+        // 解析并校验客户端上报的准星目标方块坐标（防作弊距离校验）
+        BlockPos validTargetPos = null;
+        if (request.targetPos().isPresent()) {
+            TargetPos candidate = request.targetPos().get();
+            double maxAllowedDistSq = Math.pow(radius + 2.0, 2);
+            double distSq = player.getEyePosition().distanceToSqr(candidate.x() + 0.5, candidate.y() + 0.5, candidate.z() + 0.5);
+            if (distSq <= maxAllowedDistSq) {
+                validTargetPos = new BlockPos(candidate.x(), candidate.y(), candidate.z());
+            }
+        }
+
+        // 1. 高性能区块检索附近纯存储容器并匹配准星目标
+        List<ScannedContainer> targetContainers = findNearbyContainers(player, radius, config, validTargetPos, stashMode);
         if (targetContainers.isEmpty()) {
             context.reply(new QuickStackResultPayload(new QuickStackResult(0)));
             return;
@@ -121,8 +139,6 @@ public final class ServerQuickStackHandler {
 
             Identifier itemId = BuiltInRegistries.ITEM.getKey(playerStack.getItem());
             String itemIdStr = itemId != null ? itemId.toString() : "";
-            // 物品维度用 itemWhitelist/itemBlacklist；whitelist/blacklist 专指容器方块，
-            // 不可混用（旧实现把物品 id 与方块 id 塞进同一列表，白名单填物品会让所有容器被过滤）。
             if (!config.quickStack.itemBlacklist.isEmpty() && config.quickStack.itemBlacklist.contains(itemIdStr)) {
                 continue;
             }
@@ -130,61 +146,41 @@ public final class ServerQuickStackHandler {
                 continue;
             }
 
-            for (Container target : targetContainers) {
+            // =========================================================================
+            // Pass 1: 同类归位（优先准星容器，其次按距离遍历所有已有该同类物品的容器）
+            // 防止近处的空箱子截胡远处分类箱已有的同类物品
+            // =========================================================================
+            for (ScannedContainer sc : targetContainers) {
                 if (playerStack.isEmpty()) {
                     break;
                 }
-
-                // 判断容器是否已包含该物品
-                boolean containerHasItem = false;
-                for (int c = 0; c < target.getContainerSize(); c++) {
-                    ItemStack cStack = target.getItem(c);
-                    if (!cStack.isEmpty() && ItemStack.isSameItemSameComponents(cStack, playerStack)) {
-                        containerHasItem = true;
-                        break;
-                    }
+                Container target = sc.container();
+                if (!containsSameItem(target, playerStack)) {
+                    continue; // 容器中没有同类物品，Pass 1 严禁触碰，防污染
                 }
 
-                // 快速堆叠模式下，若容器无该同类物品则跳过
-                if (!stashMode && !containerHasItem) {
-                    continue;
-                }
+                // 1.1 补齐未满的同类物品堆叠
+                totalMoved += fillExistingStacks(target, playerStack, modifiedContainers);
 
-                // 阶段一：补齐未满的同类物品堆叠
-                for (int c = 0; c < target.getContainerSize(); c++) {
+                // 1.2 同类溢出占用本分类容器自身的空槽
+                if (!playerStack.isEmpty()) {
+                    totalMoved += fillEmptySlots(target, playerStack, modifiedContainers);
+                }
+            }
+
+            // =========================================================================
+            // Pass 2: 全新物品开荒倾倒（仅向 allowDumpNewItem == true 的准星锁定容器倾倒空槽）
+            // =========================================================================
+            if (!playerStack.isEmpty()) {
+                for (ScannedContainer sc : targetContainers) {
                     if (playerStack.isEmpty()) {
                         break;
                     }
-                    ItemStack cStack = target.getItem(c);
-                    if (!cStack.isEmpty() && ItemStack.isSameItemSameComponents(cStack, playerStack)) {
-                        int maxStack = Math.min(target.getMaxStackSize(cStack), cStack.getMaxStackSize());
-                        int available = maxStack - cStack.getCount();
-                        if (available > 0) {
-                            int toMove = Math.min(playerStack.getCount(), available);
-                            cStack.grow(toMove);
-                            playerStack.shrink(toMove);
-                            totalMoved += toMove;
-                            modifiedContainers.add(target);
-                        }
+                    if (!sc.allowDumpNewItem()) {
+                        continue; // 周边未被准星明确锁定的容器严禁占用空槽，防污染
                     }
-                }
 
-                // 阶段二：存入空槽（若为一键存入 stashMode，或该容器本已有该同类物品）
-                if (!playerStack.isEmpty() && (stashMode || containerHasItem)) {
-                    for (int c = 0; c < target.getContainerSize(); c++) {
-                        if (playerStack.isEmpty()) {
-                            break;
-                        }
-                        ItemStack cStack = target.getItem(c);
-                        if (cStack.isEmpty() && target.canPlaceItem(c, playerStack)) {
-                            int maxStack = Math.min(target.getMaxStackSize(playerStack), playerStack.getMaxStackSize());
-                            int toMove = Math.min(playerStack.getCount(), maxStack);
-                            target.setItem(c, playerStack.copyWithCount(toMove));
-                            playerStack.shrink(toMove);
-                            totalMoved += toMove;
-                            modifiedContainers.add(target);
-                        }
-                    }
+                    totalMoved += fillEmptySlots(sc.container(), playerStack, modifiedContainers);
                 }
             }
 
@@ -206,7 +202,64 @@ public final class ServerQuickStackHandler {
         context.reply(new QuickStackResultPayload(new QuickStackResult(totalMoved)));
     }
 
-    private static List<Container> findNearbyContainers(ServerPlayer player, int radius, OneKeyConfig config) {
+    private static boolean containsSameItem(Container target, ItemStack playerStack) {
+        for (int c = 0; c < target.getContainerSize(); c++) {
+            ItemStack cStack = target.getItem(c);
+            if (!cStack.isEmpty() && ItemStack.isSameItemSameComponents(cStack, playerStack)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static int fillExistingStacks(Container target, ItemStack playerStack, Set<Container> modifiedContainers) {
+        int moved = 0;
+        for (int c = 0; c < target.getContainerSize(); c++) {
+            if (playerStack.isEmpty()) {
+                break;
+            }
+            ItemStack cStack = target.getItem(c);
+            if (!cStack.isEmpty() && ItemStack.isSameItemSameComponents(cStack, playerStack)) {
+                int maxStack = Math.min(target.getMaxStackSize(cStack), cStack.getMaxStackSize());
+                int available = maxStack - cStack.getCount();
+                if (available > 0) {
+                    int toMove = Math.min(playerStack.getCount(), available);
+                    cStack.grow(toMove);
+                    playerStack.shrink(toMove);
+                    moved += toMove;
+                    modifiedContainers.add(target);
+                }
+            }
+        }
+        return moved;
+    }
+
+    private static int fillEmptySlots(Container target, ItemStack playerStack, Set<Container> modifiedContainers) {
+        int moved = 0;
+        for (int c = 0; c < target.getContainerSize(); c++) {
+            if (playerStack.isEmpty()) {
+                break;
+            }
+            ItemStack cStack = target.getItem(c);
+            if (cStack.isEmpty() && target.canPlaceItem(c, playerStack)) {
+                int maxStack = Math.min(target.getMaxStackSize(playerStack), playerStack.getMaxStackSize());
+                int toMove = Math.min(playerStack.getCount(), maxStack);
+                target.setItem(c, playerStack.copyWithCount(toMove));
+                playerStack.shrink(toMove);
+                moved += toMove;
+                modifiedContainers.add(target);
+            }
+        }
+        return moved;
+    }
+
+    private static List<ScannedContainer> findNearbyContainers(
+            ServerPlayer player,
+            int radius,
+            OneKeyConfig config,
+            BlockPos clientTargetPos,
+            boolean stashMode
+    ) {
         ServerLevel level = player.level();
         int px = player.getBlockX();
         int py = player.getBlockY();
@@ -239,12 +292,12 @@ public final class ServerQuickStackHandler {
 
                     BlockEntity be = entry.getValue();
 
-                    // 严禁接触尚未开封的战利品箱
+                    // 严禁接触尚未开封的战利品箱（地牢、遗迹等），防止破坏战利品生成机制或通过隔墙探矿作弊
                     if (be instanceof RandomizableContainerBlockEntity randomizable && randomizable.getLootTable() != null) {
                         continue;
                     }
 
-                    // 玩家无权开启的容器严禁存入
+                    // 玩家无权开启的已加锁容器（如 LockCode 密码锁），严禁存入
                     if (be instanceof BaseContainerBlockEntity baseContainer && !baseContainer.canOpen(player)) {
                         continue;
                     }
@@ -262,38 +315,50 @@ public final class ServerQuickStackHandler {
                     }
 
                     if (block instanceof ChestBlock chestBlock) {
+                        Set<BlockPos> chestPositions = new HashSet<>();
+                        chestPositions.add(pos.immutable());
+
+                        // 避免重复扫描大箱子的两个半区，并将两个物理坐标一并归一化
                         ChestType chestType = state.hasProperty(ChestBlock.TYPE) ? state.getValue(ChestBlock.TYPE) : ChestType.SINGLE;
                         if (chestType == ChestType.LEFT || chestType == ChestType.RIGHT) {
                             Direction connected = ChestBlock.getConnectedDirection(state);
-                            visited.add(pos.relative(connected));
+                            BlockPos otherHalf = pos.relative(connected).immutable();
+                            chestPositions.add(otherHalf);
+                            visited.add(otherHalf);
                         }
                         visited.add(pos);
 
                         Container chestContainer = ChestBlock.getContainer(chestBlock, state, level, pos, false);
                         if (chestContainer != null && chestContainer.stillValid(player)) {
-                            scanned.add(new ScannedContainer(chestContainer, pos, distSq));
+                            boolean isTargeted = clientTargetPos != null && chestPositions.contains(clientTargetPos);
+                            boolean allowDumpNew = stashMode && isTargeted;
+                            scanned.add(new ScannedContainer(chestContainer, chestPositions, distSq, isTargeted, allowDumpNew));
                         }
                     } else if (be instanceof BarrelBlockEntity barrel) {
                         visited.add(pos);
                         if (barrel.stillValid(player) && barrel.canOpen(player)) {
-                            scanned.add(new ScannedContainer(barrel, pos, distSq));
+                            boolean isTargeted = clientTargetPos != null && pos.equals(clientTargetPos);
+                            boolean allowDumpNew = stashMode && isTargeted;
+                            scanned.add(new ScannedContainer(barrel, Set.of(pos.immutable()), distSq, isTargeted, allowDumpNew));
                         }
                     } else if (be instanceof ShulkerBoxBlockEntity shulker) {
                         visited.add(pos);
                         if (shulker.stillValid(player) && shulker.canOpen(player)) {
-                            scanned.add(new ScannedContainer(shulker, pos, distSq));
+                            boolean isTargeted = clientTargetPos != null && pos.equals(clientTargetPos);
+                            boolean allowDumpNew = stashMode && isTargeted;
+                            scanned.add(new ScannedContainer(shulker, Set.of(pos.immutable()), distSq, isTargeted, allowDumpNew));
                         }
                     }
                 }
             }
         }
 
-        scanned.sort(Comparator.comparingDouble(ScannedContainer::distSq));
+        // 排序规则：准星锁定的容器绝对置顶，其余按与玩家的几何距离由近及远排序
+        scanned.sort(
+                Comparator.comparing(ScannedContainer::isTargeted).reversed()
+                        .thenComparingDouble(ScannedContainer::distSq)
+        );
 
-        List<Container> result = new ArrayList<>(scanned.size());
-        for (ScannedContainer sc : scanned) {
-            result.add(sc.container());
-        }
-        return result;
+        return scanned;
     }
 }
