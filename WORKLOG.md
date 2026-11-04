@@ -18,7 +18,7 @@
 | 版本状态 | ✅ `mod_version=1.0.2`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
 | 协议版本 | ⚠️ `ProtocolVersion.CURRENT=2`（`QuickStackRequest` 新增目标坐标字段）→ 多人游戏必须双端同版本 |
 | 当前任务聚焦 | 🎯 v1.0.2 提交与推送、GitHub Release 物料就绪 |
-| 发布状态 | ✅ v1.0.1 已发布（tag + Release）；🕓 v1.0.2 待建 tag 与 Release |
+| 发布状态 | ✅ v1.0.2 已发布：tag `v1.0.2` → `4c34f78`，Release 含 4 个产物 https://github.com/Roland114514/OneKey/releases/tag/v1.0.2 |
 | 运行实测 | ✅ R 键整理、K 键原生 GUI、Alt+左键槽位锁定在 Minecraft 26.3 干净无崩溃实测通过 |
 | 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入重构与红队严苛审查加固全面完成 ✅** |
 | 阻塞项 | 无 |
@@ -48,6 +48,11 @@
    - **混版本被踢（P1 兼容）**：旧版客户端（1.0.1 及更早）发来的 `QuickStackRequest` 只有 3 个字段，1.0.2 服务端按新格式解码会抛异常并被原版以「数据包解码失败」断开。已在双端 `QuickStackRequestPayload` 包一层容错解码：失败时退化为 `syncId = -1` 的空请求（服务端校验后静默丢弃）并打一条 warn 日志，混版本玩家最多「按了没反应」，不再被踢。
 3. **验证**：`clean build` 绿；`:fabric:test :neoforge:test --rerun-tasks` 各 40 例、合计 **80 例全绿**；产物 112,346 B / 110,965 B，sha256 `82f0eb33…dea1b` / `263f55ee…0d8a`，jar 内版本均为 `1.0.2`。
 4. **文档**：CHANGELOG 新增 `## [1.0.2]` 小节（3 新增 + 3 修复 + 已知限制 + 兼容性）；README 快捷键表/设置项/已知限制/路线图更新；PLAN 发布清单改 40 例与 1.0.2 产物；`docs/release/GITHUB_RELEASE.md` 重写为 v1.0.2（新哈希/体积），`PUBLISHING_GUIDE.md` 同步；`docs/release/` 下 1.0.1 jar 已替换为 1.0.2 构建产物。
+
+### 发布记录（v1.0.2）
+- 提交 `c3a9043`（feat）+ `4c34f78`（fix 容错解码）已推送 `origin/main`；annotated tag `v1.0.2` 已推送。
+- GitHub Release「OneKey v1.0.2 · 看哪存哪 B 键重构版 (Minecraft 26.3)」已发布（非草稿）：https://github.com/Roland114514/OneKey/releases/tag/v1.0.2 ，上传 4 个产物（fabric jar 112,346 B / sources 70,723 B / neoforge jar 110,965 B / sources 67,670 B），正文取自 `docs/release/GITHUB_RELEASE.md`。
+- 推送凭据：`git credential fill` 已能取到 GitHub token（此前 v1.0.1 阶段失效的 helper 已恢复可用），API 创建 Release 与上传资产均 201 成功；token 未写入任何文件。
 
 ### 待跟进（不阻塞本次发版）
 - `QuickStackEngine`（common 纯内核）仍只被单测引用，两端生产 handler 是等价镜像实现，单测未覆盖真实写回路径——建议 v1.1 合流；
