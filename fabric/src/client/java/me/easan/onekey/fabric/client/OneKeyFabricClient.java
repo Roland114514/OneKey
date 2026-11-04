@@ -12,6 +12,7 @@ import me.easan.onekey.common.net.SortRequest;
 import me.easan.onekey.common.net.TargetPos;
 import me.easan.onekey.common.sort.StackCondenser;
 import me.easan.onekey.common.inventory.InventorySlots;
+import me.easan.onekey.fabric.util.PlayerSlotFilter;
 import me.easan.onekey.common.sort.Sorter;
 import me.easan.onekey.common.sort.StackView;
 import me.easan.onekey.fabric.OneKeyFabric;
@@ -195,7 +196,8 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                     boolean isPlayer = hovered.container == client.player.getInventory();
                     if (isPlayer) {
                         int slotIdx = hovered.getContainerSlot();
-                        if (!InventorySlots.isIncluded(slotIdx, OneKeyFabric.config().gestures.includeHotbar)) {
+                        if (!PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, hovered,
+                                OneKeyFabric.config().gestures.includeHotbar)) {
                             return true; // 盔甲/副手永不参与；快捷栏由「手势影响快捷栏」开关决定
                         }
                         if (ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
@@ -325,6 +327,7 @@ public final class OneKeyFabricClient implements ClientModInitializer {
             }
         });
 
+
         OneKeyFabric.LOGGER.info("[OneKey] 客户端已初始化，注册 4 个热键（默认 R / V / B / K）与手势系统");
     }
 
@@ -341,7 +344,8 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         if (slot.container == client.player.getInventory()) {
             int slotIndex = slot.getContainerSlot();
             // 0..35 全部可加锁（含快捷栏）；盔甲与副手不参与任何功能，禁止加锁
-            return InventorySlots.isPlayerInventorySlot(slotIndex);
+            return InventorySlots.isPlayerInventorySlot(slotIndex)
+                    && PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, slot, true);
         } else {
             // 外部容器：必须属于纯存储白名单类型
             return ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(screen.getMenu()));
@@ -402,7 +406,8 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                 }
                 int slotIdx = slot.getContainerSlot();
                 // 快捷栏是否参与由「手势影响快捷栏」开关决定；锁定槽位禁止转移
-                if (!InventorySlots.isIncluded(slotIdx, OneKeyFabric.config().gestures.includeHotbar)) {
+                if (!PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, slot,
+                        OneKeyFabric.config().gestures.includeHotbar)) {
                     continue;
                 }
                 if (ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
@@ -599,12 +604,14 @@ public final class OneKeyFabricClient implements ClientModInitializer {
 
     private static List<Slot> clientPlayerMainInventorySlots(AbstractContainerMenu menu, LocalPlayer player) {
         List<Slot> result = new ArrayList<>();
-        for (Slot slot : menu.slots) {
-            if (slot.container == player.getInventory()) {
-                int slotIndex = slot.getContainerSlot();
-                if (InventorySlots.isIncluded(slotIndex, OneKeyFabric.config().sort.includeHotbar)) {
-                    result.add(slot);
-                }
+        // 26.3 创造模式「生存模式物品栏」页签会用 SlotWrapper 包装背包槽位，报告的容器槽位是
+        // InventoryMenu 下标（装备 5..8、快捷栏 36..44），与 Inventory 下标不一致。玩家背包一律从
+        // player.inventoryMenu 取槽位对象，保证容器槽位号与 Inventory 一一对应。
+        AbstractContainerMenu sourceMenu = player.inventoryMenu != null ? player.inventoryMenu : menu;
+        for (Slot slot : sourceMenu.slots) {
+            if (PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot,
+                    OneKeyFabric.config().sort.includeHotbar)) {
+                result.add(slot);
             }
         }
         return result;

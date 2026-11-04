@@ -13,8 +13,8 @@
   - `onekey-neoforge-1.0.3.jar` (114 KB)
   - `onekey-neoforge-1.0.3-sources.jar`
 - **校验和**：
-  - Fabric: `e34dc8400b34f66438dc204ad2205ffc2748d0b69225fddc0b206b07608891c8`
-  - NeoForge: `c96b790462b661e124dfe14234e0dc62421d423a786000c5c0c81022a57cb018`
+  - Fabric: `7bc1754b0b60bbe992bea6481b4788f0be65444629cd23ff1abd84b979c903e8`
+  - NeoForge: `a5baac52a3eba3d055923cdc35567147a41bacdc3425971876b49a01298696e2`
 
 ---
 

@@ -12,12 +12,12 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | 待提交：`feat: v1.0.3 快捷栏整理/手势双开关 + 快捷栏可加锁（整理即合并）` |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.3.jar`（118,639 B ≈116KB）与 `neoforge/build/libs/onekey-neoforge-1.0.3.jar`（117,173 B ≈114KB） |
+| 最新提交 | `fix: v1.0.3 修复创造模式「生存模式物品栏」页签把物品整理进装备槽` |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.3.jar`（119,771 B ≈117KB）与 `neoforge/build/libs/onekey-neoforge-1.0.3.jar`（118,342 B ≈116KB） |
 | 单测状态 | ✅ 双端各 52 例（Fabric 52 + NeoForge 52 = **104 例全绿**，含 `StackCondenserTest` 7 例、`InventorySlotsTest` 4 例） |
 | 版本状态 | ✅ `mod_version=1.0.3`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
 | 协议版本 | `ProtocolVersion.CURRENT=2`（payload 未再变，1.0.2 与 1.0.3 可混连） |
-| 当前任务聚焦 | 🎯 重建 v1.0.3（强移 tag + 替换 Release 资产）；Modrinth/CurseForge **由用户自行上传**（用户 m02071 明确要求，脚本已备好可选用） |
+| 当前任务聚焦 | 🎯 v1.0.3 装备槽写入 bug 已修复并重建（强移 tag + 替换 Release 资产）；Modrinth/CurseForge **由用户自行上传** |
 | 发布状态 | ✅ v1.0.2 已发布并重建（tag `v1.0.2` → `d51c04c`）；🔄 v1.0.3 已发布后因新增快捷栏开关重建（tag 强移、资产替换） |
 | 运行实测 | ✅ R 键整理、K 键原生 GUI、Alt+左键槽位锁定在 Minecraft 26.3 干净无崩溃实测通过 |
 | 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入重构与红队严苛审查加固全面完成 ✅** |
@@ -25,6 +25,41 @@
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，具备高质量发版与交付水准 |
 
 **接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，随后阅读第 17 次会话的「快捷栏双开关」细节。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 18 次会话：v1.0.3 整理写入装备槽 bug）
+
+### 用户报告
+> "版本3出现了一个很诡异的问题，首先分开摆放的物品确实会整理后堆叠了，但是出现了复制的问题，比如一组原木分开放，R键整理之后变成了两组，在多按几次，直接变出来了4组，而且这四组原木都出现了穿戴在玩家身上的问题"
+
+补充：创造模式截图（顶部有物品分类页签、停在「生存模式物品栏」页签）+ "退出存档重新进后，那些原木依然存在"。
+
+### 定位过程
+1. 静态审计（`Sorter.permutation` 恒双射、`StackCondenser` 20 万组随机用例 0 违例、写回前 `copy()` 快照、javap 确认 `Slot.set`/`ItemStack.setCount` 无副作用）→ 算法层不存在复制。
+2. dev 客户端自动复现（临时 `ProbeHarness2` + 反射 `selectTab(INVENTORY)` + `triggerScreenSort`）：`CLIENT BEFORE total=384 -> 9:64..14:64`；`CLIENT AFTER total=384 -> 9:64 10:64 36:64 37:64 38:64 39:64`（36..39 = 装备槽），服务端未变。
+3. 根因：26.3 创造模式「生存模式物品栏」页签用 `SlotWrapper` 包装背包槽位，**装备槽报告的容器槽位是 InventoryMenu 下标 5..8**（而非 Inventory 下标 36..39），只按 0..35 过滤就把装备槽当成了普通背包格。
+
+### 修复
+1. 新增 `PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot, includeHotbar)`（fabric/neoforge 各一份）：容器是玩家背包 + 非 `ArmorSlot` + 容器槽位 0..35 + 堆叠上限 > 1 + `mayPlace(普通物品)`。
+2. 双端 `ServerSortingHandler.playerMainInventorySlots`、`ServerScrollHandler`（源槽 + 对侧槽）、客户端 `clientPlayerMainInventorySlots`、滚轮守卫、`Shift+双击` 守卫、`isSlotLockable` 全部改用该谓词。
+3. 客户端玩家背包整理改为从 `player.inventoryMenu` 取槽位对象，保证容器槽位号与 Inventory 一一对应（顺带让快捷栏在创造模式下正确参与）。
+
+### 验证
+- 复现脚本重跑：`16@9 + 10@20 + 7@3` → 按 R 后 `9:33`（单叠 33），装备槽为空，客户端与服务端一致。
+- `clean build` ✅；`:fabric:test :neoforge:test --rerun-tasks` → 双端各 52 例、合计 **104 例 0 失败**。
+- 新产物：fabric 119,771 B sha256 `7bc1754b0b60bbe992bea6481b4788f0be65444629cd23ff1abd84b979c903e8`；neoforge 118,342 B sha256 `a5baac52a3eba3d055923cdc35567147a41bacdc3425971876b49a01298696e2`。
+- 临时探针文件、probe hook、`fabric/run/saves/ProbeWorld` 已全部删除。
+
+### 踩坑记录
+- `Slot.getContainerSlot()` 语义按槽位类不同：`ArmorSlot` 返回 Inventory 下标（36..39），创造模式 `SlotWrapper` 返回 InventoryMenu 下标（装备 5..8、快捷栏 36..44）。任何「按 0..35 判断背包槽」的代码都必须在创造页签下重新验证。
+- `Slot.index` 在创造页签包装槽位里恒为 0，**不能用作槽位标识**（滚轮 payload 仍用它，创造模式下滚动定位失效 → v1.1）。
+- Fabric JUnit 里无法 `new ItemStack(...)`（`Components not bound yet`），端到端验证必须起 dev 客户端。
+
+### 下一步
+1. commit + push `origin main`。
+2. `git tag -f -a v1.0.3` 强推 → 删除并重传 Release 434363014 的 4 个资产 → PATCH 正文。
+3. v1.1 候选：滚轮 payload 改容器槽位、`compat.enabled`/`clickDelayMs` 死配置、`QuickStackEngine` 与生产路径合流。
 
 ---
 

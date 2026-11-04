@@ -10,12 +10,14 @@
 
 | 加载器 (Loader) | Minecraft 版本 | 文件名 | 体积 |
 |---|---|---|---|
-| **Fabric** | 26.3 (Java 25) | `onekey-fabric-1.0.3.jar` | ~116 KB |
-| **NeoForge** | 26.3 (Java 25) | `onekey-neoforge-1.0.3.jar` | ~114 KB |
+| **Fabric** | 26.3 (Java 25) | `onekey-fabric-1.0.3.jar` | ~117 KB |
+| **NeoForge** | 26.3 (Java 25) | `onekey-neoforge-1.0.3.jar` | ~116 KB |
 
 ---
 
 ## 🎯 v1.0.3 更新摘要
+
+- **修复**：创造模式「生存模式物品栏」页签下按 `R` 会把物品塞进装备槽（看似复制）——26.3 该页签用 `SlotWrapper` 把装备槽报成 InventoryMenu 下标 5..8，已改为四重槽位筛选 + 玩家背包直接从 `player.inventoryMenu` 取槽位。
 
 ### 新增
 
@@ -62,6 +64,6 @@
 ## 🛠️ 校验和 (SHA-256 Checksums)
 
 ```text
-e34dc8400b34f66438dc204ad2205ffc2748d0b69225fddc0b206b07608891c8  onekey-fabric-1.0.3.jar
-c96b790462b661e124dfe14234e0dc62421d423a786000c5c0c81022a57cb018  onekey-neoforge-1.0.3.jar
+7bc1754b0b60bbe992bea6481b4788f0be65444629cd23ff1abd84b979c903e8  onekey-fabric-1.0.3.jar
+a5baac52a3eba3d055923cdc35567147a41bacdc3425971876b49a01298696e2  onekey-neoforge-1.0.3.jar
 ```

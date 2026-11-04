@@ -11,6 +11,7 @@ import me.easan.onekey.common.net.SortRequest;
 import me.easan.onekey.common.net.SortResult;
 import me.easan.onekey.common.sort.StackCondenser;
 import me.easan.onekey.common.inventory.InventorySlots;
+import me.easan.onekey.neoforge.util.PlayerSlotFilter;
 import me.easan.onekey.common.sort.Sorter;
 import me.easan.onekey.common.sort.StackView;
 import me.easan.onekey.neoforge.OneKeyNeoForge;
@@ -268,7 +269,7 @@ public final class ServerSortingHandler {
         for (Slot slot : menu.slots) {
             if (slot.container == player.getInventory()) {
                 int slotIndex = slot.getContainerSlot();
-                if (InventorySlots.isIncluded(slotIndex, includeHotbar)) {
+                if (PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot, includeHotbar)) {
                     result.add(slot);
                 }
             }
