@@ -52,6 +52,14 @@ class ConfigCodecTest {
     }
 
     @Test
+    void outOfRangeValuesAreClamped() {
+        OneKeyConfig config = ConfigCodec.fromJson("{\"sort\":{\"cooldownMs\":-100},\"quickStack\":{\"radius\":9999}}");
+
+        assertEquals(50, config.sort.cooldownMs);
+        assertEquals(32, config.quickStack.radius);
+    }
+
+    @Test
     void saveCreatesParentDirectoriesAndLoadsBack(@TempDir Path tempDir) throws IOException {
         Path file = tempDir.resolve("nested").resolve("onekey.json");
         OneKeyConfig config = new OneKeyConfig();

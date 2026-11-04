@@ -24,7 +24,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
     @Inject(method = "extractSlot", at = @At("TAIL"))
     private void onekey$renderLockedSlotOverlay(GuiGraphicsExtractor extractor, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
-        if (ClientLockedSlots.isSlotLocked(this.menu, slot)) {
+        if (slot.isActive() && ClientLockedSlots.isSlotLocked(this.menu, slot)) {
             // 半透明琥珀金底色
             extractor.fill(slot.x, slot.y, slot.x + 16, slot.y + 16, 0x33FFA000);
             // 1 像素高亮金黄边框

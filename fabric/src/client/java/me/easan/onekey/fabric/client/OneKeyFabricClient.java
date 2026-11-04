@@ -12,9 +12,11 @@ import me.easan.onekey.fabric.net.SortRequestPayload;
 import me.easan.onekey.fabric.net.SortResultPayload;
 import me.easan.onekey.fabric.net.SyncSlotLocksPayload;
 import me.easan.onekey.fabric.net.ToggleSlotLockPayload;
+import me.easan.onekey.fabric.server.ServerSortingHandler;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
@@ -28,7 +30,9 @@ import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 
 /**
@@ -61,6 +65,10 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(SyncSlotLocksPayload.TYPE, (payload, context) -> {
             ClientLockedSlots.setLocks(payload.containerKey(), payload.lockedSlots());
         });
+
+        // 进出世界或断开连接时，清空客户端锁存缓存，防止跨存档泄漏
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientLockedSlots.clear());
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ClientLockedSlots.clear());
 
         // 2. 监听容器界面内的按键与鼠标事件
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
@@ -133,8 +141,28 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         OneKeyFabric.LOGGER.info("[OneKey] 客户端已初始化，注册 4 个热键（默认 R / V / B / K）");
     }
 
+    private static boolean isSlotLockable(Minecraft client, AbstractContainerScreen<?> screen, Slot slot) {
+        if (client.player == null || slot == null || screen == null || screen.getMenu() == null) {
+            return false;
+        }
+        if (slot.isFake() || !slot.isActive() || slot instanceof ResultSlot) {
+            return false;
+        }
+        if (slot.container instanceof CraftingContainer) {
+            return false;
+        }
+        if (slot.container == client.player.getInventory()) {
+            int slotIndex = slot.getContainerSlot();
+            // 仅允许主背包 9..35 加锁；快捷栏 0..8 严格不参与整理，默认永久受保护，无需且禁止加锁
+            return slotIndex >= 9 && slotIndex < 36;
+        } else {
+            // 外部容器：必须属于纯存储白名单类型
+            return ServerSortingHandler.isMenuSortable(screen.getMenu().getType());
+        }
+    }
+
     private static void toggleSlotLock(Minecraft client, AbstractContainerScreen<?> screen, Slot slot) {
-        if (client.player == null) {
+        if (!isSlotLockable(client, screen, slot)) {
             return;
         }
 

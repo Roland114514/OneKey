@@ -45,6 +45,16 @@ public final class ServerSortingHandler {
             MenuType.GENERIC_9x4, MenuType.GENERIC_9x5, MenuType.GENERIC_9x6,
             MenuType.GENERIC_3x3, MenuType.HOPPER, MenuType.SHULKER_BOX);
 
+    public static boolean isMenuSortable(MenuType<?> menuType) {
+        return menuType != null && SORTABLE_MENU_TYPES.contains(menuType);
+    }
+
+    public static void onPlayerDisconnect(UUID playerUuid) {
+        if (playerUuid != null) {
+            LAST_SORT_TIME.remove(playerUuid);
+        }
+    }
+
     private ServerSortingHandler() {
     }
 
@@ -70,6 +80,11 @@ public final class ServerSortingHandler {
         // 校验容器同步 ID
         AbstractContainerMenu menu = player.containerMenu;
         if (menu == null || menu.containerId != request.syncId()) {
+            return;
+        }
+
+        // 若玩家光标当前正拿着物品，安全跳过整理，避免发生坐标错位或幽灵物品
+        if (!menu.getCarried().isEmpty()) {
             return;
         }
 

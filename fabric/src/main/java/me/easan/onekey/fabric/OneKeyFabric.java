@@ -17,6 +17,7 @@ import me.easan.onekey.fabric.storage.LockedSlotsStorage;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.level.ServerPlayer;
@@ -72,10 +73,10 @@ public final class OneKeyFabric implements ModInitializer {
             ServerSortingHandler.handle(payload.request(), context);
         });
 
-        // 3. 注册服务端槽位锁定请求处理器
+        // 3. 注册服务端槽位锁定请求处理器（含合法性与内存防 DoS 校验）
         ServerPlayNetworking.registerGlobalReceiver(RequestSlotLocksPayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();
-            if (player != null) {
+            if (player != null && payload.containerKey() != null && payload.containerKey().length() <= 64) {
                 Set<Integer> locks = LockedSlotsStorage.getLockedSlots(player.getUUID(), payload.containerKey());
                 context.responseSender().sendPacket(new SyncSlotLocksPayload(payload.containerKey(), new ArrayList<>(locks)));
             }
@@ -83,18 +84,38 @@ public final class OneKeyFabric implements ModInitializer {
 
         ServerPlayNetworking.registerGlobalReceiver(ToggleSlotLockPayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();
-            if (player != null) {
-                boolean current = LockedSlotsStorage.isSlotLocked(player.getUUID(), payload.containerKey(), payload.slotIndex());
-                LockedSlotsStorage.setSlotLocked(player.getUUID(), payload.containerKey(), payload.slotIndex(), !current);
-                LockedSlotsStorage.save(context.server());
+            if (player == null || payload.containerKey() == null || payload.containerKey().length() > 64) {
+                return;
+            }
+
+            // 槽位合法性校验：玩家背包仅允许主背包 9..35（快捷栏 0..8 永久保护、盔甲 36..39 / 副手 40 均不参与整理）
+            if ("player_inventory".equals(payload.containerKey())) {
+                if (payload.slotIndex() < 9 || payload.slotIndex() > 35) {
+                    return;
+                }
+            } else if (payload.slotIndex() < 0 || payload.slotIndex() > 100) {
+                return;
+            }
+
+            boolean current = LockedSlotsStorage.isSlotLocked(player.getUUID(), payload.containerKey(), payload.slotIndex());
+            boolean changed = LockedSlotsStorage.setSlotLocked(player.getUUID(), payload.containerKey(), payload.slotIndex(), !current);
+            if (changed) {
                 Set<Integer> locks = LockedSlotsStorage.getLockedSlots(player.getUUID(), payload.containerKey());
                 context.responseSender().sendPacket(new SyncSlotLocksPayload(payload.containerKey(), new ArrayList<>(locks)));
             }
         });
 
-        // 4. 注册存档生命周期（每个世界存档独立持久化锁定槽位）
+        // 4. 注册存档生命周期（每个世界存档独立持久化锁定槽位；采用脏标记与周期写盘，消除主线程 I/O DoS）
         ServerLifecycleEvents.SERVER_STARTED.register(LockedSlotsStorage::init);
-        ServerLifecycleEvents.SERVER_STOPPING.register(LockedSlotsStorage::save);
+        ServerLifecycleEvents.BEFORE_SAVE.register((server, flush, force) -> LockedSlotsStorage.save(server));
+        ServerLifecycleEvents.SERVER_STOPPING.register(LockedSlotsStorage::saveAndClose);
+
+        // 5. 监听玩家离线，及时清理内存中的冷却记录
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            if (handler.player != null) {
+                ServerSortingHandler.onPlayerDisconnect(handler.player.getUUID());
+            }
+        });
 
         LOGGER.info("[OneKey] 已初始化（Minecraft 26.3 / Fabric）");
     }

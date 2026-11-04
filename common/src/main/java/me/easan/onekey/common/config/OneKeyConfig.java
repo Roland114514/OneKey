@@ -84,6 +84,9 @@ public final class OneKeyConfig {
         if (quickStack.blacklist == null) {
             quickStack.blacklist = new ArrayList<>();
         }
+        // 数值上下限约束，防止异常配置引发计算暴涨或失去冷却保护
+        sort.cooldownMs = Math.clamp(sort.cooldownMs, 50, 5000);
+        quickStack.radius = Math.clamp(quickStack.radius, 1, 32);
         return this;
     }
 }

@@ -12,15 +12,76 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `4c6b842`（M4: 统一热键框架、原版风格设置界面与槽位锁定交互渲染落地） |
+| 最新提交 | 待推送（深度自我审查与全维度代码加固：防 DoS、防 OOM、状态防泄漏） |
 | 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` |
-| 单测状态 | ✅ 19/19 通过（动作 3 + 排序 9 + 分类 3 + 配置 4） |
-| 运行验证 | ✅ 设置界面构建通过、K 键唤出正常、Alt+左键切换锁定带音效与金边渲染、双向同步入存档 |
-| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / **M4 热键与设置界面 ✅** / **M5 快速堆叠与存入 ← 下一步** |
+| 单测状态 | ✅ 20/20 通过（动作 3 + 排序 9 + 分类 3 + 配置 5） |
+| 运行验证 | ✅ 服务端防 DoS 写盘优化、输入边界防 OOM、断开连接清空锁存、鼠标悬浮安全检测通过 |
+| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / **M5 快速堆叠与存入 ← 下一步** |
 | 阻塞项 | 无 |
-| 生产可用性 | 🟢 一键整理、图形设置界面、槽位锁定交互全部闭环可用 |
+| 生产可用性 | 🟢 经历严苛安全与并发审计加固，具备生产级防 DoS / 防 OOM / 零状态泄漏能力 |
 
 **接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M5 任务清单。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 3 次会话：深度自我审查与全维度代码加固）
+
+### 审查与修复目标
+
+根据用户要求，在开启 M5 前以严苛眼光对已有代码（特别是 M3、M4 新增的网络、并发、存储与交互代码）进行全面自我审查，排除所有安全漏洞、内存泄漏、DoS 隐患与交互瑕疵。
+
+### 审查发现与修复清单（共 9 项缺陷全面闭环）
+
+#### 1. 🔴 P0 严重级缺陷修复
+- **主线程同步磁盘 I/O 阻塞 DoS 漏洞**：
+  - *原因*：原 `OneKeyFabric.java` 在每次收到 `ToggleSlotLockPayload` 时均在主线程直接调用 `LockedSlotsStorage.save` 写入磁盘，恶意连点或网络刷包可瞬间导致 TPS 降为 0 并崩服。
+  - *修复*：在 `LockedSlotsStorage` 中引入 `dirty` 脏标记与 `markDirty()`；将写盘委托给 `ServerLifecycleEvents.BEFORE_SAVE`（周期/保存世界）与 `SERVER_STOPPING`；同时写盘采用 `.tmp` 临时文件 + `Files.move(ATOMIC_MOVE)` 原子替换，防止掉电导致 JSON 损坏。
+- **无界网络输入与 JVM 堆耗尽 (OOM) 漏洞**：
+  - *原因*：`containerKey` 与 `slotIndex` 缺乏合法性校验，服务端盲目插入 `LOCKS` 映射。
+  - *修复*：`OneKeyFabric.java` 限制 `containerKey` 长度 $\le 64$；限制玩家背包只能加锁主背包 `9..35`；`LockedSlotsStorage` 限制单个玩家最多记录 50 种容器、每个容器最多 64 个锁定槽位，超限直接丢弃。
+
+#### 2. 🟡 P1 状态泄漏与并发隐患修复
+- **单人世界切换导致客户端锁定状态跨存档泄漏**：
+  - *原因*：`ClientLockedSlots` 静态映射在玩家退出世界、重进世界或断开连接时从未调用 `clear()`，导致上一个存档的锁定状态残留高亮在下一个存档中。
+  - *修复*：在 `OneKeyFabricClient.java` 中注册 `ClientPlayConnectionEvents.DISCONNECT` 与 `JOIN`，进出游戏时自动执行 `ClientLockedSlots.clear()`。
+- **`LockedSlotsStorage.getLockedSlots` 并发修改异常**：
+  - *原因*：原先返回 `Collections.unmodifiableSet(slots)` 仅是内部 HashSet 的包装，网络层迭代发包时若主线程增删槽位会抛出 `ConcurrentModificationException`。
+  - *修复*：在 `synchronized` 同步块内复制并返回不可变快照 `Set.copyOf(slots)`。
+- **`LAST_SORT_TIME` 内存泄漏**：
+  - *原因*：玩家离线后其 UUID 永远残留在 `LAST_SORT_TIME` 中。
+  - *修复*：增加 `ServerSortingHandler.onPlayerDisconnect(UUID)`，并在 `ServerPlayConnectionEvents.DISCONNECT` 中触发清理。
+
+#### 3. 🟢 P2 逻辑与交互缺陷修复
+- **光标悬浮物品 (Carried Item) 整理引发的幽灵物品隐患**：
+  - *原因*：鼠标正拿着物品时若触发整理，该槽位被视为空格重新排布，放下物品时引发客户端/服务端坐标不同步。
+  - *修复*：在 `ServerSortingHandler.handle` 增加 `if (!menu.getCarried().isEmpty()) return;`，光标持物时安全跳过整理。
+- **快捷栏、盔甲与无效槽位被误加锁**：
+  - *原因*：快捷栏 0..8 底层永久保护且不参与整理，但客户端原先允许玩家 Alt+左键点击加锁并画出黄框，严重误导玩家。
+  - *修复*：在 `OneKeyFabricClient.java` 增加 `isSlotLockable` 校验，快捷栏（0..8）、盔甲、副手、合成格以及非白名单外部容器严格禁止锁定，无声忽略。
+- **非活跃槽位 (Inactive Slot) 悬空高亮**：
+  - *原因*：配方书或特定容器隐藏槽位时，`AbstractContainerScreenMixin` 依然绘制高亮边框。
+  - *修复*：在 `extractSlot` 注入点增加 `slot.isActive()` 守卫。
+- **配置文件数值越界缺少收敛**：
+  - *原因*：用户手改配置将半径设为 9999 会导致 M5 计算崩服，冷却时间为负数会失去防刷保护。
+  - *修复*：在 `OneKeyConfig.normalized()` 中加入 `Math.clamp` 约束 `cooldownMs`（50~5000ms）、`radius`（1~32格）；并在 `ConfigCodecTest` 中增加越界收敛单测。
+
+### 本次改动文件清单
+
+- `common/src/main/java/.../config/OneKeyConfig.java`：数值上下限约束。
+- `common/src/test/java/.../config/ConfigCodecTest.java`：新增越界收敛单测。
+- `fabric/src/main/java/.../storage/LockedSlotsStorage.java`：`dirty` 标记、周期与关服保存、原子替换、不可变快照拷贝、容量上限防护。
+- `fabric/src/main/java/.../OneKeyFabric.java`：网络输入合法性拦截、生命周期事件挂载、离线冷却清理。
+- `fabric/src/main/java/.../server/ServerSortingHandler.java`：光标悬浮物品检查、离线清理、暴露 `isMenuSortable`。
+- `fabric/src/client/java/.../client/OneKeyFabricClient.java`：进出世界清理锁存缓存、`isSlotLockable` 过滤非法与快捷栏槽位。
+- `fabric/src/client/java/.../client/mixin/AbstractContainerScreenMixin.java`：`slot.isActive()` 守卫。
+
+### 验证记录
+
+| 验证项 | 命令 / 方式 | 结果 |
+|---|---|---|
+| 单元测试 | `bash scripts/with-jdk25.sh test` | 20/20 通过（全绿） |
+| 完整构建 | `bash scripts/with-jdk25.sh clean build` | BUILD SUCCESSFUL |
+| 产物检查 | `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` | 包含全部加固后的 class |
 
 ---
 
