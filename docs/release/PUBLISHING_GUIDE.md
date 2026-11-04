@@ -61,3 +61,31 @@ CurseForge 同样支持直接提交审核：
    - 审核通过后在 **Files** 页面上传：
      - `onekey-fabric-1.0.3.jar`（勾选 Java 25、Minecraft 26.3、Fabric）
      - `onekey-neoforge-1.0.3.jar`（勾选 Java 25、Minecraft 26.3、NeoForge）
+
+---
+
+## 五、命令行一键发布（可选，推荐）
+
+仓库内置两个脚本，避免手工点网页传文件：
+
+```bash
+# Modrinth：项目需先在网页创建，token 在 https://modrinth.com/settings/account 生成（scope: create_version, read_project）
+export MODRINTH_TOKEN=xxxx
+python3 scripts/publish_modrinth.py --project <slug> --version 1.0.3 --loader fabric \
+    --file fabric/build/libs/onekey-fabric-1.0.3.jar
+python3 scripts/publish_modrinth.py --project <slug> --version 1.0.3 --loader neoforge \
+    --file neoforge/build/libs/onekey-neoforge-1.0.3.jar
+
+# CurseForge：Project ID 是项目页 URL 里的数字，token 在 https://legacy.curseforge.com/account/api-tokens 生成
+export CURSEFORGE_PROJECT_ID=1234567
+export CURSEFORGE_TOKEN=xxxx
+python3 scripts/publish_curseforge.py --version 1.0.3 --loader fabric \
+    --file fabric/build/libs/onekey-fabric-1.0.3.jar
+python3 scripts/publish_curseforge.py --version 1.0.3 --loader neoforge \
+    --file neoforge/build/libs/onekey-neoforge-1.0.3.jar
+```
+
+- 两个脚本都支持从项目根 `.env` 读取 token（`.env` 已在 `.gitignore` 中，不会被提交）；
+- 都支持 `--dry-run` 先看将要提交的 metadata / changelog；
+- changelog 自动从 `CHANGELOG.md` 抽取对应版本小节，无需手抄。
+
