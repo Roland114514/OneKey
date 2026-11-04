@@ -13,7 +13,7 @@
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
 | 最新提交 | 见下方（本次：v1.0.2 GUI 双开关 + 准星交互距离收紧 + 异常回滚加固） |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.2.jar`（111,003 B ≈108KB）与 `neoforge/build/libs/onekey-neoforge-1.0.2.jar`（109,634 B ≈107KB） |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.2.jar`（112,346 B ≈110KB）与 `neoforge/build/libs/onekey-neoforge-1.0.2.jar`（110,965 B ≈108KB） |
 | 单测状态 | ✅ 双端各 40 例（Fabric 40 + NeoForge 40 = **80 例全绿**） |
 | 版本状态 | ✅ `mod_version=1.0.2`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
 | 协议版本 | ⚠️ `ProtocolVersion.CURRENT=2`（`QuickStackRequest` 新增目标坐标字段）→ 多人游戏必须双端同版本 |
@@ -45,7 +45,8 @@
    - **末影箱界面不绑定（P1 体验缺口）**：`getOpenMenuContainer` 能拿到 `PlayerEnderChestContainer`，但它不在世界方块扫描范围内，导致「开着末影箱按 B 无效」。已显式加入 `targetContainers`（`isTargeted=true`，仅当 stash 时允许倒空槽）。
    - **协议版本未升（P1 兼容）**：codec 已从 3 字段变 4 字段，但 `ProtocolVersion.CURRENT` 仍是 1；已升 2（NeoForge `versioned("2")` 同步），并在 CHANGELOG/README 明确「双端必须同版本」。
    - 新增 2 项配置单测（双开关往返 + 缺省为 true）。
-3. **验证**：`clean build` 绿；`:fabric:test :neoforge:test --rerun-tasks` 各 40 例、合计 **80 例全绿**；产物 111,003 B / 109,634 B，sha256 `93553f51…87d1` / `cdd94db2…607e`，jar 内版本均为 `1.0.2`。
+   - **混版本被踢（P1 兼容）**：旧版客户端（1.0.1 及更早）发来的 `QuickStackRequest` 只有 3 个字段，1.0.2 服务端按新格式解码会抛异常并被原版以「数据包解码失败」断开。已在双端 `QuickStackRequestPayload` 包一层容错解码：失败时退化为 `syncId = -1` 的空请求（服务端校验后静默丢弃）并打一条 warn 日志，混版本玩家最多「按了没反应」，不再被踢。
+3. **验证**：`clean build` 绿；`:fabric:test :neoforge:test --rerun-tasks` 各 40 例、合计 **80 例全绿**；产物 112,346 B / 110,965 B，sha256 `82f0eb33…dea1b` / `263f55ee…0d8a`，jar 内版本均为 `1.0.2`。
 4. **文档**：CHANGELOG 新增 `## [1.0.2]` 小节（3 新增 + 3 修复 + 已知限制 + 兼容性）；README 快捷键表/设置项/已知限制/路线图更新；PLAN 发布清单改 40 例与 1.0.2 产物；`docs/release/GITHUB_RELEASE.md` 重写为 v1.0.2（新哈希/体积），`PUBLISHING_GUIDE.md` 同步；`docs/release/` 下 1.0.1 jar 已替换为 1.0.2 构建产物。
 
 ### 待跟进（不阻塞本次发版）

@@ -28,13 +28,35 @@ public record QuickStackRequestPayload(QuickStackRequest request) implements Cus
     private static final StreamCodec<ByteBuf, Optional<TargetPos>> OPTIONAL_TARGET_POS_CODEC =
             ByteBufCodecs.optional(TARGET_POS_CODEC);
 
-    public static final StreamCodec<ByteBuf, QuickStackRequestPayload> CODEC = StreamCodec.composite(
+    private static final StreamCodec<ByteBuf, QuickStackRequestPayload> RAW_CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, p -> p.request().syncId(),
             ByteBufCodecs.VAR_INT, p -> p.request().radius(),
             ByteBufCodecs.BOOL, p -> p.request().stash(),
             OPTIONAL_TARGET_POS_CODEC, p -> p.request().targetPos(),
             (syncId, radius, stash, targetPos) -> new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos))
     );
+
+    /**
+     * 容错解码：1.0.1 及更早的客户端数据包不含「目标坐标」字段，直接按新格式解码会抛异常，
+     * 进而导致该玩家被服务器以「数据包解码失败」断开。这里把解码失败退化为 syncId = -1 的空请求，
+     * 交由服务端 syncId 校验静默丢弃，混版本玩家最多是「按了没反应」，不会被踢下线。
+     */
+    public static final StreamCodec<ByteBuf, QuickStackRequestPayload> CODEC = new StreamCodec<>() {
+        @Override
+        public QuickStackRequestPayload decode(ByteBuf buffer) {
+            try {
+                return RAW_CODEC.decode(buffer);
+            } catch (RuntimeException exception) {
+                OneKeyNeoForge.LOGGER.warn("[OneKey] 无法解码快速堆叠请求（可能是旧版客户端），已忽略：{}", exception.toString());
+                return new QuickStackRequestPayload(new QuickStackRequest(-1, 0, false, Optional.empty()));
+            }
+        }
+
+        @Override
+        public void encode(ByteBuf buffer, QuickStackRequestPayload value) {
+            RAW_CODEC.encode(buffer, value);
+        }
+    };
 
     @Override
     public Type<? extends CustomPacketPayload> type() {
