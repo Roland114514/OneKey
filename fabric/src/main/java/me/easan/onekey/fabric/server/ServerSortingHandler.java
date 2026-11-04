@@ -206,7 +206,7 @@ public final class ServerSortingHandler {
         return slot.index;
     }
 
-    private static String menuTypeKey(AbstractContainerMenu menu) {
+    public static String menuTypeKey(AbstractContainerMenu menu) {
         Identifier menuType = BuiltInRegistries.MENU.getKey(menu.getType());
         return menuType != null ? menuType.toString() : "generic_container";
     }

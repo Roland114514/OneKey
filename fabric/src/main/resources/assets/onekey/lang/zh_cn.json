@@ -12,6 +12,7 @@
   "onekey.stash.success": "已存入 %s 件物品",
   "onekey.quick_stack.none": "附近无可堆叠或存入的同类物品",
   "onekey.quick_stack.server_not_installed": "服务器未安装 OneKey，无法快速堆叠",
+  "onekey.compat.conflict_detected": "§e[OneKey] 检测到已安装同类模组（%s）。OneKey 已自动调整交互避免冲突，可在 K 键设置中微调。",
   "onekey.settings.title": "OneKey 设置",
   "onekey.settings.sort.enabled": "一键整理",
   "onekey.settings.sort.groupByCategory": "分类分组",

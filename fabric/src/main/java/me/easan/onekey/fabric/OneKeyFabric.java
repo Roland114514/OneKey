@@ -10,11 +10,13 @@ import me.easan.onekey.common.config.OneKeyConfig;
 import me.easan.onekey.fabric.net.QuickStackRequestPayload;
 import me.easan.onekey.fabric.net.QuickStackResultPayload;
 import me.easan.onekey.fabric.net.RequestSlotLocksPayload;
+import me.easan.onekey.fabric.net.ScrollItemTransferPayload;
 import me.easan.onekey.fabric.net.SortRequestPayload;
 import me.easan.onekey.fabric.net.SortResultPayload;
 import me.easan.onekey.fabric.net.SyncSlotLocksPayload;
 import me.easan.onekey.fabric.net.ToggleSlotLockPayload;
 import me.easan.onekey.fabric.server.ServerQuickStackHandler;
+import me.easan.onekey.fabric.server.ServerScrollHandler;
 import me.easan.onekey.fabric.server.ServerSortingHandler;
 import me.easan.onekey.fabric.storage.LockedSlotsStorage;
 import me.easan.onekey.fabric.util.ItemConversion;
@@ -73,14 +75,19 @@ public final class OneKeyFabric implements ModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(SyncSlotLocksPayload.TYPE, SyncSlotLocksPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(QuickStackRequestPayload.TYPE, QuickStackRequestPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(QuickStackResultPayload.TYPE, QuickStackResultPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ScrollItemTransferPayload.TYPE, ScrollItemTransferPayload.CODEC);
 
-        // 2. 注册服务端整理与快速堆叠请求处理器
+        // 2. 注册服务端整理、快速堆叠与滚轮微调请求处理器
         ServerPlayNetworking.registerGlobalReceiver(SortRequestPayload.TYPE, (payload, context) -> {
             ServerSortingHandler.handle(payload.request(), context);
         });
 
         ServerPlayNetworking.registerGlobalReceiver(QuickStackRequestPayload.TYPE, (payload, context) -> {
             ServerQuickStackHandler.handle(payload.request(), context);
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(ScrollItemTransferPayload.TYPE, (payload, context) -> {
+            ServerScrollHandler.handle(payload, context);
         });
 
         // 3. 注册服务端槽位锁定请求处理器（含合法性与内存防 DoS 校验）

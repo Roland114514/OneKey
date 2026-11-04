@@ -12,6 +12,7 @@
   "onekey.stash.success": "Stashed %s items",
   "onekey.quick_stack.none": "No matching containers or items to transfer",
   "onekey.quick_stack.server_not_installed": "Server does not have OneKey installed",
+  "onekey.compat.conflict_detected": "§e[OneKey] Detected compatible inventory mod(s): %s. OneKey has adapted interactions to avoid conflicts.",
   "onekey.settings.title": "OneKey Settings",
   "onekey.settings.sort.enabled": "Sorting",
   "onekey.settings.sort.groupByCategory": "Group by Category",

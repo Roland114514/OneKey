@@ -48,6 +48,15 @@ public final class ClientLockedSlots {
         return slots != null && slots.contains(slotIndex);
     }
 
+    /** 获取指定容器类型的全部锁定槽位快照。 */
+    public static Set<Integer> getLocks(String containerKey) {
+        if (containerKey == null) {
+            return java.util.Collections.emptySet();
+        }
+        Set<Integer> slots = LOCKS.get(containerKey);
+        return (slots == null || slots.isEmpty()) ? java.util.Collections.emptySet() : Set.copyOf(slots);
+    }
+
     /** 结合当前容器与槽位对象，判断该槽位是否已被锁定。 */
     public static boolean isSlotLocked(AbstractContainerMenu menu, Slot slot) {
         if (slot == null || menu == null) {

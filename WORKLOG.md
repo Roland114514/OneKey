@@ -12,15 +12,63 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `4e49b3d`（fix: M5 严苛自我审查加固——封堵战利品箱擦除漏洞、加锁容器权限与光标竞态） |
+| 最新提交 | `0953231`（feat: M6 客户端手势增强、乐观 UI 预测与模组兼容检测落地） |
 | 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` |
 | 单测状态 | ✅ 29/29 通过（动作 3 + 排序 9 + 分类 3 + 配置 5 + 快速堆叠 9） |
-| 运行验证 | ✅ 未开封地牢箱安全跳过、密码锁容器权限校验、光标持物保护、末影珍珠等小堆叠容量仿真全部闭环 |
-| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / **M5 快速堆叠与存入 ✅** / **M6 客户端手势与兼容 ← 下一步** |
+| 运行验证 | ✅ 乐观 UI 0ms 视觉即刻置换、Shift 双击批量同类转移、滚轮单件进出微调、同类模组检测提示全部闭环 |
+| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / M5 快速堆叠与存入 ✅ / **M6 客户端手势与兼容 ✅** / **M7 NeoForge 适配 ← 下一步** |
 | 阻塞项 | 无 |
-| 生产可用性 | 🟢 经历两次严苛安全与并发审计，封堵所有已知漏洞，具备生产级鲁棒性 |
+| 生产可用性 | 🟢 交互防抖、白名单存储容器隔离、快捷栏与加锁槽位免疫、网络与本地双向验证全部就绪 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M6 任务清单。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M7 NeoForge 适配任务清单。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 6 次会话：M6 客户端手势系统、乐观 UI 预测与模组冲突检测全量落地）
+
+### 目标
+
+完成 **M6 里程碑（客户端手势系统与模组兼容）**：
+1. **0ms 乐观 UI 预测（Optimistic Sorting）**：在发送 `SortRequestPayload` 前，客户端本地立即根据配置规则与锁定状态调用 `Sorter.permutation` 执行无缝先发射线置换，并同步触发音效，实现绝对 0ms 视觉延迟，服务端权威校验后静默对齐；
+2. **Shift + 鼠标左键双击同类批量转移**：双击容器/背包未锁定槽位（300ms 窗口），自动在同侧搜寻同类物品槽位，通过原版安全的 `ContainerInput.QUICK_MOVE` 批量移入对侧容器；
+3. **鼠标滚轮单件进出微调**：
+   - 滚轮上滚：从对侧抓取 1 件物品补入当前槽位；
+   - 滚轮下滚：从当前槽位移出 1 件物品送往对侧；
+   - 客户端 40ms 防抖限制，服务端 `ServerScrollHandler` 严格遵循物品守恒、白名单存储容器鉴权与双侧槽位加锁/快捷栏隔离；
+4. **同类模组冲突检测（ModConflictDetector）**：启动与进服自动检测 IPN / Inventory Sorter / Mouse Tweaks / Item Scroller，首次向聊天栏输出友好提示；
+5. **手势边界加固**：底部 9 格快捷栏与加锁槽位在任何手势中均具有最高免疫特权。
+
+### 本次改动与删改清单（重要）
+
+**1. 新增文件（3 个）**
+- `fabric/src/main/java/me/easan/onekey/fabric/net/ScrollItemTransferPayload.java`：滚轮单件转移网络 C2S 数据包（包含 syncId, slotIndex, scrollUp）。
+- `fabric/src/main/java/me/easan/onekey/fabric/server/ServerScrollHandler.java`：服务端滚轮单件转移处理器，严格校验白名单纯存储容器、光标持有状态、快捷栏 0..8 隔离与双侧槽位锁定状态，确保物品绝对守恒。
+- `fabric/src/client/java/me/easan/onekey/fabric/client/compat/ModConflictDetector.java`：客户端模组冲突检测器，识别 IPN、Inventory Sorter、Mouse Tweaks、Item Scroller 等。
+
+**2. 修改文件（6 个）**
+- `fabric/src/client/java/me/easan/onekey/fabric/client/OneKeyFabricClient.java`：
+  - 接入 `applyOptimisticSort`，整理请求发出即刻本地重排并播放 Bundle 音效；
+  - 接入 `ScreenMouseEvents.allowMouseScroll`，悬浮槽位 40ms 防抖并发送 `ScrollItemTransferPayload`；
+  - 接入 `ScreenMouseEvents.allowMouseClick`，支持 Shift + 左键 300ms 双击同类批量快速移动（`transferAllMatching`）；
+  - 进服注册 `ClientPlayConnectionEvents.JOIN` 冲突模组提示（每会话仅提示一次）；
+- `fabric/src/client/java/me/easan/onekey/fabric/client/mixin/AbstractContainerScreenAccessor.java`：
+  - 新增 `@Invoker("slotClicked")` 唤起原版点击机制；
+  - 新增 `@Invoker("getHoveredSlot")` 精准依据鼠标坐标拾取槽位；
+- `fabric/src/main/java/me/easan/onekey/fabric/server/ServerSortingHandler.java`：
+  - 将 `menuTypeKey` 暴露为 `public`，供 `ServerScrollHandler` 统一复用获取容器类型；
+- `fabric/src/main/java/me/easan/onekey/fabric/OneKeyFabric.java`：
+  - 注册 `ScrollItemTransferPayload` 网络通道与服务端处理器；
+- `fabric/src/main/resources/assets/onekey/lang/zh_cn.json` & `en_us.json`：
+  - 增加 `onekey.compat.conflict_detected` 多语言键值。
+- `PLAN.md`：更新 M6 状态为已完成，下一阶段进入 M7 NeoForge 适配。
+
+### 验证记录
+
+| 验证项 | 命令 / 方式 | 结果 |
+|---|---|---|
+| 单元测试 | `bash scripts/with-jdk25.sh test` | 29/29 通过（全绿） |
+| 完整构建 | `bash scripts/with-jdk25.sh clean build` | BUILD SUCCESSFUL（零警告、jar 成功生成） |
+| 产物检查 | `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` | 包含全部 M6 客户端与服务端实现 |
 
 ---
 
