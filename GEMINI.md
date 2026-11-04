@@ -5,8 +5,14 @@
 - **API 配置与调用工具**：
   - API Key 已保存在项目根目录的本地环境配置文件 `.env`（已加入 `.gitignore`，严禁提交到 Git）。
   - 项目内置了零依赖且支持管道/上下文文件的调用脚本：`scripts/gemini.sh` 及 `scripts/gemini_api.py`。
-  - 默认模型为 `gemini-3.8-flash`（可根据需要指定 `-m gemini-4-argon` 等）。
-  - 示例：`./scripts/gemini.sh "你的分析提示词"` 或 `cat log.txt | ./scripts/gemini.sh "分析日志"`。
+- **默认模型与自主分级调度策略**：
+  - **常规高频任务（默认使用 `gemini-3.8-flash`）**：单文件局部逻辑编写、日常文档维护、普通语法检查、基础日志过滤与简单翻译。兼具超低延迟与高响应速度。
+  - **复杂深度/攻坚任务（自主切换至 `gemini-4-argon`）**：核心算法重构（如准星射线检测与容器分发逻辑）、跨端底层网络包协议设计、棘手的 JVM 崩溃/死锁/时序 Bug 分析、多模块架构推导与严谨的形式化逻辑推断。智能体有权根据任务复杂度自主传入 `-m gemini-4-argon` 启动深度推理。
+  - **用户显式指定**：如果用户在提示词中显式指定了模型（如指定使用某模型），则以用户指定为最高优先级。
+- **示例**：
+  - 常规调用：`./scripts/gemini.sh "提示词"`
+  - 攻坚调用：`./scripts/gemini.sh -m gemini-4-argon "复杂架构设计提示词"`
+  - 管道结合：`cat crash.log | ./scripts/gemini.sh -m gemini-4-argon "深入推导此 JVM 崩溃根因"`
 
 ## 2. Git 规范与多智能体防冲突规则
 - **严禁全量暂存**：严禁执行 `git add .`、`git add -A` 或 `git commit -a`。
