@@ -251,7 +251,8 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                                 boolean lockedOrHotbar = false;
                                 if (isPlayer) {
                                     int slotIdx = hovered.getContainerSlot();
-                                    lockedOrHotbar = (slotIdx < 9 || slotIdx >= 36) || ClientLockedSlots.isLocked("player_inventory", slotIdx);
+                                    lockedOrHotbar = !InventorySlots.isIncluded(slotIdx, OneKeyFabric.config().gestures.includeHotbar)
+                                            || ClientLockedSlots.isLocked("player_inventory", slotIdx);
                                 } else {
                                     String menuKey = ClientLockedSlots.getMenuTypeKey(containerScreen.getMenu());
                                     lockedOrHotbar = ClientLockedSlots.isLocked(menuKey, hovered.index);
