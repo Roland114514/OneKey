@@ -60,7 +60,7 @@ public final class ServerSortingHandler {
 
     public static void handle(SortRequest request, ServerPlayNetworking.Context context) {
         ServerPlayer player = context.player();
-        if (player == null) {
+        if (player == null || player.isSpectator() || player.isDeadOrDying()) {
             return;
         }
 
@@ -69,28 +69,34 @@ public final class ServerSortingHandler {
             return;
         }
 
-        // 校验冷却时间（默认 250ms，防止连点导致网络错位）
+        // 校验容器同步 ID 与合法性
+        AbstractContainerMenu menu = player.containerMenu;
+        if (menu == null || menu.containerId != request.syncId() || !menu.stillValid(player)) {
+            if (menu != null) {
+                menu.sendAllDataToRemote();
+            }
+            return;
+        }
+
+        // 校验冷却时间（默认 250ms，防止连点导致网络错位；被拦截时强制重置客户端同步）
         long now = System.currentTimeMillis();
         long lastTime = LAST_SORT_TIME.getOrDefault(player.getUUID(), 0L);
         if (now - lastTime < config.sort.cooldownMs) {
+            menu.sendAllDataToRemote();
             return;
         }
         LAST_SORT_TIME.put(player.getUUID(), now);
 
-        // 校验容器同步 ID
-        AbstractContainerMenu menu = player.containerMenu;
-        if (menu == null || menu.containerId != request.syncId()) {
-            return;
-        }
-
         // 若玩家光标当前正拿着物品，安全跳过整理，避免发生坐标错位或幽灵物品
         if (!menu.getCarried().isEmpty()) {
+            menu.sendAllDataToRemote();
             return;
         }
 
         // 筛选待排序槽位
         List<Slot> slotsToSort = resolveSlotsToSort(menu, player, request.mode());
         if (slotsToSort.isEmpty()) {
+            menu.sendAllDataToRemote();
             context.responseSender().sendPacket(new SortResultPayload(new SortResult(false, 0)));
             return;
         }

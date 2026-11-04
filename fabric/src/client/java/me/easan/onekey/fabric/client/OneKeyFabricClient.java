@@ -68,6 +68,7 @@ public final class OneKeyFabricClient implements ClientModInitializer {
     private static int lastShiftClickSlot = -1;
     private static ItemStack lastShiftClickItem = ItemStack.EMPTY;
     private static long lastScrollTime = 0L;
+    private static long lastClientSortTime = 0L;
     private static boolean conflictWarned = false;
 
     @Override
@@ -91,21 +92,14 @@ public final class OneKeyFabricClient implements ClientModInitializer {
             ClientLockedSlots.setLocks(payload.containerKey(), payload.lockedSlots());
         });
 
-        // 进出世界或断开连接时，清空客户端锁存缓存，防止跨存档泄漏；首次进入提示冲突
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientLockedSlots.clear());
+        // 进出世界或断开连接时，清空客户端锁存与物品分类缓存，防止跨存档泄漏与陈旧数据
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            ClientLockedSlots.clear();
+            ItemConversion.clearCache();
+        });
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             ClientLockedSlots.clear();
-            if (!conflictWarned) {
-                List<String> conflicts = ModConflictDetector.detectConflicts();
-                if (!conflicts.isEmpty()) {
-                    conflictWarned = true;
-                    OneKeyFabric.LOGGER.warn("[OneKey] 检测到共存库存模组: {}", conflicts);
-                    if (client.player != null) {
-                        client.player.sendSystemMessage(
-                                Component.translatable("onekey.compat.conflict_detected", String.join(", ", conflicts)));
-                    }
-                }
-            }
+            ItemConversion.clearCache();
         });
 
         // 2. 监听容器界面内的按键与鼠标事件
@@ -181,7 +175,7 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                     if (hovered == null || hovered.isFake() || !hovered.isActive() || hovered instanceof ResultSlot) {
                         return true;
                     }
-                    if (hovered.container instanceof CraftingContainer) {
+                    if (hovered.container instanceof CraftingContainer || hovered.getItem().isEmpty()) {
                         return true;
                     }
 
@@ -291,6 +285,16 @@ public final class OneKeyFabricClient implements ClientModInitializer {
 
         // 3. 客户端 Tick 事件：未开 GUI 时按热键触发整理、快速堆叠、一键存入与设置界面
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (!conflictWarned && client.player != null) {
+                conflictWarned = true;
+                List<String> conflicts = ModConflictDetector.detectConflicts();
+                if (!conflicts.isEmpty()) {
+                    OneKeyFabric.LOGGER.warn("[OneKey] 检测到共存库存模组: {}", conflicts);
+                    client.player.sendSystemMessage(
+                            Component.translatable("onekey.compat.conflict_detected", String.join(", ", conflicts)));
+                }
+            }
+
             if (client.gui != null && client.gui.screen() == null && client.player != null) {
                 while (sortKey.consumeClick()) {
                     triggerSort(client, client.player.inventoryMenu.containerId, SortRequest.MODE_PLAYER);
@@ -402,6 +406,10 @@ public final class OneKeyFabricClient implements ClientModInitializer {
             ItemStack item = slot.getItem();
             if (!item.isEmpty() && ItemStack.isSameItemSameComponents(item, targetItem)) {
                 accessor.onekey$slotClicked(slot, slot.index, 0, ContainerInput.QUICK_MOVE);
+                if (!slot.getItem().isEmpty()) {
+                    // 槽位未能完全清空（对侧已无空间），中止后续多余点击
+                    break;
+                }
             }
         }
     }
@@ -441,6 +449,13 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                     Component.translatable("onekey.sort.server_not_installed"));
             return;
         }
+
+        // 客户端冷却检查（防连点发包与乐观置换错位）
+        long now = System.currentTimeMillis();
+        if (now - lastClientSortTime < OneKeyFabric.config().sort.cooldownMs) {
+            return;
+        }
+        lastClientSortTime = now;
 
         // 乐观 UI 预测：客户端本地即刻执行纯逻辑排序置换与音效
         applyOptimisticSort(client, syncId, mode);

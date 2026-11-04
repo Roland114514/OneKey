@@ -32,6 +32,10 @@ public final class ServerScrollHandler {
             return;
         }
 
+        if (!menu.stillValid(player)) {
+            return;
+        }
+
         // 仅在已打开且属于纯存储白名单的容器中生效，避免侵入工作台、铁砧、熔炉等特种界面
         if (!ServerSortingHandler.isMenuSortable(menu.getType())) {
             return;
@@ -51,6 +55,12 @@ public final class ServerScrollHandler {
             return;
         }
         if (sourceSlot.container instanceof CraftingContainer) {
+            return;
+        }
+
+        // 源槽位若为空，不执行任何盲抓或移动，防止意外向空槽移入对侧未知物品
+        ItemStack sourceStack = sourceSlot.getItem();
+        if (sourceStack.isEmpty()) {
             return;
         }
 
@@ -104,13 +114,15 @@ public final class ServerScrollHandler {
 
         if (!payload.scrollUp()) {
             // 向下滚：从本槽位移出 1 件物品送往对侧
-            ItemStack sourceStack = sourceSlot.getItem();
-            if (sourceStack.isEmpty()) {
+            if (!sourceSlot.mayPickup(player)) {
                 return;
             }
 
             // 优先尝试合并进对侧未满的同类槽位
             for (Slot oppSlot : oppositeSlots) {
+                if (!oppSlot.mayPlace(sourceStack)) {
+                    continue;
+                }
                 ItemStack oppStack = oppSlot.getItem();
                 if (!oppStack.isEmpty() && ItemStack.isSameItemSameComponents(oppStack, sourceStack)) {
                     int max = Math.min(oppSlot.getMaxStackSize(oppStack), oppStack.getMaxStackSize());
@@ -146,14 +158,16 @@ public final class ServerScrollHandler {
                 menu.broadcastChanges();
             }
         } else {
-            // 向上滚：从对侧抓取 1 件物品补充到本槽位
-            ItemStack sourceStack = sourceSlot.getItem();
-            if (sourceStack.isEmpty()) {
-                // 若本槽位为空，从对侧拿取第 1 个有物品且本槽允许放入的槽位
+            // 向上滚：从对侧抓取 1 件同类物品补充到本槽位
+            int max = Math.min(sourceSlot.getMaxStackSize(sourceStack), sourceStack.getMaxStackSize());
+            if (sourceStack.getCount() < max) {
                 for (Slot oppSlot : oppositeSlots) {
                     ItemStack oppStack = oppSlot.getItem();
-                    if (!oppStack.isEmpty() && sourceSlot.mayPlace(oppStack)) {
-                        sourceSlot.set(oppStack.copyWithCount(1));
+                    if (!oppStack.isEmpty() && ItemStack.isSameItemSameComponents(oppStack, sourceStack)) {
+                        if (!oppSlot.mayPickup(player) || !sourceSlot.mayPlace(oppStack)) {
+                            continue;
+                        }
+                        sourceStack.grow(1);
                         oppStack.shrink(1);
                         if (oppStack.isEmpty()) {
                             oppSlot.set(ItemStack.EMPTY);
@@ -163,25 +177,6 @@ public final class ServerScrollHandler {
                         sourceSlot.setChanged();
                         changed = true;
                         break;
-                    }
-                }
-            } else {
-                int max = Math.min(sourceSlot.getMaxStackSize(sourceStack), sourceStack.getMaxStackSize());
-                if (sourceStack.getCount() < max) {
-                    for (Slot oppSlot : oppositeSlots) {
-                        ItemStack oppStack = oppSlot.getItem();
-                        if (!oppStack.isEmpty() && ItemStack.isSameItemSameComponents(oppStack, sourceStack)) {
-                            sourceStack.grow(1);
-                            oppStack.shrink(1);
-                            if (oppStack.isEmpty()) {
-                                oppSlot.set(ItemStack.EMPTY);
-                            } else {
-                                oppSlot.setChanged();
-                            }
-                            sourceSlot.setChanged();
-                            changed = true;
-                            break;
-                        }
                     }
                 }
             }

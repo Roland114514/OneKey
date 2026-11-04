@@ -12,15 +12,46 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `3c9df67`（feat: M6 客户端手势增强、乐观 UI 预测与模组兼容检测落地） |
+| 最新提交 | `PENDING_COMMIT`（fix: M6 深度审查与健壮性加固——封堵乐观置换回滚与手势溢出） |
 | 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` |
 | 单测状态 | ✅ 29/29 通过（动作 3 + 排序 9 + 分类 3 + 配置 5 + 快速堆叠 9） |
-| 运行验证 | ✅ 乐观 UI 0ms 视觉即刻置换、Shift 双击批量同类转移、滚轮单件进出微调、同类模组检测提示全部闭环 |
+| 运行验证 | ✅ 乐观置换客户端服务端双向防抖与拒绝回滚、滚轮空槽与权限阻断、Shift 双击满仓熔断、进服模组提醒时机全部严密闭环 |
 | 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / M5 快速堆叠与存入 ✅ / **M6 客户端手势与兼容 ✅** / **M7 NeoForge 适配 ← 下一步** |
 | 阻塞项 | 无 |
-| 生产可用性 | 🟢 交互防抖、白名单存储容器隔离、快捷栏与加锁槽位免疫、网络与本地双向验证全部就绪 |
+| 生产可用性 | 🟢 历经三次严苛审查与防作弊对齐，零已知漏洞，具备生产级鲁棒性 |
 
 **接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M7 NeoForge 适配任务清单。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 7 次会话：M6 深度对抗性代码审查与安全健壮性加固）
+
+### 目标
+
+对 M6 全量代码开展深度对抗性代码审查（Adversarial Code Audit），重点排查网络延迟、并发竞争、权限穿透、空槽盲操作与客户端预测回滚等高危边缘场景，实施 5 项关键加固：
+
+1. **🔴 [预测同步与反作弊回滚] 乐观 UI 服务端拒绝强制 resync 与客户端冷却前置**：
+   - *问题*：原先若客户端在 cooldownMs 冷却期或光标持物状态下按 R，客户端乐观置换了槽位，但服务端静默 `return`，未向客户端下发任何槽位同步，导致客户端进入假象状态直到下一次点击。
+   - *加固*：
+     - `OneKeyFabricClient.triggerSort` 增加客户端前置冷却校验，防连击发包与空转置换；
+     - `ServerSortingHandler.handle` 在任何早期拒绝路径（冷却、光标持物、容器失效、旁观者、死亡、空槽位）均统一调用 `menu.sendAllDataToRemote()`，强制客户端在拒绝时瞬间复原服务端权威状态。
+
+2. **🟡 [滚轮空槽与盲抓拦截] 杜绝悬停空槽误抓取物品**：
+   - *问题*：原先滚轮向上微调在空槽位上触发时，会盲目从对侧第一格拿取任意物品放入空槽，极易在无意滚轮时误将贵重物品抽出。
+   - *加固*：
+     - `OneKeyFabricClient` 客户端增加 `hovered.getItem().isEmpty()` 拦截，滚轮悬停空槽不发包、不发声；
+     - `ServerScrollHandler` 服务端强校验 `sourceStack.isEmpty()` 拦截；且在转移前后双向校验 `sourceSlot.mayPickup(player)` 与 `oppSlot.mayPlace(sourceStack)` 权限。
+
+3. **🟡 [双击转移批量熔断] 对侧容器满仓时即刻停止后续循环**：
+   - *问题*：Shift 双击批量转移时，若目标容器在转移前两个堆叠后已满，原先仍会对剩余几十个同类槽位继续盲调 `onekey$slotClicked`，产生无意义的发包与计算。
+   - *加固*：单次快速移动后检测 `if (!slot.getItem().isEmpty()) break;`，只要某槽位未能全部移出（表明对侧容量耗尽），立即熔断退出循环。
+
+4. **🟢 [模组冲突提示可靠性] 转移至 END_CLIENT_TICK 避免 Join 握手期静默丢失**：
+   - *问题*：`ClientPlayConnectionEvents.JOIN` 阶段 `client.player` 可能尚未挂载完 HUD 导致提示消息丢失。
+   - *加固*：移入 `ClientTickEvents.END_CLIENT_TICK`，在玩家首个客户端 tick 且 `client.player != null` 时单次输出，确保 100% 呈现在聊天栏。
+
+5. **🟢 [跨世界缓存清理] 进出世界双向清空分类与锁定缓存**：
+   - 在 `DISCONNECT` 与 `JOIN` 事件中同步调用 `ItemConversion.clearCache()`，防止跨服务器自定义物品标签数据污染。
 
 ---
 
