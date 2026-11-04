@@ -19,6 +19,7 @@ public final class OneKeyConfig {
     public Hotkeys hotkeys = new Hotkeys();
     public Sort sort = new Sort();
     public QuickStack quickStack = new QuickStack();
+    public Gestures gestures = new Gestures();
     public ClientCompat compat = new ClientCompat();
 
     /** 热键映射：值形如 {@code key.keyboard.r}。 */
@@ -38,6 +39,11 @@ public final class OneKeyConfig {
 
         /** 排序前是否先把散落的同类堆叠并成满堆（如 16 个 + 10 个楼梯 → 26 个一盘）。 */
         public boolean mergeStacks = true;
+        /**
+         * 整理（R）与快速堆叠（V / B）是否包含底部快捷栏 0..8。
+         * 默认包含；关闭后回到 1.0.3 之前的「快捷栏严格不参与」。锁定槽位始终不参与。
+         */
+        public boolean includeHotbar = true;
         /** 连续触发的冷却时间，避免连点导致与服务端不同步。 */
         public int cooldownMs = 250;
 
@@ -70,6 +76,15 @@ public final class OneKeyConfig {
         public boolean smartMatching = true;
     }
 
+    /** 鼠标手势（滚轮微调 / Shift 双击批量转移）设置。 */
+    public static final class Gestures {
+        /**
+         * 手势是否作用于底部快捷栏 0..8。
+         * 默认包含；关闭后滚轮与 Shift 双击都不会移动快捷栏物品。锁定槽位始终不参与。
+         */
+        public boolean includeHotbar = true;
+    }
+
     /** 纯客户端点击模拟（用于公共服务器）的开关，默认关闭。 */
     public static final class ClientCompat {
         public boolean enabled = false;
@@ -87,6 +102,9 @@ public final class OneKeyConfig {
         }
         if (quickStack == null) {
             quickStack = new QuickStack();
+        }
+        if (gestures == null) {
+            gestures = new Gestures();
         }
         if (compat == null) {
             compat = new ClientCompat();

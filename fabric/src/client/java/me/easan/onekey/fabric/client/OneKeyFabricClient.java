@@ -11,6 +11,7 @@ import me.easan.onekey.common.net.QuickStackRequest;
 import me.easan.onekey.common.net.SortRequest;
 import me.easan.onekey.common.net.TargetPos;
 import me.easan.onekey.common.sort.StackCondenser;
+import me.easan.onekey.common.inventory.InventorySlots;
 import me.easan.onekey.common.sort.Sorter;
 import me.easan.onekey.common.sort.StackView;
 import me.easan.onekey.fabric.OneKeyFabric;
@@ -194,8 +195,8 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                     boolean isPlayer = hovered.container == client.player.getInventory();
                     if (isPlayer) {
                         int slotIdx = hovered.getContainerSlot();
-                        if (slotIdx < 9 || slotIdx >= 36) {
-                            return true; // 快捷栏 0..8 严格不参与
+                        if (!InventorySlots.isIncluded(slotIdx, OneKeyFabric.config().gestures.includeHotbar)) {
+                            return true; // 盔甲/副手永不参与；快捷栏由「手势影响快捷栏」开关决定
                         }
                         if (ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
                             return true;
@@ -338,8 +339,8 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         }
         if (slot.container == client.player.getInventory()) {
             int slotIndex = slot.getContainerSlot();
-            // 仅允许主背包 9..35 加锁；快捷栏 0..8 严格不参与整理，默认永久受保护，无需且禁止加锁
-            return slotIndex >= 9 && slotIndex < 36;
+            // 0..35 全部可加锁（含快捷栏）；盔甲与副手不参与任何功能，禁止加锁
+            return InventorySlots.isPlayerInventorySlot(slotIndex);
         } else {
             // 外部容器：必须属于纯存储白名单类型
             return ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(screen.getMenu()));
@@ -399,8 +400,8 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                     continue;
                 }
                 int slotIdx = slot.getContainerSlot();
-                // 快捷栏 0..8 严格隔离，锁定槽位禁止转移
-                if (slotIdx < 9 || slotIdx >= 36) {
+                // 快捷栏是否参与由「手势影响快捷栏」开关决定；锁定槽位禁止转移
+                if (!InventorySlots.isIncluded(slotIdx, OneKeyFabric.config().gestures.includeHotbar)) {
                     continue;
                 }
                 if (ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
@@ -600,7 +601,7 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         for (Slot slot : menu.slots) {
             if (slot.container == player.getInventory()) {
                 int slotIndex = slot.getContainerSlot();
-                if (slotIndex >= 9 && slotIndex < 36) {
+                if (InventorySlots.isIncluded(slotIndex, OneKeyFabric.config().sort.includeHotbar)) {
                     result.add(slot);
                 }
             }

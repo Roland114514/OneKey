@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.Set;
 import me.easan.onekey.common.config.ConfigCodec;
 import me.easan.onekey.common.config.OneKeyConfig;
+import me.easan.onekey.common.inventory.InventorySlots;
 import me.easan.onekey.common.net.ProtocolVersion;
 import me.easan.onekey.neoforge.client.ClientLockedSlots;
 import me.easan.onekey.neoforge.client.ClientQuickStackHandler;
@@ -155,7 +156,8 @@ public final class OneKeyNeoForge {
             return;
         }
         if ("player_inventory".equals(payload.containerKey())) {
-            if (payload.slotIndex() < 9 || payload.slotIndex() >= 36) {
+            // 0..35 全部允许加锁（含快捷栏）；盔甲 36..39 与副手 40 不参与任何功能，禁止加锁
+            if (!InventorySlots.isPlayerInventorySlot(payload.slotIndex())) {
                 return;
             }
         } else if (player.containerMenu == null || payload.slotIndex() >= player.containerMenu.slots.size()) {

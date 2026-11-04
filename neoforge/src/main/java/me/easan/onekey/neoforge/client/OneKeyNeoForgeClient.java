@@ -11,6 +11,7 @@ import me.easan.onekey.common.net.QuickStackRequest;
 import me.easan.onekey.common.net.SortRequest;
 import me.easan.onekey.common.net.TargetPos;
 import me.easan.onekey.common.sort.StackCondenser;
+import me.easan.onekey.common.inventory.InventorySlots;
 import me.easan.onekey.common.sort.Sorter;
 import me.easan.onekey.common.sort.StackView;
 import me.easan.onekey.neoforge.OneKeyNeoForge;
@@ -209,7 +210,8 @@ public final class OneKeyNeoForgeClient {
         boolean isPlayer = hovered.container == client.player.getInventory();
         if (isPlayer) {
             int slotIdx = hovered.getContainerSlot();
-            if (slotIdx < 9 || slotIdx >= 36 || ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
+            if (!InventorySlots.isIncluded(slotIdx, OneKeyNeoForge.config().gestures.includeHotbar)
+                    || ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
                 return;
             }
         } else {
@@ -270,7 +272,8 @@ public final class OneKeyNeoForgeClient {
                 boolean lockedOrHotbar = false;
                 if (isPlayer) {
                     int slotIdx = hovered.getContainerSlot();
-                    lockedOrHotbar = (slotIdx < 9 || slotIdx >= 36) || ClientLockedSlots.isLocked("player_inventory", slotIdx);
+                    lockedOrHotbar = !InventorySlots.isIncluded(slotIdx, OneKeyNeoForge.config().gestures.includeHotbar)
+                            || ClientLockedSlots.isLocked("player_inventory", slotIdx);
                 } else {
                     String menuKey = ClientLockedSlots.getMenuTypeKey(containerScreen.getMenu());
                     lockedOrHotbar = ClientLockedSlots.isLocked(menuKey, hovered.index);
@@ -363,7 +366,8 @@ public final class OneKeyNeoForgeClient {
         }
         if (slot.container == client.player.getInventory()) {
             int slotIndex = slot.getContainerSlot();
-            return slotIndex >= 9 && slotIndex < 36;
+            // 0..35 全部可加锁（含快捷栏）；盔甲与副手不参与任何功能，禁止加锁
+            return InventorySlots.isPlayerInventorySlot(slotIndex);
         } else {
             return ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(screen.getMenu()));
         }
@@ -415,7 +419,8 @@ public final class OneKeyNeoForgeClient {
                     continue;
                 }
                 int slotIdx = slot.getContainerSlot();
-                if (slotIdx < 9 || slotIdx >= 36 || ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
+                if (!InventorySlots.isIncluded(slotIdx, OneKeyNeoForge.config().gestures.includeHotbar)
+                        || ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
                     continue;
                 }
             } else {
@@ -597,7 +602,7 @@ public final class OneKeyNeoForgeClient {
         for (Slot slot : menu.slots) {
             if (slot.container == player.getInventory()) {
                 int slotIndex = slot.getContainerSlot();
-                if (slotIndex >= 9 && slotIndex < 36) {
+                if (InventorySlots.isIncluded(slotIndex, OneKeyNeoForge.config().sort.includeHotbar)) {
                     result.add(slot);
                 }
             }

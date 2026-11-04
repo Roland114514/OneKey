@@ -10,6 +10,7 @@ import me.easan.onekey.common.config.OneKeyConfig;
 import me.easan.onekey.common.net.SortRequest;
 import me.easan.onekey.common.net.SortResult;
 import me.easan.onekey.common.sort.StackCondenser;
+import me.easan.onekey.common.inventory.InventorySlots;
 import me.easan.onekey.common.sort.Sorter;
 import me.easan.onekey.common.sort.StackView;
 import me.easan.onekey.neoforge.OneKeyNeoForge;
@@ -172,7 +173,7 @@ public final class ServerSortingHandler {
         }
 
         // 筛选待排序槽位
-        List<Slot> slotsToSort = resolveSlotsToSort(menu, player, request.mode());
+        List<Slot> slotsToSort = resolveSlotsToSort(menu, player, request.mode(), config.sort.includeHotbar);
         if (slotsToSort.isEmpty()) {
             menu.sendAllDataToRemote();
             replyResult(context, false, 0);
@@ -237,11 +238,11 @@ public final class ServerSortingHandler {
         replyResult(context, true, moved);
     }
 
-    private static List<Slot> resolveSlotsToSort(AbstractContainerMenu menu, ServerPlayer player, int mode) {
+    private static List<Slot> resolveSlotsToSort(AbstractContainerMenu menu, ServerPlayer player, int mode, boolean includeHotbar) {
         boolean isPlayerOnly = (mode == SortRequest.MODE_PLAYER) || (menu instanceof InventoryMenu);
 
         if (isPlayerOnly) {
-            return playerMainInventorySlots(menu, player);
+            return playerMainInventorySlots(menu, player, includeHotbar);
         }
 
         // 只在白名单内的纯存储容器上整理容器本体
@@ -258,16 +259,16 @@ public final class ServerSortingHandler {
         }
 
         // 不支持整理本容器（或本容器无可排序槽位）→ 降级整理玩家主背包
-        return playerMainInventorySlots(menu, player);
+        return playerMainInventorySlots(menu, player, includeHotbar);
     }
 
-    /** 玩家主背包 27 格（容器槽位号 9..35），快捷栏 0..8 严格不参与。 */
-    private static List<Slot> playerMainInventorySlots(AbstractContainerMenu menu, ServerPlayer player) {
+    /** 玩家背包可整理槽位：盔甲 36..39 与副手 40 永不参与；快捷栏 0..8 由「整理包含快捷栏」开关决定。 */
+    private static List<Slot> playerMainInventorySlots(AbstractContainerMenu menu, ServerPlayer player, boolean includeHotbar) {
         List<Slot> result = new ArrayList<>();
         for (Slot slot : menu.slots) {
             if (slot.container == player.getInventory()) {
                 int slotIndex = slot.getContainerSlot();
-                if (slotIndex >= 9 && slotIndex < 36) {
+                if (InventorySlots.isIncluded(slotIndex, includeHotbar)) {
                     result.add(slot);
                 }
             }

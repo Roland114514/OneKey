@@ -8,13 +8,13 @@
 
 - **发布链接**：[https://github.com/Roland114514/OneKey/releases/tag/v1.0.3](https://github.com/Roland114514/OneKey/releases/tag/v1.0.3)
 - **已挂载产物**：
-  - `onekey-fabric-1.0.3.jar` (114 KB)
+  - `onekey-fabric-1.0.3.jar` (116 KB)
   - `onekey-fabric-1.0.3-sources.jar`
-  - `onekey-neoforge-1.0.3.jar` (112 KB)
+  - `onekey-neoforge-1.0.3.jar` (114 KB)
   - `onekey-neoforge-1.0.3-sources.jar`
 - **校验和**：
-  - Fabric: `abefc2a21f995defb100246cea33030956957a744c3959ece2b9d7c73e9fbde9`
-  - NeoForge: `e775ca9a5a89a4365447a23c4d26c836befc6a1e8a5b6e654d936067b1464c6c`
+  - Fabric: `7e29e1392e8bc49092618ea6913c68eed9fb7ebff7c20c79612f9cb360f55904`
+  - NeoForge: `c96b790462b661e124dfe14234e0dc62421d423a786000c5c0c81022a57cb018`
 
 ---
 

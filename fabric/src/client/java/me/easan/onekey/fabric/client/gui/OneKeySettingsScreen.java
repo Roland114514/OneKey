@@ -34,69 +34,72 @@ public final class OneKeySettingsScreen extends Screen {
 
         // 第一行：整理总开关 / 按分类分组
         this.addRenderableWidget(CycleButton.onOffBuilder(config.sort.enabled)
-                .create(leftX, 40, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.enabled"),
+                .create(leftX, 36, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.enabled"),
                         (button, value) -> config.sort.enabled = value));
 
         this.addRenderableWidget(CycleButton.onOffBuilder(config.sort.groupByCategory)
-                .create(rightX, 40, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.groupByCategory"),
+                .create(rightX, 36, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.groupByCategory"),
                         (button, value) -> config.sort.groupByCategory = value));
 
         // 第二行：按名称排序 / 按数量降序
         this.addRenderableWidget(CycleButton.onOffBuilder(config.sort.sortByName)
-                .create(leftX, 64, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.sortByName"),
+                .create(leftX, 60, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.sortByName"),
                         (button, value) -> config.sort.sortByName = value));
 
         this.addRenderableWidget(CycleButton.onOffBuilder(config.sort.sortByCountDesc)
-                .create(rightX, 64, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.sortByCountDesc"),
+                .create(rightX, 60, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.sortByCountDesc"),
                         (button, value) -> config.sort.sortByCountDesc = value));
 
-        // 第三行：冷却时间 / 堆叠扫描半径
+        // 第三行：合并同类堆叠 / 整理包含快捷栏（默认开，玩家可自行关闭）
+        this.addRenderableWidget(CycleButton.onOffBuilder(config.sort.mergeStacks)
+                .create(leftX, 84, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.mergeStacks"),
+                        (button, value) -> config.sort.mergeStacks = value));
+
+        this.addRenderableWidget(CycleButton.onOffBuilder(config.sort.includeHotbar)
+                .create(rightX, 84, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.includeHotbar"),
+                        (button, value) -> config.sort.includeHotbar = value));
+
+        // 第四行：冷却时间 / 堆叠扫描半径
         this.addRenderableWidget(CycleButton.<Integer>builder(val -> Component.literal(val + " ms"), () -> config.sort.cooldownMs)
                 .withValues(100, 150, 200, 250, 300, 500)
-                .create(leftX, 88, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.cooldown"),
+                .create(leftX, 108, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.cooldown"),
                         (button, value) -> config.sort.cooldownMs = value));
 
         this.addRenderableWidget(CycleButton.<Integer>builder(val -> Component.literal(val + " 格"), () -> config.quickStack.radius)
                 .withValues(2, 4, 6, 8)
-                .create(rightX, 88, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.radius"),
+                .create(rightX, 108, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.radius"),
                         (button, value) -> config.quickStack.radius = value));
 
-        // 第四行：存入模式 / 兼容点击延迟
+        // 第五行：存入模式 / 手势影响快捷栏（滚轮与 Shift 双击是否作用于 0..8）
         this.addRenderableWidget(CycleButton.<Boolean>builder(
                         val -> Component.translatable(val ? "onekey.settings.stashMode.all" : "onekey.settings.stashMode.matching"),
                         () -> config.quickStack.stashMode)
                 .withValues(false, true)
-                .create(leftX, 112, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.stashMode"),
+                .create(leftX, 132, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.stashMode"),
                         (button, value) -> config.quickStack.stashMode = value));
 
-        this.addRenderableWidget(CycleButton.onOffBuilder(config.compat.enabled)
-                .create(rightX, 112, btnWidth, btnHeight, Component.translatable("onekey.settings.compat.enabled"),
-                        (button, value) -> config.compat.enabled = value));
+        this.addRenderableWidget(CycleButton.onOffBuilder(config.gestures.includeHotbar)
+                .create(rightX, 132, btnWidth, btnHeight, Component.translatable("onekey.settings.gestures.includeHotbar"),
+                        (button, value) -> config.gestures.includeHotbar = value));
 
-
-        // 第五行：准星瞄准优先 / 智能分类防污染
+        // 第六行：准星瞄准优先 / 智能分类防污染
         this.addRenderableWidget(CycleButton.onOffBuilder(config.quickStack.crosshairPriority)
-                .create(leftX, 136, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.crosshairPriority"),
+                .create(leftX, 156, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.crosshairPriority"),
                         (button, value) -> config.quickStack.crosshairPriority = value));
 
         this.addRenderableWidget(CycleButton.onOffBuilder(config.quickStack.smartMatching)
-                .create(rightX, 136, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.smartMatching"),
+                .create(rightX, 156, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.smartMatching"),
                         (button, value) -> config.quickStack.smartMatching = value));
 
-        // 第六行：合并同类堆叠 / 原版按键绑定设置入口
-        this.addRenderableWidget(CycleButton.onOffBuilder(config.sort.mergeStacks)
-                .create(leftX, 162, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.mergeStacks"),
-                        (button, value) -> config.sort.mergeStacks = value));
-
+        // 底部一行：原版按键绑定入口 / 完成
         this.addRenderableWidget(Button.builder(Component.translatable("onekey.settings.openKeybinds"), btn -> {
             if (this.minecraft != null) {
                 this.minecraft.setScreenAndShow(new KeyBindsScreen(this, this.minecraft.options));
             }
-        }).bounds(rightX, 162, btnWidth, btnHeight).build());
+        }).bounds(leftX, this.height - 28, btnWidth, btnHeight).build());
 
-        // 底部：完成按钮
         this.addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, btn -> onClose())
-                .bounds(this.width / 2 - 100, this.height - 28, 200, btnHeight).build());
+                .bounds(rightX, this.height - 28, btnWidth, btnHeight).build());
     }
 
     @Override

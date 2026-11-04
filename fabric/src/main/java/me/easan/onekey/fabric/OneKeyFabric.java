@@ -7,6 +7,7 @@ import java.util.Set;
 
 import me.easan.onekey.common.config.ConfigCodec;
 import me.easan.onekey.common.config.OneKeyConfig;
+import me.easan.onekey.common.inventory.InventorySlots;
 import me.easan.onekey.fabric.net.QuickStackRequestPayload;
 import me.easan.onekey.fabric.net.QuickStackResultPayload;
 import me.easan.onekey.fabric.net.RequestSlotLocksPayload;
@@ -124,7 +125,7 @@ public final class OneKeyFabric implements ModInitializer {
 
             // 槽位合法性校验：玩家背包仅允许主背包 9..35（快捷栏 0..8 永久保护、盔甲 36..39 / 副手 40 均不参与整理）
             if ("player_inventory".equals(payload.containerKey())) {
-                if (payload.slotIndex() < 9 || payload.slotIndex() > 35) {
+                if (!InventorySlots.isPlayerInventorySlot(payload.slotIndex())) {
                     return;
                 }
             } else if (payload.slotIndex() < 0

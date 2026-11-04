@@ -27,7 +27,7 @@ import net.minecraft.world.level.storage.LevelResource;
  * <p>槽位索引约定（与 {@code ServerSortingHandler} 读取侧保持一致）：
  * <ul>
  *   <li>玩家背包（containerKey = {@code "player_inventory"}）：使用 {@code Slot.getContainerSlot()}，范围 0..35
- *       （快捷栏 0..8 不参与整理，主背包 9..35）。</li>
+ *       （玩家背包 0..35，含快捷栏；盔甲 36..39 与副手 40 不参与）。</li>
  *   <li>外部容器（containerKey = 菜单类型 id，如 {@code minecraft:generic_9x3}）：使用菜单槽位号 {@code Slot.index}。</li>
  * </ul>
  */

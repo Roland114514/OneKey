@@ -12,19 +12,64 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | 待提交：`feat: v1.0.3 整理前自动合并同类堆叠（StackCondenser + GUI 开关）` |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.3.jar`（116,508 B ≈114KB）与 `neoforge/build/libs/onekey-neoforge-1.0.3.jar`（115,111 B ≈112KB） |
-| 单测状态 | ✅ 双端各 47 例（Fabric 47 + NeoForge 47 = **94 例全绿**，含 `StackCondenserTest` 7 例） |
+| 最新提交 | 待提交：`feat: v1.0.3 快捷栏整理/手势双开关 + 快捷栏可加锁（整理即合并）` |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.3.jar`（118,639 B ≈116KB）与 `neoforge/build/libs/onekey-neoforge-1.0.3.jar`（117,173 B ≈114KB） |
+| 单测状态 | ✅ 双端各 52 例（Fabric 52 + NeoForge 52 = **104 例全绿**，含 `StackCondenserTest` 7 例、`InventorySlotsTest` 4 例） |
 | 版本状态 | ✅ `mod_version=1.0.3`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
 | 协议版本 | `ProtocolVersion.CURRENT=2`（payload 未再变，1.0.2 与 1.0.3 可混连） |
-| 当前任务聚焦 | 🎯 v1.0.3 提交/推送/Release，以及 Modrinth + CurseForge 发布（等待用户提供 Modrinth slug+PAT、CurseForge Project ID+API Token） |
-| 发布状态 | ✅ v1.0.2 已发布并重建（tag `v1.0.2` → `d51c04c`）；⏳ v1.0.3 待提交并发布 |
+| 当前任务聚焦 | 🎯 重建 v1.0.3（强移 tag + 替换 Release 资产）；Modrinth/CurseForge **由用户自行上传**（用户 m02071 明确要求，脚本已备好可选用） |
+| 发布状态 | ✅ v1.0.2 已发布并重建（tag `v1.0.2` → `d51c04c`）；🔄 v1.0.3 已发布后因新增快捷栏开关重建（tag 强移、资产替换） |
 | 运行实测 | ✅ R 键整理、K 键原生 GUI、Alt+左键槽位锁定在 Minecraft 26.3 干净无崩溃实测通过 |
 | 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入重构与红队严苛审查加固全面完成 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，具备高质量发版与交付水准 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，随后阅读第 16 次会话的「整理前合并同类堆叠」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，随后阅读第 17 次会话的「快捷栏双开关」细节。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 17 次会话：快捷栏参与权交给玩家 + v1.0.3 重建）
+
+### 用户需求（原文 m02071 / m02080）
+
+> "你可以将是否底部的快捷栏是否被整理与是否被鼠标手势影响的选择权交给玩家，将这一部分添加至GUI中让玩家自己选择是否开启。最后将这完整的版本定为v1.0.3，不需要再更新到4。"
+>
+> "首先开关粒度两个开关就行，其次这两个新添加的默认值为开，玩家想关上自己关。允许对快捷栏格子加锁。最后强移 tag + 替换现有 Release 资产即可"
+
+同时用户明确：**Modrinth 与 CurseForge 以后由用户自己上传**，不再由我发布。
+
+### 实现
+
+1. 新增纯逻辑 `common/src/main/java/me/easan/onekey/common/inventory/InventorySlots.java`：
+   - `HOTBAR_START=0`、`MAIN_START=9`、`MAIN_END=36`；
+   - `isIncluded(int containerSlot, boolean includeHotbar)`：越界、盔甲 36..39、副手 40 一律 false，否则 `includeHotbar || containerSlot >= 9`；
+   - `firstIncludedSlot(boolean)`、`isPlayerInventorySlot(int)`（0..35 可加锁）。
+2. 配置 `OneKeyConfig`：`Sort.includeHotbar = true`；新增 `Gestures { includeHotbar = true }` 与 `gestures` 字段；`normalized()` 补 null 兜底。
+3. 服务端接线（双端）：`ServerSortingHandler.resolveSlotsToSort(..., includeHotbar)` / `playerMainInventorySlots(..., includeHotbar)`；`ServerQuickStackHandler` 遍历起点用 `firstIncludedSlot`；`ServerScrollHandler` 源槽与目标槽都改用 `InventorySlots.isIncluded(..., gestures.includeHotbar)`。
+4. 加锁范围：`OneKeyFabric` / `OneKeyNeoForge` 的 `ToggleSlotLock` 校验改为 `InventorySlots.isPlayerInventorySlot(...)`（0..35 含快捷栏）。
+5. 客户端接线：Fabric 4 处、NeoForge 5 处（滚轮守卫、Shift 双击守卫、`isSlotLockable`、`transferAllMatching`、乐观排序槽位）。
+6. 设置界面双端重排为 6 行 × 2 列（36/60/84/108/132/156），底部一行「配置原版按键绑定」+「完成」；移除 v1.1 占位的「兼容点击延迟」按钮。
+7. 语言文件 4 个各 33 键，新增 `onekey.settings.sort.includeHotbar`、`onekey.settings.gestures.includeHotbar`，改写 `onekey.settings.tip.hotbar`。
+
+### 验证
+
+- `clean build` 绿；`:fabric:test :neoforge:test --rerun-tasks` → 双端各 52 例、**合计 104 例 0 失败**（新增 `InventorySlotsTest` 4 例、`hotbarTogglesDefaultToTrueAndRoundTrip` 1 例）。
+- 构建产物：`onekey-fabric-1.0.3.jar` **118,639 B**（sha256 `7e29e139…5904`）、`onekey-neoforge-1.0.3.jar` **117,173 B**（sha256 `c96b7904…b018`）；sources 76,840 / 73,924 B。
+
+### 行为变化（重要）
+
+- 升级后默认**快捷栏参与整理与手势**（两个开关默认开）；想要 v1.0.2 的「快捷栏绝对不动」行为，需在 `K` 界面关掉两个开关。
+- 快捷栏槽位现在可以 `Alt + 左键` 加锁；锁定槽位仍然在任何路径下都不参与。
+
+### 踩坑记录
+
+- `ServerScrollHandler` 原本没有 `OneKeyConfig` import，补 `InventorySlots` import 时必须插在 `import me.easan.onekey.fabric.OneKeyFabric;` 之前，否则锚点匹配失败。
+- `ConfigCodecTest` 新增断言用到 `assertFalse`，忘记补 static import 会直接 `cannot find symbol`（构建失败但 `tail -2` 会把错误吞掉，务必看完整输出）。
+
+### 遗留 / 待办
+
+- Modrinth / CurseForge：用户自行上传，`scripts/publish_modrinth.py`、`scripts/publish_curseforge.py` 保留可用。
+- 已知限制不变：锁定按容器类型共享、快速堆叠不豁免外部容器锁定槽、多人服 smartMatching 由服务端决定。
 
 ---
 

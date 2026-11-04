@@ -1,6 +1,7 @@
 package me.easan.onekey.common.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -173,5 +174,19 @@ class ConfigCodecTest {
         assertTrue(!ConfigCodec.isValidJson("{\"sort\":"));
         assertTrue(!ConfigCodec.isValidJson(""));
         assertTrue(!ConfigCodec.isValidJson(null));
+    }
+
+    @Test
+    void hotbarTogglesDefaultToTrueAndRoundTrip() {
+        OneKeyConfig defaults = ConfigCodec.fromJson("{}");
+        assertTrue(defaults.sort.includeHotbar, "整理包含快捷栏默认应为开");
+        assertTrue(defaults.gestures.includeHotbar, "手势影响快捷栏默认应为开");
+
+        OneKeyConfig custom = new OneKeyConfig();
+        custom.sort.includeHotbar = false;
+        custom.gestures.includeHotbar = false;
+        OneKeyConfig roundTripped = ConfigCodec.fromJson(ConfigCodec.toJson(custom));
+        assertFalse(roundTripped.sort.includeHotbar, "关闭后应能往返保持");
+        assertFalse(roundTripped.gestures.includeHotbar, "关闭后应能往返保持");
     }
 }

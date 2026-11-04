@@ -212,6 +212,8 @@
 | `quickStack.whitelist` | list | `[]` | 允许的容器方块 id；空 = 不限制 |
 | `quickStack.blacklist` | list | `[]` | 禁止的容器方块 id（优先于白名单） |
 | `quickStack.itemWhitelist` | list | `[]` | 参与堆叠的物品 id；空 = 不限制 |
+| `sort.includeHotbar` | bool | `true` | `R` 整理与 `B`/`V` 堆叠是否包含快捷栏 0..8；锁定槽位始终不参与 |
+| `gestures.includeHotbar` | bool | `true` | 滚轮微调与 Shift 双击是否作用于快捷栏 0..8；锁定槽位始终不参与 |
 | `quickStack.itemBlacklist` | list | `[]` | 排除的物品 id（优先于物品白名单） |
 | `compat.enabled` | bool | false | 点击模拟兼容层开关 |
 | `compat.clickDelayMs` | int | 60 | 模拟点击间隔 |
@@ -253,7 +255,7 @@
 - [x] CurseForge 发布物料：`docs/release/CURSEFORGE.md` 同步就绪
 - [x] GitHub Release：`docs/release/GITHUB_RELEASE.md`，带 SHA-256 校验和与双端 jar
 - [x] CHANGELOG：`CHANGELOG.md` 完整记录 F1–F6 + F10 列表与注意事项
-- [x] 产物归档：`fabric/build/libs/onekey-fabric-1.0.3.jar` (114 KB) 与 `neoforge/build/libs/onekey-neoforge-1.0.3.jar` (112 KB)
+- [x] 产物归档：`fabric/build/libs/onekey-fabric-1.0.3.jar` (116 KB) 与 `neoforge/build/libs/onekey-neoforge-1.0.3.jar` (114 KB)
 
 ---
 

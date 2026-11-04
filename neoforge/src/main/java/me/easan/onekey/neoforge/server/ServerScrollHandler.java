@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import me.easan.onekey.common.inventory.InventorySlots;
 import me.easan.onekey.neoforge.OneKeyNeoForge;
 import me.easan.onekey.neoforge.net.ScrollItemTransferPayload;
 import me.easan.onekey.neoforge.storage.LockedSlotsStorage;
@@ -92,8 +93,8 @@ public final class ServerScrollHandler {
         boolean sourceIsPlayer = sourceSlot.container == player.getInventory();
         if (sourceIsPlayer) {
             int slotIdx = sourceSlot.getContainerSlot();
-            if (slotIdx < 9 || slotIdx >= 36) {
-                return; // 快捷栏不参与
+            if (!InventorySlots.isIncluded(slotIdx, OneKeyNeoForge.config().gestures.includeHotbar)) {
+                return; // 盔甲 / 副手永不参与；快捷栏由「手势影响快捷栏」开关决定
             }
             if (LockedSlotsStorage.isSlotLocked(player.getUUID(), "player_inventory", slotIdx)) {
                 return;
@@ -121,7 +122,7 @@ public final class ServerScrollHandler {
                 // 当前源是外部容器 -> 对侧是玩家主背包（9..35，严格隔离快捷栏 0..8 与锁定槽位）
                 if (slot.container == player.getInventory()) {
                     int slotIdx = slot.getContainerSlot();
-                    if (slotIdx >= 9 && slotIdx < 36 && !LockedSlotsStorage.isSlotLocked(player.getUUID(), "player_inventory", slotIdx)) {
+                    if (InventorySlots.isIncluded(slotIdx, OneKeyNeoForge.config().gestures.includeHotbar) && !LockedSlotsStorage.isSlotLocked(player.getUUID(), "player_inventory", slotIdx)) {
                         oppositeSlots.add(slot);
                     }
                 }

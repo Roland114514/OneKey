@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import me.easan.onekey.common.config.OneKeyConfig;
+import me.easan.onekey.common.inventory.InventorySlots;
 import me.easan.onekey.common.net.QuickStackRequest;
 import me.easan.onekey.common.net.QuickStackResult;
 import me.easan.onekey.common.net.TargetPos;
@@ -204,7 +205,7 @@ public final class ServerQuickStackHandler {
                                                        List<ScannedContainer> containers, OneKeyConfig config,
                                                        Set<Container> modifiedContainers) {
         int totalMoved = 0;
-        for (int slotIdx = 9; slotIdx < 36; slotIdx++) {
+        for (int slotIdx = InventorySlots.firstIncludedSlot(config.sort.includeHotbar); slotIdx < InventorySlots.MAIN_END; slotIdx++) {
             if (lockedSlots.contains(slotIdx)) {
                 continue;
             }
