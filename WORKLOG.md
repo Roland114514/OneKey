@@ -16,6 +16,7 @@
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.1.jar`（103,492 B ≈101KB）与 `neoforge/build/libs/onekey-neoforge-1.0.1.jar`（102,007 B ≈100KB） |
 | 单测状态 | ✅ 双端各 36 例（Fabric 36 + NeoForge 36 = **72 例全绿**） |
 | 版本状态 | ✅ `mod_version=1.0.1`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
+| 发布状态 | ✅ tag `v1.0.1` → `f98796e` 已推送；GitHub Release 已创建并上传 4 个产物：https://github.com/Roland114514/OneKey/releases/tag/v1.0.1 |
 | 运行实测 | ✅ R 键整理、K 键原生 GUI、Alt+左键槽位锁定在 Minecraft 26.3 干净无崩溃实测通过 |
 | 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入精准控制需求已立项归档 ← 下一步重点** |
 | 当前任务聚焦 | 🎯 **重构 B 键快速存入：实现「准星射线聚焦锁定（看哪存哪）」与「分类防异物污染规则」** |
@@ -122,6 +123,17 @@
 - `bash scripts/with-jdk25.sh clean build` → **BUILD SUCCESSFUL**（18 任务全执行）。
 - 单测：`ConfigCodecTest` 由 9 → 12 例（损坏 JSON 回退、损坏文件加载回退、原子写无残留 `.tmp`、`isValidJson`、物品/方块过滤列表分行往返、旧配置缺新字段 null 归一、`backupIfCorrupted` 行为），公共内核 29 → 36；`fabric/test` 36 例 + `neoforge/test` 36 例 = **72 例 0 失败**。
 - 产物：`fabric/build/libs/onekey-fabric-1.0.1.jar` 103,492 B（sha256 `5db68fa18af2afdac1afc72a308dc97c8e4be2de92f5fef6776d1e1a96e5b7f4`）、`neoforge/build/libs/onekey-neoforge-1.0.1.jar` 102,007 B（sha256 `a29766700d7dfadae988b6e203a14f79b9b594a7fb63d1b82ee295fd17ac7e81`）；jar 内 `fabric.mod.json` / `neoforge.mods.toml` 的版本号已展开为 `1.0.1`。
+
+### 发布（release）
+
+- 本地提交 `f98796e` 已推送至 `origin/main`（`git ls-remote` 与 GitHub API 双确认）。
+- annotated tag `v1.0.1` 指向 `f98796e`，已推送。
+- GitHub Release **v1.0.1 · 稳定性维护版 (Minecraft 26.3)** 已发布（非草稿），正文取自 `docs/release/GITHUB_RELEASE.md`，四个产物全部上传成功：
+  - `onekey-fabric-1.0.1.jar` 103,492 B（sha256 `5db68fa1…5b7f4`）
+  - `onekey-fabric-1.0.1-sources.jar` 65,905 B
+  - `onekey-neoforge-1.0.1.jar` 102,007 B（sha256 `a2976670…7e81`）
+  - `onekey-neoforge-1.0.1-sources.jar` 62,666 B
+- 上传后复核：Release 页面 sha256 与本地 `docs/release/` 产物一致。
 
 ### 文档与物料
 
