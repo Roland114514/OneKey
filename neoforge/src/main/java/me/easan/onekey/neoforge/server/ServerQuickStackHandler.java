@@ -21,6 +21,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.CompoundContainer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -139,9 +140,10 @@ public final class ServerQuickStackHandler {
         // 末影箱界面：容器是玩家个人存储，不在方块扫描范围内，显式绑定为当前 GUI 目标（需求③界面强绑定）
         if (openMenuContainer instanceof PlayerEnderChestContainer enderChest
                 && targetContainers.stream().noneMatch(sc -> sc.container() == enderChest)) {
-            boolean allowDumpAnywhereForMenu = stashMode && !config.quickStack.smartMatching;
-            targetContainers.add(new ScannedContainer(enderChest, Set.of(), 0.0, true,
-                    allowDumpAnywhereForMenu || stashMode));
+            targetContainers.add(new ScannedContainer(enderChest, Set.of(), 0.0, true, stashMode));
+            // 追加后重新排序：界面绑定的末影箱同样应排在队首，而不是因 append 顺序落到末尾
+            targetContainers.sort(Comparator.comparing(ScannedContainer::isTargeted).reversed()
+                    .thenComparingDouble(ScannedContainer::distSq));
         }
 
         if (targetContainers.isEmpty()) {
@@ -153,8 +155,55 @@ public final class ServerQuickStackHandler {
         Inventory playerInv = player.getInventory();
         Set<Integer> lockedSlots = LockedSlotsStorage.getLockedSlots(player.getUUID(), "player_inventory");
         Set<Container> modifiedContainers = new HashSet<>();
-        int totalMoved = 0;
 
+        int totalMoved = 0;
+        try {
+            totalMoved = transferInventoryIntoContainers(playerInv, lockedSlots, targetContainers, config, modifiedContainers);
+        } finally {
+            // 即使中途抛异常也要先把「已经发生的写入」标脏落盘，避免内存里背包已扣、容器已加，
+            // 但区块未标脏导致重启后物品凭空消失（异常本身继续向上抛，由 handle(...) 回滚界面状态）。
+            for (Container modified : modifiedContainers) {
+                modified.setChanged();
+            }
+            playerInv.setChanged();
+        }
+
+        // 3. 广播（标脏已在 finally 中完成，异常路径同样落盘）
+        if (totalMoved > 0) {
+            player.containerMenu.broadcastChanges();
+        }
+
+        // 4. 回包
+        context.reply(new QuickStackResultPayload(new QuickStackResult(totalMoved)));
+    }
+
+    /**
+     * 判断扫描到的容器是否就是玩家当前界面里打开的那个容器。
+     * 单箱子/木桶/潜影盒是同一个对象，直接比引用即可；大箱子则不然——菜单侧（{@code MENU_PROVIDER_COMBINER}）
+     * 与扫描侧（{@code CHEST_COMBINER}）各自 new 了一个 {@link CompoundContainer}，而它的 equals 未被重写，
+     * 需要借 {@link CompoundContainer#contains(Container)} 反查「菜单容器是否包含这个半区方块实体」。
+     */
+    private static boolean isOpenMenuContainer(Container openMenuContainer, Container scannedContainer,
+                                               Container blockEntityContainer) {
+        if (openMenuContainer == null) {
+            return false;
+        }
+        if (openMenuContainer == scannedContainer || openMenuContainer.equals(scannedContainer)) {
+            return true;
+        }
+        return openMenuContainer instanceof CompoundContainer compound
+                && blockEntityContainer != null
+                && compound.contains(blockEntityContainer);
+    }
+
+    /**
+     * 把背包主槽位（9..35）里的物品分两阶段写入目标容器，返回实际移动件数。
+     * 独立成方法是为了让调用方用 try/finally 兜住「部分写入后抛异常」的标脏。
+     */
+    private static int transferInventoryIntoContainers(Inventory playerInv, Set<Integer> lockedSlots,
+                                                       List<ScannedContainer> containers, OneKeyConfig config,
+                                                       Set<Container> modifiedContainers) {
+        int totalMoved = 0;
         for (int slotIdx = 9; slotIdx < 36; slotIdx++) {
             if (lockedSlots.contains(slotIdx)) {
                 continue;
@@ -178,7 +227,7 @@ public final class ServerQuickStackHandler {
             // Pass 1: 同类归位（优先准星容器，其次按距离遍历所有已有该同类物品的容器）
             // 防止近处的空箱子截胡远处分类箱已有的同类物品
             // =========================================================================
-            for (ScannedContainer sc : targetContainers) {
+            for (ScannedContainer sc : containers) {
                 if (playerStack.isEmpty()) {
                     break;
                 }
@@ -200,7 +249,7 @@ public final class ServerQuickStackHandler {
             // Pass 2: 全新物品开荒倾倒（仅向 allowDumpNewItem == true 的准星锁定容器倾倒空槽）
             // =========================================================================
             if (!playerStack.isEmpty()) {
-                for (ScannedContainer sc : targetContainers) {
+                for (ScannedContainer sc : containers) {
                     if (playerStack.isEmpty()) {
                         break;
                     }
@@ -217,17 +266,7 @@ public final class ServerQuickStackHandler {
             }
         }
 
-        // 3. 变更写回与广播
-        if (totalMoved > 0) {
-            for (Container c : modifiedContainers) {
-                c.setChanged();
-            }
-            playerInv.setChanged();
-            player.containerMenu.broadcastChanges();
-        }
-
-        // 4. 回包
-        context.reply(new QuickStackResultPayload(new QuickStackResult(totalMoved)));
+        return totalMoved;
     }
 
     private static Container getOpenMenuContainer(AbstractContainerMenu menu) {
@@ -341,7 +380,10 @@ public final class ServerQuickStackHandler {
         List<ScannedContainer> scanned = new ArrayList<>();
         Set<BlockPos> targetCandidates = resolveTargetPositions(level, clientTargetPos);
         // 「智能分类防污染」关闭时，退回旧版行为：B 键可以把新物品倒进任意扫描到的容器
-        boolean allowDumpAnywhere = stashMode && !config.quickStack.smartMatching;
+        // 「智能分类防污染」或「准星瞄准优先」任一关闭，都退回旧版范围存入：
+        // 只关准星时若仍强制 isTargeted，B 键将永远找不到目标（等于废掉该键）。
+        boolean allowDumpAnywhere = stashMode
+                && (!config.quickStack.smartMatching || !config.quickStack.crosshairPriority);
 
         for (int cx = minChunkX; cx <= maxChunkX; cx++) {
             for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
@@ -411,7 +453,8 @@ public final class ServerQuickStackHandler {
 
                         Container chestContainer = ChestBlock.getContainer(chestBlock, state, level, pos, false);
                         if (chestContainer != null && chestContainer.stillValid(player)) {
-                            boolean isTargeted = (openMenuContainer != null && (chestContainer == openMenuContainer || chestContainer.equals(openMenuContainer)))
+                            boolean isTargeted = isOpenMenuContainer(openMenuContainer, chestContainer,
+                                    be instanceof Container beContainer ? beContainer : null)
                                     || targetCandidates.stream().anyMatch(chestPositions::contains);
                             boolean allowDumpNew = allowDumpAnywhere || (stashMode && isTargeted);
                             scanned.add(new ScannedContainer(chestContainer, chestPositions, distSq, isTargeted, allowDumpNew));
@@ -419,7 +462,7 @@ public final class ServerQuickStackHandler {
                     } else if (be instanceof BarrelBlockEntity barrel) {
                         visited.add(pos);
                         if (barrel.stillValid(player) && barrel.canOpen(player)) {
-                            boolean isTargeted = (openMenuContainer != null && (barrel == openMenuContainer || barrel.equals(openMenuContainer)))
+                            boolean isTargeted = isOpenMenuContainer(openMenuContainer, barrel, barrel)
                                     || targetCandidates.contains(pos);
                             boolean allowDumpNew = allowDumpAnywhere || (stashMode && isTargeted);
                             scanned.add(new ScannedContainer(barrel, Set.of(pos.immutable()), distSq, isTargeted, allowDumpNew));
@@ -427,7 +470,7 @@ public final class ServerQuickStackHandler {
                     } else if (be instanceof ShulkerBoxBlockEntity shulker) {
                         visited.add(pos);
                         if (shulker.stillValid(player) && shulker.canOpen(player)) {
-                            boolean isTargeted = (openMenuContainer != null && (shulker == openMenuContainer || shulker.equals(openMenuContainer)))
+                            boolean isTargeted = isOpenMenuContainer(openMenuContainer, shulker, shulker)
                                     || targetCandidates.contains(pos);
                             boolean allowDumpNew = allowDumpAnywhere || (stashMode && isTargeted);
                             scanned.add(new ScannedContainer(shulker, Set.of(pos.immutable()), distSq, isTargeted, allowDumpNew));

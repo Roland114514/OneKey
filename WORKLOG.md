@@ -13,7 +13,7 @@
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
 | 最新提交 | 见下方（本次：v1.0.2 GUI 双开关 + 准星交互距离收紧 + 异常回滚加固） |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.2.jar`（112,346 B ≈110KB）与 `neoforge/build/libs/onekey-neoforge-1.0.2.jar`（110,965 B ≈108KB） |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.2.jar`（112,773 B ≈110KB）与 `neoforge/build/libs/onekey-neoforge-1.0.2.jar`（111,401 B ≈109KB） |
 | 单测状态 | ✅ 双端各 40 例（Fabric 40 + NeoForge 40 = **80 例全绿**） |
 | 版本状态 | ✅ `mod_version=1.0.2`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
 | 协议版本 | ⚠️ `ProtocolVersion.CURRENT=2`（`QuickStackRequest` 新增目标坐标字段）→ 多人游戏必须双端同版本 |
@@ -46,12 +46,30 @@
    - **协议版本未升（P1 兼容）**：codec 已从 3 字段变 4 字段，但 `ProtocolVersion.CURRENT` 仍是 1；已升 2（NeoForge `versioned("2")` 同步），并在 CHANGELOG/README 明确「双端必须同版本」。
    - 新增 2 项配置单测（双开关往返 + 缺省为 true）。
    - **混版本被踢（P1 兼容）**：旧版客户端（1.0.1 及更早）发来的 `QuickStackRequest` 只有 3 个字段，1.0.2 服务端按新格式解码会抛异常并被原版以「数据包解码失败」断开。已在双端 `QuickStackRequestPayload` 包一层容错解码：失败时退化为 `syncId = -1` 的空请求（服务端校验后静默丢弃）并打一条 warn 日志，混版本玩家最多「按了没反应」，不再被踢。
-3. **验证**：`clean build` 绿；`:fabric:test :neoforge:test --rerun-tasks` 各 40 例、合计 **80 例全绿**；产物 112,346 B / 110,965 B，sha256 `82f0eb33…dea1b` / `263f55ee…0d8a`，jar 内版本均为 `1.0.2`。
+3. **验证**：`clean build` 绿；`:fabric:test :neoforge:test --rerun-tasks` 各 40 例、合计 **80 例全绿**；产物 112,773 B / 111,401 B，sha256 `2cc5534e…3560` / `ba4b31fa…a2d9`，jar 内版本均为 `1.0.2`。
 4. **文档**：CHANGELOG 新增 `## [1.0.2]` 小节（3 新增 + 3 修复 + 已知限制 + 兼容性）；README 快捷键表/设置项/已知限制/路线图更新；PLAN 发布清单改 40 例与 1.0.2 产物；`docs/release/GITHUB_RELEASE.md` 重写为 v1.0.2（新哈希/体积），`PUBLISHING_GUIDE.md` 同步；`docs/release/` 下 1.0.1 jar 已替换为 1.0.2 构建产物。
+
+### 发布后追加修复（对抗性审查发现的 3 个 P1）
+
+首版 v1.0.2 推送并发 Release 后，只读对抗审查子代理回报「未发现 P0，但 3 个 P1」，均已修复并重建：
+
+1. **双箱「界面强绑定」失效**：菜单侧容器与扫描侧容器是两个 `CompoundContainer` 实例，而 26.3 的 `CompoundContainer` **没有重写 equals**（只有 `contains(Container)`，按引用比两个半区），旧判定 `==`/`equals` 恒 false → 开着大箱子按 B 不算靶心目标。改为 `isOpenMenuContainer(...)` 用 `compound.contains(半区方块实体)` 反查（单箱/木桶/潜影盒仍走引用比较）。
+2. **部分写入后抛异常会丢物品**：标脏原被 `if (totalMoved > 0)` 包在 `try` 内，异常时容器已加、背包已扣却未 `setChanged()`，区块可能不落盘 → 重启后物品凭空消失。已把背包遍历抽成 `transferInventoryIntoContainers(...)`，调用处 `try/finally` 无条件标脏「已修改容器 + 玩家背包」，异常仍向上抛由 `handle(...)` 回滚界面。
+3. **关掉「准星瞄准优先」等于废掉 B 键**：关闭后无 `targetPos` → 无容器算 targeted → `allowDumpNew` 恒 false → 全新物品永远存不进。改为 `allowDumpAnywhere = stashMode && (!smartMatching || !crosshairPriority)`：任一开关关闭即退回旧版「范围存入」。
+4. 顺手清掉末影箱分支的两处冗余：追加后重新排序（避免 `isTargeted=true` 却排在队尾）、`allowDumpAnywhereForMenu || stashMode` 恒等式化简为 `stashMode`。
+
+验证：`clean build` 绿；双端测试 40 + 40 = **80 例全绿**；重建产物 fabric 112,773 B / neoforge 111,401 B（sha256 `2cc5534e…3560` / `ba4b31fa…a2d9`）；`docs/release/` 四个 jar 已同步替换。
+
+### 遗留（P2，记录待 v1.1）
+
+- Fabric 端无协议协商门禁（仅靠 payload 容错解码退化，混版本不踢人但静默失效）。
+- 冷却时间与排序共用 `sort.cooldownMs`（250ms），排序与快速堆叠会互吞按键；早退路径（旁观/死亡/syncId 不符/光标持物）不回执提示。
+- 配置半径可到 32，但候选容器仍须过 `stillValid`（≈8.5 格交互距离），更大值实际无效。
+- `QuickStackEngine`/`SimulatedSlot` 仍是死代码（仅单测引用），线上逻辑内联在两端 handler → 单测不覆盖双箱、末影箱、组件匹配等真实路径。
 
 ### 发布记录（v1.0.2）
 - 提交 `c3a9043`（feat）+ `4c34f78`（fix 容错解码）已推送 `origin/main`；annotated tag `v1.0.2` 已推送。
-- GitHub Release「OneKey v1.0.2 · 看哪存哪 B 键重构版 (Minecraft 26.3)」已发布（非草稿）：https://github.com/Roland114514/OneKey/releases/tag/v1.0.2 ，上传 4 个产物（fabric jar 112,346 B / sources 70,723 B / neoforge jar 110,965 B / sources 67,670 B），正文取自 `docs/release/GITHUB_RELEASE.md`。
+- GitHub Release「OneKey v1.0.2 · 看哪存哪 B 键重构版 (Minecraft 26.3)」已发布（非草稿）：https://github.com/Roland114514/OneKey/releases/tag/v1.0.2 ，上传 4 个产物（fabric jar 112,773 B / sources 71,645 B / neoforge jar 111,401 B / sources 68,591 B；首版发布后经对抗审查又修 3 个 P1，已重切 v1.0.2 并替换资产），正文取自 `docs/release/GITHUB_RELEASE.md`。
 - 推送凭据：`git credential fill` 已能取到 GitHub token（此前 v1.0.1 阶段失效的 helper 已恢复可用），API 创建 Release 与上传资产均 201 成功；token 未写入任何文件。
 
 ### 待跟进（不阻塞本次发版）

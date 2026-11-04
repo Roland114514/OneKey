@@ -10,7 +10,7 @@
 | 加载器 (Loader) | Minecraft 版本 | 文件名 | 体积 |
 |---|---|---|---|
 | **Fabric** | 26.3 (Java 25) | `onekey-fabric-1.0.2.jar` | ~110 KB |
-| **NeoForge** | 26.3 (Java 25) | `onekey-neoforge-1.0.2.jar` | ~108 KB |
+| **NeoForge** | 26.3 (Java 25) | `onekey-neoforge-1.0.2.jar` | ~109 KB |
 
 ---
 
@@ -58,6 +58,6 @@
 ## 🛠️ 校验和 (SHA-256 Checksums)
 
 ```text
-82f0eb335cef50b46ef9b2aa1b5cbf9cc891754886df7a6579d1b35bb29dea1b  onekey-fabric-1.0.2.jar
-263f55ee096f49b9cd2bd7a1723ba403b1c9d12e420372edae35ef2d0f110d8a  onekey-neoforge-1.0.2.jar
+2cc5534efcb88672b17ea8617770948e0d6e4152f13ac4048c4b2fcdf8803560  onekey-fabric-1.0.2.jar
+ba4b31fad8c084322f1765012e78c15de1df0161ee8a0f2cf45dc55dbbcda2d9  onekey-neoforge-1.0.2.jar
 ```
