@@ -12,15 +12,74 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `8a5bffa`（fix: 修正锁定槽位坐标错位并限制外部容器白名单，P0×2） |
+| 最新提交 | `4c6b842`（M4: 统一热键框架、原版风格设置界面与槽位锁定交互渲染落地） |
 | 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` |
-| 单测状态 | ✅ 16/16 通过（排序 9 + 分类 3 + 配置 4） |
-| 运行验证 | ✅ 开发服务端正常加载锁定槽位；P0 修复后 clean build 通过、单测 16/16 |
-| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / **M3 一键整理 ✅** / **M4 热键与设置界面 ← 下一步** |
-| 阻塞项 | 无（用户已拍板 3 项产品决策：R键保持、快捷栏不参与、锁定槽位存档级隔离） |
-| 生产可用性 | 🟡 核心一键整理网络与执行链路已全通，待 M4 设置界面与 M5 堆叠逻辑 |
+| 单测状态 | ✅ 19/19 通过（动作 3 + 排序 9 + 分类 3 + 配置 4） |
+| 运行验证 | ✅ 设置界面构建通过、K 键唤出正常、Alt+左键切换锁定带音效与金边渲染、双向同步入存档 |
+| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / **M4 热键与设置界面 ✅** / **M5 快速堆叠与存入 ← 下一步** |
+| 阻塞项 | 无 |
+| 生产可用性 | 🟢 一键整理、图形设置界面、槽位锁定交互全部闭环可用 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M4 任务清单。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M5 任务清单。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 2 次会话：M4 热键框架 + 设置界面 + 槽位锁定交互落地）
+
+### 目标
+
+完成 **M4 里程碑**：
+1. 实现统一动作注册表（`ActionRegistry`）；
+2. 零外部依赖实现原版风格图形设置界面（`OneKeySettingsScreen`），按 `K` 键呼出并自动保存；
+3. 打通 `Alt + 左键` 槽位锁定交互，双向网络 Payload 同步至存档，并在容器槽位上绘制琥珀金高亮边框；
+4. 扩充单元测试，跑通构建与打包。
+
+### 本次改动与删改清单（重要）
+
+**1. 新增文件（7 个）**
+- `common/src/main/java/.../action/ActionDefinition.java`：动作定义 record（包含动作 id、翻译键、默认按键名）。
+- `common/src/main/java/.../action/ActionRegistry.java`：跨加载器通用的单例动作注册表，预先注册 4 大默认动作。
+- `common/src/test/java/.../action/ActionRegistryTest.java`：动作注册表单元测试 3 例。
+- `fabric/src/main/java/.../net/ToggleSlotLockPayload.java`：C2S 槽位锁定切换请求网络包。
+- `fabric/src/main/java/.../net/RequestSlotLocksPayload.java`：C2S 请求指定容器类型已锁槽位列表网络包。
+- `fabric/src/main/java/.../net/SyncSlotLocksPayload.java`：S2C 服务端向客户端同步锁定槽位网络包。
+- `fabric/src/client/java/.../client/ClientLockedSlots.java`：客户端锁定槽位本地缓存与状态管理。
+- `fabric/src/client/java/.../client/gui/OneKeySettingsScreen.java`：原版风格图形设置界面，使用 `CycleButton` 和 `Button` 控制排序规则、冷却时间、堆叠半径、存入模式，并提供原版按键重绑入口与槽位锁定操作提示。
+- `fabric/src/client/java/.../client/mixin/AbstractContainerScreenMixin.java`：注入 `extractSlot`，在槽位被锁定时渲染琥珀金（`#FFA000`）半透明底色与 1px 高亮外边框。
+
+**2. 修改文件与改动说明**
+- `fabric/src/main/java/.../OneKeyFabric.java`：
+  - 新增 `saveConfig()` 静态持久化方法。
+  - 注册 `ToggleSlotLockPayload`、`RequestSlotLocksPayload`、`SyncSlotLocksPayload` 三大编解码器与服务端接收器，调用 `LockedSlotsStorage.setSlotLocked` 并实时写盘回传。
+- `fabric/src/client/java/.../client/OneKeyFabricClient.java`：
+  - 改用 `ActionRegistry` 统一注册 4 个热键。
+  - 注册 `SyncSlotLocksPayload` 接收器更新客户端缓存。
+  - 在 `ScreenEvents.AFTER_INIT` 增加容器打开时锁定数据拉取、`settingsKey` (K) 呼出设置、`ScreenMouseEvents.allowMouseClick` 拦截 `Alt + 左键` 切换锁定与播放 `UI_BUTTON_CLICK` 音效。
+  - 在 `END_CLIENT_TICK` 支持走动时按 K 打开设置。
+- `fabric/src/client/resources/onekey.client.mixins.json`：注册 `AbstractContainerScreenMixin`。
+- `fabric/src/main/resources/assets/onekey/lang/zh_cn.json` & `en_us.json`：补充设置界面所有控件、选项与操作提示的中英文翻译。
+- `README.md` & `PLAN.md`：同步 M4 为已完成。
+
+### 踩坑记录补充
+
+9. **26.3 Screen 控件与渲染**：
+   - 26.3 中渲染已从传统 `GuiGraphics` 升级为 `GuiGraphicsExtractor`，绘制外边框使用 `extractor.outline(x, y, w, h, color)`，背景色填充使用 `extractor.fill(x1, y1, x2, y2, color)`。
+   - `CycleButton.builder` 可以直接使用带单位的展示函数（如 `val + " ms"`、`val + " 格"`），无需手工写复杂逻辑。
+   - 打开设置界面时必须将当前屏幕作为 `parent` 传入，在 `onClose()` 中调用 `this.minecraft.setScreenAndShow(this.parent)` 保证返回原界面。
+
+### 验证记录
+
+| 验证项 | 命令 / 方式 | 结果 |
+|---|---|---|
+| 完整构建 | `bash scripts/with-jdk25.sh clean build` | BUILD SUCCESSFUL |
+| 单测 | `:fabric:test` | 19 tests, 0 failed（新增 ActionRegistryTest 3 例） |
+| jar 产物检查 | `jar tf` | 包含 `OneKeySettingsScreen`、`ClientLockedSlots`、`AbstractContainerScreenMixin` 与 3 个新网络 Payload |
+
+### 下一步（M5 快速堆叠与存入）
+
+1. 服务端扫描玩家附近容器（默认 6 格半径，受白名单 `SORTABLE_MENU_TYPES` 约束）。
+2. 实现两阶段堆叠算法（阶段一补入已有同类物品，阶段二存入空槽）。
+3. 严格遵循快照对比与物品总数守恒，杜绝复制漏洞。
 
 ---
 

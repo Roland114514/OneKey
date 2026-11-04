@@ -3,7 +3,8 @@
 	"package": "me.easan.onekey.fabric.client.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
-		"AbstractContainerScreenAccessor"
+		"AbstractContainerScreenAccessor",
+		"AbstractContainerScreenMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

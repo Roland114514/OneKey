@@ -74,7 +74,7 @@
 | **M1 项目骨架** | D1（11-03） | `settings.gradle`、`gradle.properties`、`fabric/build.gradle`、`fabric.mod.json`、双 mixin 配置、中英文语言文件、图标、README/LICENSE | `./gradlew build` 通过；产物 jar 可被 Fabric 识别（`fabric.mod.json` 校验通过） | ✅ 完成 |
 | **M2 内核：排序 + 配置 + 协议** | D1（11-03） | `common` 下 sort/config/action/net 包；JUnit 5 单测 13 例 | 全部单测通过（排序双射、锁定槽位、空格后置、配置往返/缺省/null 归一） | ✅ 完成 |
 | **M3 一键整理落地** | D2–D4（11-04 ~ 11-06） | 客户端 `KeyMapping` → `SortRequest` payload；服务端 `ServerPlayNetworking` 收包、排序、回包；`SortResult` 提示 | 单人/专用服务器均能整理；快捷栏严格不参与；锁定槽位按存档独立持久化；连续按 250 ms 冷却；未装服务端时不崩、提示「服务端未安装」 | ✅ 完成 |
-| **M4 热键框架 + 设置界面** | D4–D6（11-06 ~ 11-08） | `ActionRegistry`（动作 ↔ 热键 ↔ 翻译键）；`Screen` 基类的设置界面（排序规则开关、堆叠半径、黑白名单、按键重绑入口） | 4 个热键全部可重绑并持久化；设置改动即时生效；界面可用键盘导航、支持中英文 | ⬜ 未开始 |
+| **M4 热键框架 + 设置界面** | D4–D6（11-06 ~ 11-08） | `ActionRegistry`（动作 ↔ 热键 ↔ 翻译键）；`Screen` 基类的设置界面（排序规则开关、堆叠半径、按键重绑入口）；`Alt+左键` 槽位锁定交互与高亮渲染 | 4 个热键全部接入统一动作注册；设置改动即时生效；界面可用键盘导航、支持中英文；槽位锁定前后端同步与高亮 | ✅ 完成 |
 | **M5 快速堆叠 / 存入** | D6–D9（11-08 ~ 11-11） | 服务端扫描半径内容器（默认 6 格）、按规则合并/存入；`QuickStackRequest/Result` 接线 | 半径内同类物品正确合并；白/黑名单生效；无容器时给出提示；不复制物品（回归测试） | ⬜ 未开始 |
 | **M6 客户端手势 + 兼容** | D9–D11（11-11 ~ 11-13） | 拖拽整叠、Shift 快速移动、滚轮分堆；与 IPN/Inventory Sorting 的冲突检测与提示 | 手势操作与原版行为一致；检测到同类 mod 时给出可关闭的提示；不与 JEI/REI 抢鼠标事件 | ⬜ 未开始 |
 | **M7 NeoForge 适配** | D11–D14（11-13 ~ 11-16） | `neoforge/` 模块（ModDevGradle）、事件与网络适配层 | `./gradlew :neoforge:build` 通过；同一套 `common` 内核；功能对齐 Fabric 端 | ⬜ 未开始 |
@@ -122,14 +122,14 @@
 
 ### M4 热键框架 + 设置界面（详细任务）
 
-| # | 任务 | 技术要点 |
-| --- | --- | --- |
-| 4.1 | `ActionRegistry` | 单例注册表：`ActionId` ↔ 默认键 ↔ 翻译键 ↔ 回调；`KeyMapping` 由此批量生成 |
-| 4.2 | 配置热键落地 | 启动时读 `hotkeys.*`，注册为 `KeyMapping`；改配置后重载需重建 `KeyMapping`（或提示重启） |
-| 4.3 | 设置界面 | 继承 `Screen`，4 个分区（热键/排序/堆叠/兼容），纯原版控件（`Button`、`CycleButton`、`EditBox`） |
-| 4.4 | 持久化 | `ConfigCodec.save` 到 `config/onekey.json`，界面关闭即写盘 |
-| 4.5 | 键盘/手柄导航 | `Screen` 原生 Tab 焦点；`CycleButton` 支持方向键 |
-| 4.6 | 测试 | 中英文切换、重绑冲突提示、非法半径（0/64）钳制 |
+| # | 任务 | 技术要点 | 状态 |
+| --- | --- | --- | --- |
+| 4.1 | `ActionRegistry` | 动作 ↔ 默认键 ↔ 翻译键集中注册，KeyMapping 由此生成 | ✅ |
+| 4.2 | 配置热键落地 | 启动时由 `ActionRegistry` 批量注册 KeyMapping，支持 K 键一键呼出设置界面 | ✅ |
+| 4.3 | 设置界面 | 继承 `Screen`，原版控件（`CycleButton` / `Button`），涵盖排序开关、半径、模式与按键入口 | ✅ |
+| 4.4 | 持久化与生效 | 界面关闭与更改即调用 `OneKeyFabric.saveConfig()` 写回 `config/onekey.json` | ✅ |
+| 4.5 | 槽位锁定交互与渲染 | `Alt + 左键` 监听切换，双向网络 Payload 同步存档；`AbstractContainerScreenMixin` 渲染琥珀金高亮边框 | ✅ |
+| 4.6 | 测试 | 单测扩充至 19 例，构建与 Clean Jar 打包通过，中英文键名齐全 | ✅ |
 
 ### M5 快速堆叠 / 存入（详细任务）
 
@@ -286,6 +286,6 @@
 
 **下一步（按顺序）**
 
-1. M4：`ActionRegistry` + 设置界面骨架（4 个开关，验证配置与按键持久化成环）
-2. M5：容器扫描与堆叠算法（重点做物品安全回归）
-3. M6 → M7 → M8
+1. M5：容器扫描与快速堆叠/存入算法（服务端半径扫描、两阶段堆叠、重点做物品安全回归）
+2. M6：客户端鼠标手势增强与同类模组兼容
+3. M7 → M8
