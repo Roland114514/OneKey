@@ -26,5 +26,10 @@ bin/
 # macOS
 .DS_Store
 
-# 本地密钥/发布凭据
+# 本地密钥/发布凭据与 API Key（严禁入库）
 secrets.properties
+.env
+.env.*
+*.key
+*.token
+scripts/config.json

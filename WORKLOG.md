@@ -27,7 +27,38 @@
 
 ---
 
-## 2026-11-04（第 2 个工作日 · 第 12 次会话：B 键快速存入交互痛点归档与目标选择重构方案设计）
+## 2026-11-04（第 2 个工作日 · 第 13 次会话：Gemini API 工具集成与默认 API 协作规则落地）
+
+### 目标与背景
+用户提出需求：
+1. 编写一个调用 Gemini API 的程序；
+2. 建立长期协作准则：以后除非用户明确要求“使用额度”，否则一律默认调用 Gemini API 进行工作；
+3. 用户提供了专用 API Key，并强调 Git 操作规范（先 `git status` 确认改动归属，再 `git add <具体路径>`，严禁全量暂存污染他方工作）。
+
+### 完成工作
+1. **Gemini API 调用工具设计与实现**：
+   - 编写 `scripts/gemini_api.py`：
+     - 零额外 pip 依赖设计，基于 Python 3 原生 `urllib.request` 与 `json`；
+     - 自动适配 macOS 根证书验证（引入 `certifi` CA 证书探测与 fallback 机制，避免 macOS 平台特有的 `SSL: CERTIFICATE_VERIFY_FAILED` 异常）；
+     - 支持单次命令行提问、多轮交互会话（REPL）、代码/日志文件上下文绑定（`-f` 参数）、终端管道输入（如 `cat log.txt | ./scripts/gemini.sh`）；
+     - 默认模型设为官方推荐的最新 `gemini-3.8-flash`（亦支持通过 `-m` 指定 `gemini-4-argon` 等）；
+     - 支持输出控制（`-o` 存盘、`--json` 输出完整结构）。
+   - 编写 Shell 快速启动脚本 `scripts/gemini.sh`，赋予可执行权限，自动导入 `.env` 环境变量并转发参数。
+
+2. **凭据安全隔离与 Git 防泄露**：
+   - 本地凭据存储于 `.env`（`GEMINI_API_KEY=...`）；
+   - 更新 `.gitignore`，增加 `.env`、`.env.*`、`*.key`、`*.token` 等敏感文件屏蔽规则，严禁私密凭据入库。
+
+3. **接口连通性实测验证**：
+   - 针对 `gemini-3.8-flash` REST 生成接口进行了实测调用，验证文本生成响应与管道输入均 100% 成功畅通。
+
+4. **协作规范持久化**：
+   - 根目录建立 `GEMINI.md`（Antigravity 自动加载 Workspace Rules），确立：
+     - 默认 API 工作准则（非显式说明“使用额度”时不消耗额度，使用 API 脚本工作）；
+     - 严格分步暂存规范（禁 `git add .` / `git add -A`，先 `git status`，后 `git add <具体路径>`）；
+     - 敏感凭证永不入库规范。
+
+---
 
 ### 目标与用户反馈
 
