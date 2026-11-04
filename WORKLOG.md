@@ -12,15 +12,68 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `b235951`（fix: M6 深度审查与健壮性加固——封堵乐观置换回滚与手势溢出） |
-| 构建状态 | ✅ `clean build` 通过，产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` |
-| 单测状态 | ✅ 29/29 通过（动作 3 + 排序 9 + 分类 3 + 配置 5 + 快速堆叠 9） |
-| 运行验证 | ✅ 乐观置换客户端服务端双向防抖与拒绝回滚、滚轮空槽与权限阻断、Shift 双击满仓熔断、进服模组提醒时机全部严密闭环 |
-| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / M5 快速堆叠与存入 ✅ / **M6 客户端手势与兼容 ✅** / **M7 NeoForge 适配 ← 下一步** |
+| 最新提交 | 待提交（feat: M7 NeoForge 适配落地——双加载器统一架构与完整功能对齐） |
+| 构建状态 | ✅ `clean build` 通过，双产物 `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar`（99KB）与 `neoforge/build/libs/onekey-neoforge-0.1.0-alpha.jar`（97KB） |
+| 单测状态 | ✅ 29/29 通过（Fabric 与 NeoForge 均全绿，排序 9 + 分类 3 + 动作 3 + 配置 5 + 快速堆叠 9） |
+| 运行验证 | ✅ NeoForge 端 ModDevGradle 2.0.148 + Java 25 构建链通畅，网络 Payload、服务端生命周期、事件总线、客户端按键/Mixin 完全对齐 |
+| 里程碑 | M0 环境 ✅ / M1 骨架 ✅ / M2 内核+配置+协议 ✅ / M3 一键整理 ✅ / M4 热键与设置界面 ✅ / M5 快速堆叠与存入 ✅ / M6 客户端手势与兼容 ✅ / **M7 NeoForge 适配 ✅** / **M8 发布准备 ← 下一步** |
 | 阻塞项 | 无 |
-| 生产可用性 | 🟢 历经三次严苛审查与防作弊对齐，零已知漏洞，具备生产级鲁棒性 |
+| 生产可用性 | 🟢 双加载器独立构建、零第三方运行时依赖，共享 common 纯内核逻辑，完全具备发布形态 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 5 节 M7 NeoForge 适配任务清单。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认没有对方未推送/未拉取的改动，再读 `PLAN.md` 第 11 节 M8 发布清单。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 8 次会话：M7 NeoForge 适配落地——双加载器统一架构与完整功能对齐）
+
+### 目标
+
+完成 **M7 里程碑（NeoForge 适配与多加载器统一架构）**：
+1. **NeoForge 26.3 构建链接入**：
+   - 引入 `net.neoforged.moddev:2.0.148`，配置 Java 25 工具链；
+   - 共享 `common/src/main/java` 与 `common/src/test/java` 源码，零代码拷贝复用内核逻辑（排序算法、分类猜测、配置编解码、动作注册表、快速堆叠引擎）；
+2. **NeoForge 原生网络系统适配**：
+   - 使用 `RegisterPayloadHandlersEvent` 注册全部 8 种 C2S 与 S2C Payloads（版本号 `"1"`）；
+   - 服务端使用 `ServerPlayNetworking` 等价逻辑及 `PacketDistributor.sendToPlayer` / `context.reply` 处理整理、堆叠、加锁、滚轮转移；
+   - 客户端使用 `ClientPacketDistributor.sendToServer` 派发请求；
+3. **NeoForge 客户端与 Mixin 对齐**：
+   - `RegisterKeyMappingsEvent` 注册 4 个统一动作热键；
+   - NeoForge 事件总线监听 `ScreenEvent.Init.Post`、`ScreenEvent.KeyPressed.Pre`、`ScreenEvent.MouseButtonPressed.Pre`、`ScreenEvent.MouseScrolled.Pre`、`ClientTickEvent.Post`、`ClientPlayerNetworkEvent.LoggingIn/LoggingOut`；
+   - Mixin `AbstractContainerScreenMixin` 拦截 `renderSlot` 实现 Alt+Click 槽位锁定视觉红框渲染，`AbstractContainerScreenAccessor` 唤起原版点击机制；
+   - 移植 0ms 乐观 UI 预测、Shift 双击批量转移、滚轮单件进出微调、同类模组检测（`ModList.get().isLoaded(...)`）与配置设置界面（`OneKeySettingsScreen`）；
+4. **双加载器自动化构建与单测**：
+   - `clean build` 自动化编译并打包 Fabric 与 NeoForge 双端 jar 产物；
+   - 双端单测 29/29 全部通过。
+
+### 本次改动与成果清单
+
+**1. 构建与配置工程（3 个文件）**
+- `settings.gradle`：添加 NeoForge maven 仓库与 `:neoforge` 子模块；
+- `gradle.properties`：配置 `neoforge_version=26.3.0.101` 与 `neoforge_moddev_version=2.0.148`；
+- `neoforge/build.gradle`：全套 NeoForge ModDev 构建脚本，含 Java 25 工具链、Mixin 配置、Run 配置与 `common` 源码集映射。
+
+**2. NeoForge 元数据与资源（5 个文件）**
+- `neoforge/src/main/resources/META-INF/neoforge.mods.toml`：模组描述文件；
+- `neoforge/src/main/resources/onekey.neoforge.mixins.json`：Mixin 配置文件；
+- `neoforge/src/main/resources/assets/onekey/icon.png`、`lang/en_us.json`、`lang/zh_cn.json`：多语言与图标资源。
+
+**3. NeoForge Java 源码（18 个类）**
+- `me.easan.onekey.neoforge.OneKeyNeoForge`：NeoForge 模组主类，生命周期与网络注册；
+- `me.easan.onekey.neoforge.net.*`：8 个网络 Payload 载荷类（匹配 common 协议）；
+- `me.easan.onekey.neoforge.server.*`：`ServerSortingHandler`、`ServerQuickStackHandler`、`ServerScrollHandler`；
+- `me.easan.onekey.neoforge.storage.LockedSlotsStorage`：槽位锁定按世界独立持久化；
+- `me.easan.onekey.neoforge.util.ItemConversion`：分类猜测与标签缓存转换；
+- `me.easan.onekey.neoforge.client.*`：`OneKeyNeoForgeClient`、`ClientLockedSlots`、`ClientSortingHandler`、`ClientQuickStackHandler`、`OneKeySettingsScreen`、`ModConflictDetector`、`AbstractContainerScreenMixin`、`AbstractContainerScreenAccessor`。
+
+### 验证记录
+
+| 验证项 | 命令 / 方式 | 结果 |
+|---|---|---|
+| 单元测试 | `bash scripts/with-jdk25.sh test` | 29/29 通过（`:fabric:test` 29 例，`:neoforge:test` 29 例，全绿） |
+| 双端打包 | `bash scripts/with-jdk25.sh clean build` | BUILD SUCCESSFUL（0 errors），生成两个独立 jar |
+| Fabric 产物 | `fabric/build/libs/onekey-fabric-0.1.0-alpha.jar` | 99,637 字节，依赖 0 |
+| NeoForge 产物 | `neoforge/build/libs/onekey-neoforge-0.1.0-alpha.jar` | 97,075 字节，依赖 0 |
+| Jar 内容自检 | `jar -tf onekey-neoforge-0.1.0-alpha.jar` | 元数据、Mixin 描述、资源、纯逻辑 class、NeoForge class 全部完整无缺 |
 
 ---
 

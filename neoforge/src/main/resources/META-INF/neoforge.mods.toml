@@ -1,0 +1,32 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "MIT"
+issueTrackerURL = "https://github.com/Roland114514/OneKey/issues"
+
+[[mods]]
+modId = "onekey"
+version = "${version}"
+displayName = "OneKey · 操作优化"
+description = '''
+轻量级、零第三方依赖的 Minecraft 26.3 操作优化模组。
+支持一键整理、快速堆叠、一键存入、统一热键、槽位锁定与鼠标手势。
+'''
+authors = "Easan"
+logoFile = "assets/onekey/icon.png"
+
+[[mixins]]
+config = "onekey.neoforge.mixins.json"
+
+[[dependencies.onekey]]
+modId = "neoforge"
+type = "required"
+versionRange = "[26.3,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.onekey]]
+modId = "minecraft"
+type = "required"
+versionRange = "[26.3,27)"
+ordering = "NONE"
+side = "BOTH"

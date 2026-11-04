@@ -1,0 +1,533 @@
+package me.easan.onekey.neoforge.client;
+
+import com.mojang.blaze3d.platform.InputConstants;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import me.easan.onekey.common.action.ActionId;
+import me.easan.onekey.common.action.ActionRegistry;
+import me.easan.onekey.common.net.QuickStackRequest;
+import me.easan.onekey.common.net.SortRequest;
+import me.easan.onekey.common.sort.Sorter;
+import me.easan.onekey.common.sort.StackView;
+import me.easan.onekey.neoforge.OneKeyNeoForge;
+import me.easan.onekey.neoforge.client.compat.ModConflictDetector;
+import me.easan.onekey.neoforge.client.gui.OneKeySettingsScreen;
+import me.easan.onekey.neoforge.client.mixin.AbstractContainerScreenAccessor;
+import me.easan.onekey.neoforge.net.QuickStackRequestPayload;
+import me.easan.onekey.neoforge.net.RequestSlotLocksPayload;
+import me.easan.onekey.neoforge.net.ScrollItemTransferPayload;
+import me.easan.onekey.neoforge.net.SortRequestPayload;
+import me.easan.onekey.neoforge.net.ToggleSlotLockPayload;
+import me.easan.onekey.neoforge.server.ServerSortingHandler;
+import me.easan.onekey.neoforge.util.ItemConversion;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.CraftingContainer;
+import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.ResultSlot;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.common.NeoForge;
+
+/**
+ * NeoForge 客户端事件与手势交互中心。
+ */
+public final class OneKeyNeoForgeClient {
+
+    private static final KeyMapping.Category CATEGORY =
+            KeyMapping.Category.register(Identifier.fromNamespaceAndPath(OneKeyNeoForge.MOD_ID, "keys"));
+
+    private static KeyMapping sortKey;
+    private static KeyMapping quickStackKey;
+    private static KeyMapping quickStashKey;
+    private static KeyMapping settingsKey;
+
+    private static long lastShiftClickTime = 0L;
+    private static int lastShiftClickSlot = -1;
+    private static ItemStack lastShiftClickItem = ItemStack.EMPTY;
+    private static long lastScrollTime = 0L;
+    private static long lastClientSortTime = 0L;
+    private static boolean conflictWarned = false;
+
+    private OneKeyNeoForgeClient() {
+    }
+
+    public static void init(IEventBus modEventBus) {
+        modEventBus.addListener(OneKeyNeoForgeClient::onRegisterKeyMappings);
+        NeoForge.EVENT_BUS.register(OneKeyNeoForgeClient.class);
+        OneKeyNeoForge.LOGGER.info("[OneKey-NeoForge] 客户端已初始化，注册热键与手势系统");
+    }
+
+    private static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
+        sortKey = new KeyMapping(ActionRegistry.get(ActionId.SORT).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD, InputConstants.KEY_R, CATEGORY);
+        quickStackKey = new KeyMapping(ActionRegistry.get(ActionId.QUICK_STACK).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD, InputConstants.KEY_V, CATEGORY);
+        quickStashKey = new KeyMapping(ActionRegistry.get(ActionId.QUICK_STASH).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD, InputConstants.KEY_B, CATEGORY);
+        settingsKey = new KeyMapping(ActionRegistry.get(ActionId.SETTINGS).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD, InputConstants.KEY_K, CATEGORY);
+
+        event.register(sortKey);
+        event.register(quickStackKey);
+        event.register(quickStashKey);
+        event.register(settingsKey);
+    }
+
+    @SubscribeEvent
+    public static void onScreenInit(ScreenEvent.Init.Post event) {
+        if (event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) {
+            ClientPacketDistributor.sendToServer(new RequestSlotLocksPayload("player_inventory"));
+            if (containerScreen.getMenu() != null) {
+                String menuKey = ClientLockedSlots.getMenuTypeKey(containerScreen.getMenu());
+                if (!"player_inventory".equals(menuKey)) {
+                    ClientPacketDistributor.sendToServer(new RequestSlotLocksPayload(menuKey));
+                }
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onKeyPressed(ScreenEvent.KeyPressed.Pre event) {
+        Minecraft client = Minecraft.getInstance();
+        if (event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) {
+            if (event.getScreen().getFocused() instanceof EditBox editBox && editBox.canConsumeInput()) {
+                return;
+            }
+
+            if (sortKey.matches(event.getKeyEvent())) {
+                triggerScreenSort(client, containerScreen);
+                event.setCanceled(true);
+                return;
+            }
+            if (quickStackKey.matches(event.getKeyEvent())) {
+                triggerQuickStack(client, false);
+                event.setCanceled(true);
+                return;
+            }
+            if (quickStashKey.matches(event.getKeyEvent())) {
+                triggerQuickStack(client, true);
+                event.setCanceled(true);
+                return;
+            }
+            if (settingsKey.matches(event.getKeyEvent())) {
+                client.setScreenAndShow(new OneKeySettingsScreen(containerScreen));
+                event.setCanceled(true);
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onMouseScrolled(ScreenEvent.MouseScrolled.Pre event) {
+        double vertical = event.getScrollDeltaY();
+        if (vertical == 0) {
+            return;
+        }
+
+        Minecraft client = Minecraft.getInstance();
+        if (!(event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) || client.player == null) {
+            return;
+        }
+        if (containerScreen.getMenu() == null || !ServerSortingHandler.isMenuSortable(containerScreen.getMenu().getType())) {
+            return;
+        }
+        if (!containerScreen.getMenu().getCarried().isEmpty()) {
+            return;
+        }
+        if (!(containerScreen instanceof AbstractContainerScreenAccessor accessor)) {
+            return;
+        }
+
+        Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
+        if (hovered == null) {
+            hovered = accessor.onekey$getHoveredSlot();
+        }
+        if (hovered == null || hovered.isFake() || !hovered.isActive() || hovered instanceof ResultSlot) {
+            return;
+        }
+        if (hovered.container instanceof CraftingContainer || hovered.getItem().isEmpty()) {
+            return;
+        }
+
+        boolean isPlayer = hovered.container == client.player.getInventory();
+        if (isPlayer) {
+            int slotIdx = hovered.getContainerSlot();
+            if (slotIdx < 9 || slotIdx >= 36 || ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
+                return;
+            }
+        } else {
+            String menuKey = ClientLockedSlots.getMenuTypeKey(containerScreen.getMenu());
+            if (ClientLockedSlots.isLocked(menuKey, hovered.index)) {
+                return;
+            }
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastScrollTime < 40L) {
+            event.setCanceled(true);
+            return;
+        }
+        lastScrollTime = now;
+
+        boolean scrollUp = vertical > 0;
+        ClientPacketDistributor.sendToServer(new ScrollItemTransferPayload(containerScreen.getMenu().containerId, hovered.index, scrollUp));
+        client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, scrollUp ? 1.4F : 1.1F));
+        event.setCanceled(true);
+    }
+
+    @SubscribeEvent
+    public static void onMouseButtonPressed(ScreenEvent.MouseButtonPressed.Pre event) {
+        Minecraft client = Minecraft.getInstance();
+        if (!(event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) || client.player == null) {
+            return;
+        }
+        if (!(containerScreen instanceof AbstractContainerScreenAccessor accessor)) {
+            return;
+        }
+
+        // Alt + 左键：锁定/解锁槽位
+        if (event.getMouseButtonEvent().hasAltDown() && event.getButton() == 0) {
+            Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
+            if (hovered == null) {
+                hovered = accessor.onekey$getHoveredSlot();
+            }
+            if (hovered != null) {
+                toggleSlotLock(client, containerScreen, hovered);
+                event.setCanceled(true);
+                return;
+            }
+        }
+
+        // Shift + 左键：双击同类批量快速移动
+        if (event.getMouseButtonEvent().hasShiftDown() && event.getButton() == 0) {
+            Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
+            if (hovered == null) {
+                hovered = accessor.onekey$getHoveredSlot();
+            }
+            if (hovered != null && !hovered.isFake() && hovered.isActive() && !(hovered instanceof ResultSlot)
+                    && !(hovered.container instanceof CraftingContainer)) {
+                boolean isPlayer = hovered.container == client.player.getInventory();
+                boolean lockedOrHotbar = false;
+                if (isPlayer) {
+                    int slotIdx = hovered.getContainerSlot();
+                    lockedOrHotbar = (slotIdx < 9 || slotIdx >= 36) || ClientLockedSlots.isLocked("player_inventory", slotIdx);
+                } else {
+                    String menuKey = ClientLockedSlots.getMenuTypeKey(containerScreen.getMenu());
+                    lockedOrHotbar = ClientLockedSlots.isLocked(menuKey, hovered.index);
+                }
+
+                if (!lockedOrHotbar) {
+                    long now = System.currentTimeMillis();
+                    if (now - lastShiftClickTime < 300L && lastShiftClickSlot == hovered.index && !lastShiftClickItem.isEmpty()) {
+                        ItemStack targetItem = lastShiftClickItem.copy();
+                        lastShiftClickTime = 0L;
+                        lastShiftClickSlot = -1;
+                        lastShiftClickItem = ItemStack.EMPTY;
+                        transferAllMatching(client, containerScreen, accessor, hovered, targetItem);
+                        event.setCanceled(true);
+                    } else {
+                        ItemStack current = hovered.getItem();
+                        if (!current.isEmpty()) {
+                            lastShiftClickTime = now;
+                            lastShiftClickSlot = hovered.index;
+                            lastShiftClickItem = current.copy();
+                        } else {
+                            lastShiftClickTime = 0L;
+                            lastShiftClickSlot = -1;
+                            lastShiftClickItem = ItemStack.EMPTY;
+                        }
+                    }
+                } else {
+                    lastShiftClickTime = 0L;
+                    lastShiftClickSlot = -1;
+                    lastShiftClickItem = ItemStack.EMPTY;
+                }
+            }
+        } else {
+            lastShiftClickTime = 0L;
+            lastShiftClickSlot = -1;
+            lastShiftClickItem = ItemStack.EMPTY;
+        }
+    }
+
+    @SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        Minecraft client = Minecraft.getInstance();
+        if (!conflictWarned && client.player != null) {
+            conflictWarned = true;
+            List<String> conflicts = ModConflictDetector.detectConflicts();
+            if (!conflicts.isEmpty()) {
+                OneKeyNeoForge.LOGGER.warn("[OneKey-NeoForge] 检测到共存库存模组: {}", conflicts);
+                client.player.sendSystemMessage(
+                        Component.translatable("onekey.compat.conflict_detected", String.join(", ", conflicts)));
+            }
+        }
+
+        if (client.gui != null && client.gui.screen() == null && client.player != null) {
+            while (sortKey.consumeClick()) {
+                triggerSort(client, client.player.inventoryMenu.containerId, SortRequest.MODE_PLAYER);
+            }
+            while (quickStackKey.consumeClick()) {
+                triggerQuickStack(client, false);
+            }
+            while (quickStashKey.consumeClick()) {
+                triggerQuickStack(client, true);
+            }
+            while (settingsKey.consumeClick()) {
+                client.setScreenAndShow(new OneKeySettingsScreen(null));
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
+        ClientLockedSlots.clear();
+        ItemConversion.clearCache();
+    }
+
+    @SubscribeEvent
+    public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        ClientLockedSlots.clear();
+        ItemConversion.clearCache();
+    }
+
+    private static boolean isSlotLockable(Minecraft client, AbstractContainerScreen<?> screen, Slot slot) {
+        if (client.player == null || slot == null || screen == null || screen.getMenu() == null) {
+            return false;
+        }
+        if (slot.isFake() || !slot.isActive() || slot instanceof ResultSlot) {
+            return false;
+        }
+        if (slot.container instanceof CraftingContainer) {
+            return false;
+        }
+        if (slot.container == client.player.getInventory()) {
+            int slotIndex = slot.getContainerSlot();
+            return slotIndex >= 9 && slotIndex < 36;
+        } else {
+            return ServerSortingHandler.isMenuSortable(screen.getMenu().getType());
+        }
+    }
+
+    private static void toggleSlotLock(Minecraft client, AbstractContainerScreen<?> screen, Slot slot) {
+        if (!isSlotLockable(client, screen, slot)) {
+            return;
+        }
+
+        String containerKey;
+        int slotIndex;
+        if (slot.container == client.player.getInventory()) {
+            containerKey = "player_inventory";
+            slotIndex = slot.getContainerSlot();
+        } else {
+            containerKey = ClientLockedSlots.getMenuTypeKey(screen.getMenu());
+            slotIndex = slot.index;
+        }
+
+        boolean nowLocked = ClientLockedSlots.toggle(containerKey, slotIndex);
+        client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, nowLocked ? 1.4F : 0.9F));
+        ClientPacketDistributor.sendToServer(new ToggleSlotLockPayload(containerKey, slotIndex));
+    }
+
+    private static void transferAllMatching(
+            Minecraft client,
+            AbstractContainerScreen<?> screen,
+            AbstractContainerScreenAccessor accessor,
+            Slot clickedSlot,
+            ItemStack targetItem) {
+        if (client.player == null || screen.getMenu() == null || targetItem.isEmpty()) {
+            return;
+        }
+
+        boolean isPlayerSide = clickedSlot.container == client.player.getInventory();
+        String menuKey = ClientLockedSlots.getMenuTypeKey(screen.getMenu());
+
+        for (Slot slot : screen.getMenu().slots) {
+            if (slot.isFake() || !slot.isActive() || slot instanceof ResultSlot || slot.container instanceof CraftingContainer) {
+                continue;
+            }
+
+            if (isPlayerSide) {
+                if (slot.container != client.player.getInventory()) {
+                    continue;
+                }
+                int slotIdx = slot.getContainerSlot();
+                if (slotIdx < 9 || slotIdx >= 36 || ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
+                    continue;
+                }
+            } else {
+                if (slot.container == client.player.getInventory() || ClientLockedSlots.isLocked(menuKey, slot.index)) {
+                    continue;
+                }
+            }
+
+            ItemStack item = slot.getItem();
+            if (!item.isEmpty() && ItemStack.isSameItemSameComponents(item, targetItem)) {
+                accessor.onekey$slotClicked(slot, slot.index, 0, ContainerInput.QUICK_MOVE);
+                if (!slot.getItem().isEmpty()) {
+                    break;
+                }
+            }
+        }
+    }
+
+    private static void triggerScreenSort(Minecraft client, AbstractContainerScreen<?> screen) {
+        if (client.player == null) {
+            return;
+        }
+
+        int syncId = screen.getMenu().containerId;
+        int mode = SortRequest.MODE_CONTAINER;
+
+        if (screen instanceof InventoryScreen || screen.getMenu() instanceof InventoryMenu) {
+            mode = SortRequest.MODE_PLAYER;
+        } else if (screen instanceof AbstractContainerScreenAccessor accessor) {
+            Slot hovered = accessor.onekey$getHoveredSlot();
+            if (hovered != null && hovered.container == client.player.getInventory()) {
+                mode = SortRequest.MODE_PLAYER;
+            }
+        }
+
+        triggerSort(client, syncId, mode);
+    }
+
+    private static void triggerSort(Minecraft client, int syncId, int mode) {
+        if (client.player == null || !OneKeyNeoForge.config().sort.enabled) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastClientSortTime < OneKeyNeoForge.config().sort.cooldownMs) {
+            return;
+        }
+        lastClientSortTime = now;
+
+        applyOptimisticSort(client, syncId, mode);
+        ClientPacketDistributor.sendToServer(new SortRequestPayload(new SortRequest(syncId, mode)));
+    }
+
+    private static void applyOptimisticSort(Minecraft client, int syncId, int mode) {
+        if (client.player == null) {
+            return;
+        }
+        AbstractContainerMenu menu = client.player.containerMenu;
+        if (menu == null || menu.containerId != syncId || !menu.getCarried().isEmpty()) {
+            return;
+        }
+
+        List<Slot> slotsToSort = resolveClientSlotsToSort(menu, client.player, mode);
+        if (slotsToSort.isEmpty()) {
+            return;
+        }
+
+        boolean playerScope = slotsToSort.get(0).container == client.player.getInventory();
+        String containerKey = playerScope ? "player_inventory" : ClientLockedSlots.getMenuTypeKey(menu);
+        Set<Integer> lockedKeys = ClientLockedSlots.getLocks(containerKey);
+
+        List<Integer> slotLockKeys = new ArrayList<>(slotsToSort.size());
+        for (Slot slot : slotsToSort) {
+            slotLockKeys.add(playerScope ? slot.getContainerSlot() : slot.index);
+        }
+        Set<Integer> lockedPositions = Sorter.resolveLockedPositions(slotLockKeys, lockedKeys);
+
+        List<StackView> views = new ArrayList<>(slotsToSort.size());
+        for (Slot slot : slotsToSort) {
+            views.add(ItemConversion.toStackView(slot.getItem()));
+        }
+
+        int[] permutation = Sorter.permutation(views, lockedPositions, OneKeyNeoForge.config().sort.toRule());
+        int moved = 0;
+        for (int i = 0; i < permutation.length; i++) {
+            if (permutation[i] != i && !views.get(permutation[i]).isEmpty()) {
+                moved++;
+            }
+        }
+
+        if (moved > 0) {
+            List<ItemStack> originals = new ArrayList<>(slotsToSort.size());
+            for (Slot slot : slotsToSort) {
+                originals.add(slot.getItem().copy());
+            }
+
+            for (int target = 0; target < permutation.length; target++) {
+                int source = permutation[target];
+                Slot slot = slotsToSort.get(target);
+                slot.set(originals.get(source));
+                slot.setChanged();
+            }
+
+            client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.BUNDLE_INSERT, 1.0F));
+        }
+    }
+
+    private static List<Slot> resolveClientSlotsToSort(AbstractContainerMenu menu, LocalPlayer player, int mode) {
+        boolean isPlayerOnly = (mode == SortRequest.MODE_PLAYER) || (menu instanceof InventoryMenu);
+        if (isPlayerOnly) {
+            return clientPlayerMainInventorySlots(menu, player);
+        }
+
+        if (ServerSortingHandler.isMenuSortable(menu.getType())) {
+            List<Slot> external = new ArrayList<>();
+            for (Slot slot : menu.slots) {
+                if (slot.container != player.getInventory() && isSortableSlot(slot)) {
+                    external.add(slot);
+                }
+            }
+            if (!external.isEmpty()) {
+                return external;
+            }
+        }
+
+        return clientPlayerMainInventorySlots(menu, player);
+    }
+
+    private static List<Slot> clientPlayerMainInventorySlots(AbstractContainerMenu menu, LocalPlayer player) {
+        List<Slot> result = new ArrayList<>();
+        for (Slot slot : menu.slots) {
+            if (slot.container == player.getInventory()) {
+                int slotIndex = slot.getContainerSlot();
+                if (slotIndex >= 9 && slotIndex < 36) {
+                    result.add(slot);
+                }
+            }
+        }
+        return result;
+    }
+
+    private static boolean isSortableSlot(Slot slot) {
+        if (slot.isFake() || !slot.isActive() || slot instanceof ResultSlot) {
+            return false;
+        }
+        if (slot.container instanceof CraftingContainer) {
+            return false;
+        }
+        return true;
+    }
+
+    private static void triggerQuickStack(Minecraft client, boolean stash) {
+        if (client.player == null) {
+            return;
+        }
+        int syncId = client.player.containerMenu != null ? client.player.containerMenu.containerId : -1;
+        int radius = OneKeyNeoForge.config().quickStack.radius;
+        ClientPacketDistributor.sendToServer(new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash)));
+    }
+}

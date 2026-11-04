@@ -4,6 +4,10 @@ pluginManagement {
 			name = 'Fabric'
 			url = 'https://maven.fabricmc.net/'
 		}
+		maven {
+			name = 'NeoForged'
+			url = 'https://maven.neoforged.net/releases'
+		}
 		mavenCentral()
 		gradlePluginPortal()
 	}
@@ -11,5 +15,5 @@ pluginManagement {
 
 rootProject.name = 'onekey'
 
-// Fabric 端优先；NeoForge 端在 M7 里程碑加入（见 PLAN.md）
 include ':fabric'
+include ':neoforge'
