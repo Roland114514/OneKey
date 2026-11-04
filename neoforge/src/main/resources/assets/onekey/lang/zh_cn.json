@@ -28,5 +28,6 @@
   "onekey.settings.compat.enabled": "兼容模式（v1.1 生效）",
   "onekey.settings.openKeybinds": "配置原版按键绑定...",
   "onekey.settings.tip.locking": "提示：Alt + 鼠标左键点击槽位可锁定/解锁，锁定槽位不参与整理",
-  "onekey.settings.tip.hotbar": "规则：底部 9 格快捷栏严格不参与整理，保证主副手工具武器安全"
+  "onekey.settings.tip.hotbar": "规则：底部 9 格快捷栏严格不参与整理，保证主副手工具武器安全",
+  "onekey.settings.sort.mergeStacks": "合并同类堆叠"
 }

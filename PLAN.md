@@ -253,7 +253,7 @@
 - [x] CurseForge 发布物料：`docs/release/CURSEFORGE.md` 同步就绪
 - [x] GitHub Release：`docs/release/GITHUB_RELEASE.md`，带 SHA-256 校验和与双端 jar
 - [x] CHANGELOG：`CHANGELOG.md` 完整记录 F1–F6 + F10 列表与注意事项
-- [x] 产物归档：`fabric/build/libs/onekey-fabric-1.0.2.jar` (110 KB) 与 `neoforge/build/libs/onekey-neoforge-1.0.2.jar` (108 KB)
+- [x] 产物归档：`fabric/build/libs/onekey-fabric-1.0.3.jar` (114 KB) 与 `neoforge/build/libs/onekey-neoforge-1.0.3.jar` (112 KB)
 
 ---
 

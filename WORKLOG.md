@@ -12,19 +12,52 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `d51c04c` fix: 修复双箱界面绑定失效、异常路径丢物品与准星开关废键三个 P1（v1.0.2 重建） |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.2.jar`（112,773 B ≈110KB）与 `neoforge/build/libs/onekey-neoforge-1.0.2.jar`（111,401 B ≈109KB） |
-| 单测状态 | ✅ 双端各 40 例（Fabric 40 + NeoForge 40 = **80 例全绿**） |
-| 版本状态 | ✅ `mod_version=1.0.2`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
-| 协议版本 | ⚠️ `ProtocolVersion.CURRENT=2`（`QuickStackRequest` 新增目标坐标字段）→ 多人游戏必须双端同版本 |
-| 当前任务聚焦 | 🎯 v1.0.2 提交与推送、GitHub Release 物料就绪 |
-| 发布状态 | ✅ v1.0.2 已发布（对抗审查后重建）：tag `v1.0.2` → `d51c04c`，Release 434335907 已替换为 4 个新产物 https://github.com/Roland114514/OneKey/releases/tag/v1.0.2 |
+| 最新提交 | 待提交：`feat: v1.0.3 整理前自动合并同类堆叠（StackCondenser + GUI 开关）` |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.3.jar`（116,508 B ≈114KB）与 `neoforge/build/libs/onekey-neoforge-1.0.3.jar`（115,111 B ≈112KB） |
+| 单测状态 | ✅ 双端各 47 例（Fabric 47 + NeoForge 47 = **94 例全绿**，含 `StackCondenserTest` 7 例） |
+| 版本状态 | ✅ `mod_version=1.0.3`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
+| 协议版本 | `ProtocolVersion.CURRENT=2`（payload 未再变，1.0.2 与 1.0.3 可混连） |
+| 当前任务聚焦 | 🎯 v1.0.3 提交/推送/Release，以及 Modrinth + CurseForge 发布（等待用户提供 Modrinth slug+PAT、CurseForge Project ID+API Token） |
+| 发布状态 | ✅ v1.0.2 已发布并重建（tag `v1.0.2` → `d51c04c`）；⏳ v1.0.3 待提交并发布 |
 | 运行实测 | ✅ R 键整理、K 键原生 GUI、Alt+左键槽位锁定在 Minecraft 26.3 干净无崩溃实测通过 |
 | 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入重构与红队严苛审查加固全面完成 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，具备高质量发版与交付水准 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，随后阅读第 14 次会话的 B 键存入重构与红队加固细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，随后阅读第 16 次会话的「整理前合并同类堆叠」细节。
+
+---
+
+## 2026-11-04（第 2 个工作日 · 第 16 次会话：一键整理自动合并同类堆叠 + v1.0.3）
+
+### 用户反馈（原文 m01976）
+
+> "当你将物体分开堆在背包里时，例如你有一组橡木楼梯，你将这一组楼梯分为任意数量的不同组合（比如一个格子放16个，另一个格子放10个等等）但是位于不同位置的格子的时候……你按R键整理的时候，他只会单纯的整理你的背包，而不会同步堆叠相同物品"
+
+### 根因
+
+`Sorter.permutation(...)` 只产出一个**槽位置换**（谁搬到哪个格子），从不改变任何一叠的数量。所以 16 个 + 10 个楼梯只会被整体搬运，永远凑不成 26 个一盘 —— 这是设计缺口，不是实现 bug。
+
+### 实现
+
+1. `common/src/main/java/me/easan/onekey/common/sort/StackCondenser.java`（新增，纯整数、无 MC 依赖）：
+   - `condense(int[] counts, int[] maxCounts, Set<Integer> locked, SameItem sameItem) -> int[]`；
+   - 按「同物品」分组 → 组内总数按格子顺序填满（`min(剩余, 该格容量)`）→ 余量顺延；锁定槽位既不进组也不被写入；
+   - 容量取 `max(堆叠上限, 原有数量)`，保证**总数守恒**且超上限槽位也不会丢物品。
+2. 双端 `ServerSortingHandler`：新增 `condenseStacks(List<Slot>, Set<Integer> lockedPositions)`，在 `Sorter.permutation` **之前**执行（`config.sort.mergeStacks` 开关控制），把数量变化写回后用 `slot.setChanged()` 标记；广播条件改为 `moved > 0 || condensedChanged`。
+3. 双端客户端 `applyOptimisticSort`：插入同样的合并步骤，保证「本地立即看到合并结果」，与服务端权威结果一致。
+4. `OneKeyConfig.Sort` 新增 `public boolean mergeStacks = true;`；设置界面第六行改为「合并同类堆叠」开关 + 「配置原版按键绑定」按钮（不再单独占一整行，避免界面超高）；4 个语言文件补 `onekey.settings.sort.mergeStacks`。
+5. 同物品判定用 `ItemStack.isSameItemSameComponents`（附魔/耐久/潜影盒内容/药水效果不同 → 不合并），避免「合并出错物品」的数据事故。
+
+### 验证
+
+- `clean build` 绿；双端测试 **94 例全绿**（新增 `StackCondenserTest` 7 例：散堆合并 / 上限溢出顺延 / 不同物品不合并 / 锁定槽隔离 / 总数守恒 / 空槽忽略 / 不可堆叠物品各自保留）。
+- 构建产物：`onekey-fabric-1.0.3.jar` 116,508 B（sha256 `abefc2a2…bde9`）、`onekey-neoforge-1.0.3.jar` 115,111 B（sha256 `e775ca9a…34c6c`）。
+
+### 遗留 / 待办
+
+- Modrinth + CurseForge 发布：已写好 `scripts/publish_modrinth.py`（支持 PAT、按 loader 建版本、changelog 自动抽取），等待用户提供 Modrinth slug/PAT 与 CurseForge Project ID/API Token。
+- 协议版本不变（2），1.0.2 ↔ 1.0.3 可混连。
 
 ---
 

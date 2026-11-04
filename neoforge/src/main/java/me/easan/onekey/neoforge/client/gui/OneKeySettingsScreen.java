@@ -82,12 +82,16 @@ public final class OneKeySettingsScreen extends Screen {
                 .create(rightX, 136, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.smartMatching"),
                         (button, value) -> config.quickStack.smartMatching = value));
 
-        // 第六行：原版按键绑定设置入口
+        // 第六行：合并同类堆叠 / 原版按键绑定设置入口
+        this.addRenderableWidget(CycleButton.onOffBuilder(config.sort.mergeStacks)
+                .create(leftX, 162, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.mergeStacks"),
+                        (button, value) -> config.sort.mergeStacks = value));
+
         this.addRenderableWidget(Button.builder(Component.translatable("onekey.settings.openKeybinds"), btn -> {
             if (this.minecraft != null) {
                 this.minecraft.setScreenAndShow(new KeyBindsScreen(this, this.minecraft.options));
             }
-        }).bounds(this.width / 2 - 100, 162, 200, btnHeight).build());
+        }).bounds(rightX, 162, btnWidth, btnHeight).build());
 
         // 底部：完成按钮
         this.addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, btn -> onClose())

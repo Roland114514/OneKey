@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import me.easan.onekey.common.config.OneKeyConfig;
 import me.easan.onekey.common.net.SortRequest;
 import me.easan.onekey.common.net.SortResult;
+import me.easan.onekey.common.sort.StackCondenser;
 import me.easan.onekey.common.sort.Sorter;
 import me.easan.onekey.common.sort.StackView;
 import me.easan.onekey.neoforge.OneKeyNeoForge;
@@ -86,6 +87,42 @@ public final class ServerSortingHandler {
         }
     }
 
+    /**
+     * 合并散落在多个槽位的同类堆叠（同物品 + 同组件），返回是否发生了数量变化。
+     * 必须在排序之前调用：否则「16 个楼梯 + 10 个楼梯」会被当成两叠独立物品分别排序，
+     * 玩家看到的仍然是被拆开的两堆。
+     */
+    private static boolean condenseStacks(List<Slot> slots, Set<Integer> lockedPositions) {
+        int size = slots.size();
+        int[] counts = new int[size];
+        int[] maxCounts = new int[size];
+        for (int i = 0; i < size; i++) {
+            ItemStack stack = slots.get(i).getItem();
+            counts[i] = stack.getCount();
+            maxCounts[i] = stack.isEmpty() ? 64 : stack.getMaxStackSize();
+        }
+
+        int[] condensed = StackCondenser.condense(counts, maxCounts, lockedPositions,
+                (first, second) -> ItemStack.isSameItemSameComponents(
+                        slots.get(first).getItem(), slots.get(second).getItem()));
+
+        boolean changed = false;
+        for (int i = 0; i < size; i++) {
+            if (condensed[i] == counts[i]) {
+                continue;
+            }
+            Slot slot = slots.get(i);
+            if (condensed[i] <= 0) {
+                slot.set(ItemStack.EMPTY);
+            } else {
+                slot.getItem().setCount(condensed[i]);
+            }
+            slot.setChanged();
+            changed = true;
+        }
+        return changed;
+    }
+
     private static void replyResult(IPayloadContext context, boolean success, int moved) {
         context.reply(new SortResultPayload(new SortResult(success, moved)));
     }
@@ -154,6 +191,12 @@ public final class ServerSortingHandler {
         }
         Set<Integer> lockedPositions = Sorter.resolveLockedPositions(slotLockKeys, lockedKeys);
 
+        // 合并同类堆叠：把散在不同槽位的「同物品 + 同组件」先并成满堆，再排序
+        boolean condensedChanged = false;
+        if (OneKeyNeoForge.config().sort.mergeStacks) {
+            condensedChanged = condenseStacks(slotsToSort, lockedPositions);
+        }
+
         // 转换为纯逻辑 StackView
         List<StackView> views = new ArrayList<>(slotsToSort.size());
         for (Slot slot : slotsToSort) {
@@ -171,7 +214,7 @@ public final class ServerSortingHandler {
             }
         }
 
-        if (moved > 0) {
+        if (moved > 0 || condensedChanged) {
             // 快照原始 ItemStack，防止直接写回覆盖造成物品丢失或复制
             List<ItemStack> originals = new ArrayList<>(slotsToSort.size());
             for (Slot slot : slotsToSort) {

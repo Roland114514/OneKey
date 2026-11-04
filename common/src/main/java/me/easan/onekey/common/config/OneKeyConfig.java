@@ -35,6 +35,9 @@ public final class OneKeyConfig {
         public boolean groupByCategory = true;
         public boolean sortByName = true;
         public boolean sortByCountDesc = true;
+
+        /** 排序前是否先把散落的同类堆叠并成满堆（如 16 个 + 10 个楼梯 → 26 个一盘）。 */
+        public boolean mergeStacks = true;
         /** 连续触发的冷却时间，避免连点导致与服务端不同步。 */
         public int cooldownMs = 250;
 

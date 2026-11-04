@@ -28,5 +28,6 @@
   "onekey.settings.compat.enabled": "Compat Mode (v1.1)",
   "onekey.settings.openKeybinds": "Configure Controls...",
   "onekey.settings.tip.locking": "Tip: Alt + Left Click on any slot to lock/unlock it from sorting",
-  "onekey.settings.tip.hotbar": "Rule: Bottom 9 hotbar slots are strictly excluded from inventory sorting"
+  "onekey.settings.tip.hotbar": "Rule: Bottom 9 hotbar slots are strictly excluded from inventory sorting",
+  "onekey.settings.sort.mergeStacks": "Merge Stacks"
 }
