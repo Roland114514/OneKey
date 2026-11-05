@@ -39,6 +39,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.CraftingContainer;
@@ -75,6 +76,8 @@ public final class OneKeyNeoForgeClient {
     private static ItemStack lastShiftClickItem = ItemStack.EMPTY;
     private static long lastScrollTime = 0L;
     private static long lastClientSortTime = 0L;
+    private static int lastDraggedSlotIndex = -1;
+    private static int lastRmbSlotIndex = -1;
     private static boolean conflictWarned = false;
 
     private OneKeyNeoForgeClient() {
@@ -187,14 +190,37 @@ public final class OneKeyNeoForgeClient {
         if (!(event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) || client.player == null) {
             return;
         }
-        if (containerScreen.getMenu() == null
-                || !ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(containerScreen.getMenu()))) {
-            return;
-        }
-        if (!containerScreen.getMenu().getCarried().isEmpty()) {
+        if (containerScreen instanceof CreativeModeInventoryScreen || containerScreen.getMenu() == null) {
             return;
         }
         if (!(containerScreen instanceof AbstractContainerScreenAccessor accessor)) {
+            return;
+        }
+
+        boolean scrollUp = vertical > 0;
+        if (OneKeyNeoForge.config().gestures.invertWheel) {
+            scrollUp = !scrollUp;
+        }
+
+        ItemStack carried = containerScreen.getMenu().getCarried();
+        // 光标持物时的滚轮微调：向下放入 1 件
+        if (!carried.isEmpty()) {
+            if (OneKeyNeoForge.config().gestures.wheelCarriedHandling && !scrollUp) {
+                Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
+                if (hovered == null) {
+                    hovered = accessor.onekey$getHoveredSlot();
+                }
+                if (hovered != null && canPlaceRmb(client.player, containerScreen, hovered, carried)) {
+                    accessor.onekey$slotClicked(hovered, hovered.index, 1, ContainerInput.PICKUP);
+                    client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.2F));
+                    event.setCanceled(true);
+                    return;
+                }
+            }
+            return;
+        }
+
+        if (!ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(containerScreen.getMenu()))) {
             return;
         }
 
@@ -234,7 +260,6 @@ public final class OneKeyNeoForgeClient {
         if (!serverSupports(ScrollItemTransferPayload.TYPE)) {
             return;
         }
-        boolean scrollUp = vertical > 0;
         ClientPacketDistributor.sendToServer(new ScrollItemTransferPayload(containerScreen.getMenu().containerId, hovered.index, scrollUp));
         client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, scrollUp ? 1.4F : 1.1F));
         event.setCanceled(true);
@@ -246,16 +271,20 @@ public final class OneKeyNeoForgeClient {
         if (!(event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) || client.player == null) {
             return;
         }
+        if (containerScreen instanceof CreativeModeInventoryScreen) {
+            return;
+        }
         if (!(containerScreen instanceof AbstractContainerScreenAccessor accessor)) {
             return;
         }
 
+        Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
+        if (hovered == null) {
+            hovered = accessor.onekey$getHoveredSlot();
+        }
+
         // Alt + 左键：锁定/解锁槽位
         if (event.getMouseButtonEvent().hasAltDown() && event.getButton() == 0) {
-            Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
-            if (hovered == null) {
-                hovered = accessor.onekey$getHoveredSlot();
-            }
             if (hovered != null) {
                 toggleSlotLock(client, containerScreen, hovered);
                 event.setCanceled(true);
@@ -263,12 +292,9 @@ public final class OneKeyNeoForgeClient {
             }
         }
 
-        // Shift + 左键：双击同类批量快速移动
+        // Shift + 左键：双击同类批量快速移动，同时记录拖拽起始槽位
         if (event.getMouseButtonEvent().hasShiftDown() && event.getButton() == 0) {
-            Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
-            if (hovered == null) {
-                hovered = accessor.onekey$getHoveredSlot();
-            }
+            lastDraggedSlotIndex = (hovered != null ? hovered.index : -1);
             if (hovered != null && !hovered.isFake() && hovered.isActive() && !(hovered instanceof ResultSlot)
                     && !(hovered.container instanceof CraftingContainer)) {
                 boolean isPlayer = hovered.container == client.player.getInventory();
@@ -315,6 +341,85 @@ public final class OneKeyNeoForgeClient {
             lastShiftClickSlot = -1;
             lastShiftClickItem = ItemStack.EMPTY;
         }
+
+        // 右键点击时若光标持物，初始化 RMB 重复投放会话
+        if (event.getButton() == 1 && containerScreen.getMenu() != null
+                && !containerScreen.getMenu().getCarried().isEmpty()
+                && !event.getMouseButtonEvent().hasShiftDown()) {
+            if (OneKeyNeoForge.config().gestures.rmbDragRepeat) {
+                lastRmbSlotIndex = (hovered != null ? hovered.index : -1);
+                accessor.onekey$getQuickCraftSlots().clear();
+                accessor.onekey$setIsQuickCrafting(false);
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onMouseDragged(ScreenEvent.MouseDragged.Pre event) {
+        Minecraft client = Minecraft.getInstance();
+        if (!(event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) || client.player == null) {
+            return;
+        }
+        if (containerScreen instanceof CreativeModeInventoryScreen || containerScreen.getMenu() == null) {
+            return;
+        }
+        if (!(containerScreen instanceof AbstractContainerScreenAccessor accessor)) {
+            return;
+        }
+
+        var mouseEvent = event.getMouseButtonEvent();
+        // 1. Shift + 左键拖拽滑动扫掠连续转移（LMB Drag Sweep）
+        if (OneKeyNeoForge.config().gestures.lmbDragSweep && event.getMouseButton() == 0 && mouseEvent.hasShiftDown()) {
+            Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
+            if (hovered != null) {
+                if (hovered.index != lastDraggedSlotIndex) {
+                    lastDraggedSlotIndex = hovered.index;
+                    if (isSafeForQuickMove(client.player, containerScreen, hovered)) {
+                        accessor.onekey$slotClicked(hovered, hovered.index, 0, ContainerInput.QUICK_MOVE);
+                    }
+                }
+            } else {
+                lastDraggedSlotIndex = -1;
+            }
+            return;
+        }
+
+        // 2. 右键划动重复投放（RMB Drag Repeated Placement）
+        ItemStack carried = containerScreen.getMenu().getCarried();
+        if (OneKeyNeoForge.config().gestures.rmbDragRepeat && event.getMouseButton() == 1 && !carried.isEmpty() && !mouseEvent.hasShiftDown()) {
+            accessor.onekey$getQuickCraftSlots().clear();
+            accessor.onekey$setIsQuickCrafting(false);
+
+            Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
+            if (hovered != null) {
+                if (hovered.index != lastRmbSlotIndex) {
+                    lastRmbSlotIndex = hovered.index;
+                    if (canPlaceRmb(client.player, containerScreen, hovered, carried)) {
+                        accessor.onekey$slotClicked(hovered, hovered.index, 1, ContainerInput.PICKUP);
+                    }
+                }
+            } else {
+                lastRmbSlotIndex = -1;
+            }
+            event.setCanceled(true); // 拦截原版拖拽避免进入 quickcraft 延迟结算
+        }
+    }
+
+    @SubscribeEvent
+    public static void onMouseButtonReleased(ScreenEvent.MouseButtonReleased.Pre event) {
+        if (event.getButton() == 0) {
+            lastDraggedSlotIndex = -1;
+        }
+        if (event.getButton() == 1) {
+            lastRmbSlotIndex = -1;
+            if (OneKeyNeoForge.config().gestures.rmbDragRepeat && !(event.getScreen() instanceof CreativeModeInventoryScreen)) {
+                if (event.getScreen() instanceof AbstractContainerScreenAccessor accessor) {
+                    accessor.onekey$getQuickCraftSlots().clear();
+                    accessor.onekey$setIsQuickCrafting(false);
+                    accessor.onekey$setSkipNextRelease(true);
+                }
+            }
+        }
     }
 
     @SubscribeEvent
@@ -350,12 +455,16 @@ public final class OneKeyNeoForgeClient {
     public static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
         ClientLockedSlots.clear();
         ItemConversion.clearCache();
+        lastDraggedSlotIndex = -1;
+        lastRmbSlotIndex = -1;
     }
 
     @SubscribeEvent
     public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         ClientLockedSlots.clear();
         ItemConversion.clearCache();
+        lastDraggedSlotIndex = -1;
+        lastRmbSlotIndex = -1;
     }
 
     private static boolean isSlotLockable(Minecraft client, AbstractContainerScreen<?> screen, Slot slot) {
@@ -443,6 +552,60 @@ public final class OneKeyNeoForgeClient {
                 }
             }
         }
+    }
+
+    private static boolean isSafeForQuickMove(Player player, AbstractContainerScreen<?> screen, Slot slot) {
+        if (player == null || screen == null || slot == null || !slot.isActive() || slot.isFake() || slot instanceof ResultSlot) {
+            return false;
+        }
+        if (slot.container instanceof CraftingContainer) {
+            return false;
+        }
+        if (!slot.hasItem() || slot.getItem().isEmpty()) {
+            return false;
+        }
+        if (slot.container == player.getInventory()) {
+            int slotIdx = slot.getContainerSlot();
+            if (!PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot, OneKeyNeoForge.config().gestures.includeHotbar)) {
+                return false;
+            }
+            return !ClientLockedSlots.isLocked("player_inventory", slotIdx);
+        } else {
+            String menuKey = ClientLockedSlots.getMenuTypeKey(screen.getMenu());
+            if (ClientLockedSlots.isLocked(menuKey, slot.index)) {
+                return false;
+            }
+            return ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(screen.getMenu()));
+        }
+    }
+
+    private static boolean canPlaceRmb(Player player, AbstractContainerScreen<?> screen, Slot slot, ItemStack carried) {
+        if (player == null || screen == null || slot == null || !slot.isActive() || slot.isFake() || slot instanceof ResultSlot) {
+            return false;
+        }
+        if (carried == null || carried.isEmpty() || !slot.mayPlace(carried)) {
+            return false;
+        }
+        if (slot.container == player.getInventory()) {
+            int slotIdx = slot.getContainerSlot();
+            if (!PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot, OneKeyNeoForge.config().gestures.includeHotbar)) {
+                return false;
+            }
+            if (ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
+                return false;
+            }
+        } else {
+            String menuKey = ClientLockedSlots.getMenuTypeKey(screen.getMenu());
+            if (ClientLockedSlots.isLocked(menuKey, slot.index)) {
+                return false;
+            }
+        }
+        ItemStack slotItem = slot.getItem();
+        if (slotItem.isEmpty()) {
+            return true;
+        }
+        int max = Math.min(slot.getMaxStackSize(carried), carried.getMaxStackSize());
+        return ItemStack.isSameItemSameComponents(slotItem, carried) && slotItem.getCount() < max;
     }
 
     private static void triggerScreenSort(Minecraft client, AbstractContainerScreen<?> screen) {

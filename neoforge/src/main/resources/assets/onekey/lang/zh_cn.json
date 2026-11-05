@@ -31,5 +31,9 @@
   "onekey.settings.tip.hotbar": "规则：快捷栏是否参与整理/手势由上排开关决定；加锁的槽位始终不参与",
   "onekey.settings.sort.mergeStacks": "合并同类堆叠",
   "onekey.settings.sort.includeHotbar": "整理包含快捷栏",
-  "onekey.settings.gestures.includeHotbar": "手势影响快捷栏"
+  "onekey.settings.gestures.includeHotbar": "手势影响快捷栏",
+  "onekey.settings.gestures.lmbDragSweep": "Shift左键扫掠转移",
+  "onekey.settings.gestures.rmbDragRepeat": "右键划动重复放置",
+  "onekey.settings.gestures.invertWheel": "滚轮方向反转",
+  "onekey.settings.gestures.wheelCarriedHandling": "持物滚轮微调"
 }

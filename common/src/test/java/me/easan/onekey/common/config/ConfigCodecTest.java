@@ -181,12 +181,24 @@ class ConfigCodecTest {
         OneKeyConfig defaults = ConfigCodec.fromJson("{}");
         assertTrue(defaults.sort.includeHotbar, "整理包含快捷栏默认应为开");
         assertTrue(defaults.gestures.includeHotbar, "手势影响快捷栏默认应为开");
+        assertTrue(defaults.gestures.lmbDragSweep, "Shift+左键扫掠默认应为开");
+        assertTrue(defaults.gestures.rmbDragRepeat, "右键重复放置默认应为开");
+        assertFalse(defaults.gestures.invertWheel, "滚轮方向反转默认应为关");
+        assertTrue(defaults.gestures.wheelCarriedHandling, "光标持物滚轮微调默认应为开");
 
         OneKeyConfig custom = new OneKeyConfig();
         custom.sort.includeHotbar = false;
         custom.gestures.includeHotbar = false;
+        custom.gestures.lmbDragSweep = false;
+        custom.gestures.rmbDragRepeat = false;
+        custom.gestures.invertWheel = true;
+        custom.gestures.wheelCarriedHandling = false;
         OneKeyConfig roundTripped = ConfigCodec.fromJson(ConfigCodec.toJson(custom));
         assertFalse(roundTripped.sort.includeHotbar, "关闭后应能往返保持");
         assertFalse(roundTripped.gestures.includeHotbar, "关闭后应能往返保持");
+        assertFalse(roundTripped.gestures.lmbDragSweep, "关闭后应能往返保持");
+        assertFalse(roundTripped.gestures.rmbDragRepeat, "关闭后应能往返保持");
+        assertTrue(roundTripped.gestures.invertWheel, "开启后应能往返保持");
+        assertFalse(roundTripped.gestures.wheelCarriedHandling, "关闭后应能往返保持");
     }
 }

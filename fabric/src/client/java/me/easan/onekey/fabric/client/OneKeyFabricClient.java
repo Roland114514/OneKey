@@ -49,6 +49,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.CraftingContainer;
@@ -78,6 +79,8 @@ public final class OneKeyFabricClient implements ClientModInitializer {
     private static ItemStack lastShiftClickItem = ItemStack.EMPTY;
     private static long lastScrollTime = 0L;
     private static long lastClientSortTime = 0L;
+    private static int lastDraggedSlotIndex = -1;
+    private static int lastRmbSlotIndex = -1;
     private static boolean conflictWarned = false;
 
     @Override
@@ -111,10 +114,14 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ClientLockedSlots.clear();
             ItemConversion.clearCache();
+            lastDraggedSlotIndex = -1;
+            lastRmbSlotIndex = -1;
         });
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             ClientLockedSlots.clear();
             ItemConversion.clearCache();
+            lastDraggedSlotIndex = -1;
+            lastRmbSlotIndex = -1;
         });
 
         // 2. 监听容器界面内的按键与鼠标事件
@@ -165,7 +172,7 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                     return true;
                 });
 
-                // 鼠标滚轮微调单件物品转移监听
+                // 鼠标滚轮微调单件物品转移与持物微调监听
                 ScreenMouseEvents.allowMouseScroll(screen).register((scr, mouseX, mouseY, horizontalAmount, verticalAmount) -> {
                     if (verticalAmount == 0) {
                         return true;
@@ -173,13 +180,36 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                     if (client.player == null || containerScreen.getMenu() == null) {
                         return true;
                     }
-                    if (!ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(containerScreen.getMenu()))) {
-                        return true;
-                    }
-                    if (!containerScreen.getMenu().getCarried().isEmpty()) {
+                    if (screen instanceof CreativeModeInventoryScreen) {
                         return true;
                     }
                     if (!(containerScreen instanceof AbstractContainerScreenAccessor accessor)) {
+                        return true;
+                    }
+
+                    boolean isUp = verticalAmount > 0;
+                    if (OneKeyFabric.config().gestures.invertWheel) {
+                        isUp = !isUp;
+                    }
+
+                    ItemStack carried = containerScreen.getMenu().getCarried();
+                    // 光标持物时的滚轮微调：向下放入 1 件
+                    if (!carried.isEmpty()) {
+                        if (OneKeyFabric.config().gestures.wheelCarriedHandling && !isUp) {
+                            Slot hovered = accessor.onekey$findSlotAt(mouseX, mouseY);
+                            if (hovered == null) {
+                                hovered = accessor.onekey$getHoveredSlot();
+                            }
+                            if (hovered != null && canPlaceRmb(client.player, containerScreen, hovered, carried)) {
+                                accessor.onekey$slotClicked(hovered, hovered.index, 1, ContainerInput.PICKUP);
+                                client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.2F));
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+
+                    if (!ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(containerScreen.getMenu()))) {
                         return true;
                     }
 
@@ -221,33 +251,33 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                     }
                     lastScrollTime = now;
 
-                    boolean scrollUp = verticalAmount > 0;
-                    ClientPlayNetworking.send(new ScrollItemTransferPayload(containerScreen.getMenu().containerId, hovered.index, scrollUp));
-                    client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, scrollUp ? 1.4F : 1.1F));
+                    ClientPlayNetworking.send(new ScrollItemTransferPayload(containerScreen.getMenu().containerId, hovered.index, isUp));
+                    client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, isUp ? 1.4F : 1.1F));
                     return false;
                 });
 
-                // 鼠标点击事件：Alt + 左键锁定；Shift + 双击同类批量转移
+                // 鼠标点击事件：Alt + 左键锁定；Shift + 双击同类批量转移；记录拖拽起始槽位
                 ScreenMouseEvents.allowMouseClick(screen).register((scr, event) -> {
-                    if (event.hasAltDown() && event.button() == 0) {
-                        if (containerScreen instanceof AbstractContainerScreenAccessor accessor) {
-                            Slot hovered = accessor.onekey$findSlotAt(event.x(), event.y());
-                            if (hovered == null) {
-                                hovered = accessor.onekey$getHoveredSlot();
-                            }
+                    if (screen instanceof CreativeModeInventoryScreen) {
+                        return true;
+                    }
+                    if (containerScreen instanceof AbstractContainerScreenAccessor accessor) {
+                        Slot hovered = accessor.onekey$findSlotAt(event.x(), event.y());
+                        if (hovered == null) {
+                            hovered = accessor.onekey$getHoveredSlot();
+                        }
+
+                        // Alt + 左键：锁定/解锁槽位
+                        if (event.hasAltDown() && event.button() == 0) {
                             if (hovered != null) {
                                 toggleSlotLock(client, containerScreen, hovered);
                                 return false; // 拦截事件，避免原版拾取/移动物品
                             }
                         }
-                    }
 
-                    if (event.hasShiftDown() && event.button() == 0) {
-                        if (containerScreen instanceof AbstractContainerScreenAccessor accessor) {
-                            Slot hovered = accessor.onekey$findSlotAt(event.x(), event.y());
-                            if (hovered == null) {
-                                hovered = accessor.onekey$getHoveredSlot();
-                            }
+                        // Shift + 左键：双击同类批量快速移动，同时记录拖拽起始槽位
+                        if (event.hasShiftDown() && event.button() == 0) {
+                            lastDraggedSlotIndex = (hovered != null ? hovered.index : -1);
                             if (hovered != null && !hovered.isFake() && hovered.isActive() && !(hovered instanceof ResultSlot)
                                     && !(hovered.container instanceof CraftingContainer)) {
                                 boolean isPlayer = hovered.container == client.player.getInventory();
@@ -289,13 +319,91 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                                     lastShiftClickItem = ItemStack.EMPTY;
                                 }
                             }
+                        } else {
+                            lastShiftClickTime = 0L;
+                            lastShiftClickSlot = -1;
+                            lastShiftClickItem = ItemStack.EMPTY;
                         }
-                    } else {
-                        lastShiftClickTime = 0L;
-                        lastShiftClickSlot = -1;
-                        lastShiftClickItem = ItemStack.EMPTY;
+
+                        // 右键点击时若光标持物，初始化 RMB 重复投放会话
+                        if (event.button() == 1 && !containerScreen.getMenu().getCarried().isEmpty() && !event.hasShiftDown()) {
+                            if (OneKeyFabric.config().gestures.rmbDragRepeat) {
+                                lastRmbSlotIndex = (hovered != null ? hovered.index : -1);
+                                accessor.onekey$getQuickCraftSlots().clear();
+                                accessor.onekey$setIsQuickCrafting(false);
+                            }
+                        }
                     }
 
+                    return true;
+                });
+
+                // 鼠标拖拽事件：Shift + 左键扫掠转移；右键画线重复放置
+                ScreenMouseEvents.allowMouseDrag(screen).register((scr, event, deltaX, deltaY) -> {
+                    if (screen instanceof CreativeModeInventoryScreen) {
+                        return true;
+                    }
+                    if (client.player == null || containerScreen.getMenu() == null) {
+                        return true;
+                    }
+                    if (!(containerScreen instanceof AbstractContainerScreenAccessor accessor)) {
+                        return true;
+                    }
+
+                    // 1. Shift + 左键拖拽滑动扫掠连续转移（LMB Drag Sweep）
+                    if (OneKeyFabric.config().gestures.lmbDragSweep && event.button() == 0 && event.hasShiftDown()) {
+                        Slot hovered = accessor.onekey$findSlotAt(event.x(), event.y());
+                        if (hovered != null) {
+                            if (hovered.index != lastDraggedSlotIndex) {
+                                lastDraggedSlotIndex = hovered.index;
+                                if (isSafeForQuickMove(client.player, containerScreen, hovered)) {
+                                    accessor.onekey$slotClicked(hovered, hovered.index, 0, ContainerInput.QUICK_MOVE);
+                                }
+                            }
+                        } else {
+                            lastDraggedSlotIndex = -1;
+                        }
+                        return true;
+                    }
+
+                    // 2. 右键划动重复投放（RMB Drag Repeated Placement）
+                    ItemStack carried = containerScreen.getMenu().getCarried();
+                    if (OneKeyFabric.config().gestures.rmbDragRepeat && event.button() == 1 && !carried.isEmpty() && !event.hasShiftDown()) {
+                        accessor.onekey$getQuickCraftSlots().clear();
+                        accessor.onekey$setIsQuickCrafting(false);
+
+                        Slot hovered = accessor.onekey$findSlotAt(event.x(), event.y());
+                        if (hovered != null) {
+                            if (hovered.index != lastRmbSlotIndex) {
+                                lastRmbSlotIndex = hovered.index;
+                                if (canPlaceRmb(client.player, containerScreen, hovered, carried)) {
+                                    accessor.onekey$slotClicked(hovered, hovered.index, 1, ContainerInput.PICKUP);
+                                }
+                            }
+                        } else {
+                            lastRmbSlotIndex = -1;
+                        }
+                        return false; // 拦截原版拖拽避免进入 quickcraft 延迟结算
+                    }
+
+                    return true;
+                });
+
+                // 鼠标释放事件：清理拖拽与重复放置状态机
+                ScreenMouseEvents.allowMouseRelease(screen).register((scr, event) -> {
+                    if (event.button() == 0) {
+                        lastDraggedSlotIndex = -1;
+                    }
+                    if (event.button() == 1) {
+                        lastRmbSlotIndex = -1;
+                        if (OneKeyFabric.config().gestures.rmbDragRepeat && !(screen instanceof CreativeModeInventoryScreen)) {
+                            if (containerScreen instanceof AbstractContainerScreenAccessor accessor) {
+                                accessor.onekey$getQuickCraftSlots().clear();
+                                accessor.onekey$setIsQuickCrafting(false);
+                                accessor.onekey$setSkipNextRelease(true);
+                            }
+                        }
+                    }
                     return true;
                 });
             }
@@ -433,6 +541,60 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                 }
             }
         }
+    }
+
+    private static boolean isSafeForQuickMove(Player player, AbstractContainerScreen<?> screen, Slot slot) {
+        if (player == null || screen == null || slot == null || !slot.isActive() || slot.isFake() || slot instanceof ResultSlot) {
+            return false;
+        }
+        if (slot.container instanceof CraftingContainer) {
+            return false;
+        }
+        if (!slot.hasItem() || slot.getItem().isEmpty()) {
+            return false;
+        }
+        if (slot.container == player.getInventory()) {
+            int slotIdx = slot.getContainerSlot();
+            if (!PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot, OneKeyFabric.config().gestures.includeHotbar)) {
+                return false;
+            }
+            return !ClientLockedSlots.isLocked("player_inventory", slotIdx);
+        } else {
+            String menuKey = ClientLockedSlots.getMenuTypeKey(screen.getMenu());
+            if (ClientLockedSlots.isLocked(menuKey, slot.index)) {
+                return false;
+            }
+            return ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(screen.getMenu()));
+        }
+    }
+
+    private static boolean canPlaceRmb(Player player, AbstractContainerScreen<?> screen, Slot slot, ItemStack carried) {
+        if (player == null || screen == null || slot == null || !slot.isActive() || slot.isFake() || slot instanceof ResultSlot) {
+            return false;
+        }
+        if (carried == null || carried.isEmpty() || !slot.mayPlace(carried)) {
+            return false;
+        }
+        if (slot.container == player.getInventory()) {
+            int slotIdx = slot.getContainerSlot();
+            if (!PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot, OneKeyFabric.config().gestures.includeHotbar)) {
+                return false;
+            }
+            if (ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
+                return false;
+            }
+        } else {
+            String menuKey = ClientLockedSlots.getMenuTypeKey(screen.getMenu());
+            if (ClientLockedSlots.isLocked(menuKey, slot.index)) {
+                return false;
+            }
+        }
+        ItemStack slotItem = slot.getItem();
+        if (slotItem.isEmpty()) {
+            return true;
+        }
+        int max = Math.min(slot.getMaxStackSize(carried), carried.getMaxStackSize());
+        return ItemStack.isSameItemSameComponents(slotItem, carried) && slotItem.getCount() < max;
     }
 
     private static void triggerScreenSort(Minecraft client, AbstractContainerScreen<?> screen) {

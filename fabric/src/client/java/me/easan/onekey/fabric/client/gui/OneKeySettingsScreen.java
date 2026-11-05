@@ -91,6 +91,24 @@ public final class OneKeySettingsScreen extends Screen {
                 .create(rightX, 156, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.smartMatching"),
                         (button, value) -> config.quickStack.smartMatching = value));
 
+        // 第七行：Shift+左键扫掠转移 / 右键重复放置
+        this.addRenderableWidget(CycleButton.onOffBuilder(config.gestures.lmbDragSweep)
+                .create(leftX, 180, btnWidth, btnHeight, Component.translatable("onekey.settings.gestures.lmbDragSweep"),
+                        (button, value) -> config.gestures.lmbDragSweep = value));
+
+        this.addRenderableWidget(CycleButton.onOffBuilder(config.gestures.rmbDragRepeat)
+                .create(rightX, 180, btnWidth, btnHeight, Component.translatable("onekey.settings.gestures.rmbDragRepeat"),
+                        (button, value) -> config.gestures.rmbDragRepeat = value));
+
+        // 第八行：滚轮方向反转 / 光标持物滚轮微调
+        this.addRenderableWidget(CycleButton.onOffBuilder(config.gestures.invertWheel)
+                .create(leftX, 204, btnWidth, btnHeight, Component.translatable("onekey.settings.gestures.invertWheel"),
+                        (button, value) -> config.gestures.invertWheel = value));
+
+        this.addRenderableWidget(CycleButton.onOffBuilder(config.gestures.wheelCarriedHandling)
+                .create(rightX, 204, btnWidth, btnHeight, Component.translatable("onekey.settings.gestures.wheelCarriedHandling"),
+                        (button, value) -> config.gestures.wheelCarriedHandling = value));
+
         // 底部一行：原版按键绑定入口 / 完成
         this.addRenderableWidget(Button.builder(Component.translatable("onekey.settings.openKeybinds"), btn -> {
             if (this.minecraft != null) {
@@ -109,8 +127,8 @@ public final class OneKeySettingsScreen extends Screen {
         extractor.centeredText(this.font, this.title, this.width / 2, 16, 0xFFFFFFFF);
 
         // 提示信息
-        extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.locking"), this.width / 2, 186, 0xFFFFB300);
-        extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.hotbar"), this.width / 2, 200, 0xFFAAAAAA);
+        extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.locking"), this.width / 2, this.height - 56, 0xFFFFB300);
+        extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.hotbar"), this.width / 2, this.height - 44, 0xFFAAAAAA);
     }
 
     @Override

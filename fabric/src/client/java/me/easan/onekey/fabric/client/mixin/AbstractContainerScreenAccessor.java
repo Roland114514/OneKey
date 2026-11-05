@@ -1,5 +1,6 @@
 package me.easan.onekey.fabric.client.mixin;
 
+import java.util.Set;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
@@ -8,7 +9,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
 /**
- * 访问 AbstractContainerScreen 中受保护的 hoveredSlot 与 slotClicked 方法。
+ * 访问 AbstractContainerScreen 中受保护的 hoveredSlot、slotClicked 与 quickcraft 状态。
  */
 @Mixin(AbstractContainerScreen.class)
 public interface AbstractContainerScreenAccessor {
@@ -21,4 +22,16 @@ public interface AbstractContainerScreenAccessor {
 
     @Invoker("getHoveredSlot")
     Slot onekey$findSlotAt(double mouseX, double mouseY);
+
+    @Accessor("isQuickCrafting")
+    void onekey$setIsQuickCrafting(boolean value);
+
+    @Accessor("isQuickCrafting")
+    boolean onekey$isQuickCrafting();
+
+    @Accessor("quickCraftSlots")
+    Set<Slot> onekey$getQuickCraftSlots();
+
+    @Accessor("skipNextRelease")
+    void onekey$setSkipNextRelease(boolean value);
 }

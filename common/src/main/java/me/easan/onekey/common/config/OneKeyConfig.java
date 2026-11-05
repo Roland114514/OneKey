@@ -76,13 +76,25 @@ public final class OneKeyConfig {
         public boolean smartMatching = true;
     }
 
-    /** 鼠标手势（滚轮微调 / Shift 双击批量转移）设置。 */
+    /** 鼠标手势设置。 */
     public static final class Gestures {
         /**
          * 手势是否作用于底部快捷栏 0..8。
-         * 默认包含；关闭后滚轮与 Shift 双击都不会移动快捷栏物品。锁定槽位始终不参与。
+         * 默认包含；关闭后所有手势都不会移动快捷栏物品。锁定槽位始终不参与。
          */
         public boolean includeHotbar = true;
+
+        /** Shift + 鼠标左键拖拽扫掠连续转移（滑过槽位自动 Shift-Click）。 */
+        public boolean lmbDragSweep = true;
+
+        /** 光标持物时，按住鼠标右键拖拽滑动画线重复投放 1 件物品。 */
+        public boolean rmbDragRepeat = true;
+
+        /** 鼠标滚轮方向反转（适配 macOS 触控板自然滚动与不同操作习惯）。 */
+        public boolean invertWheel = false;
+
+        /** 光标持物悬停槽位时，滚轮向下放入 1 件、向上收回 1 件。 */
+        public boolean wheelCarriedHandling = true;
     }
 
     /** 纯客户端点击模拟（用于公共服务器）的开关，默认关闭。 */

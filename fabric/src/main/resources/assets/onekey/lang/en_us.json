@@ -31,5 +31,9 @@
   "onekey.settings.tip.hotbar": "Rule: hotbar involvement is controlled by the toggles above; locked slots never move",
   "onekey.settings.sort.mergeStacks": "Merge Stacks",
   "onekey.settings.sort.includeHotbar": "Include Hotbar",
-  "onekey.settings.gestures.includeHotbar": "Hotbar in Gestures"
+  "onekey.settings.gestures.includeHotbar": "Hotbar in Gestures",
+  "onekey.settings.gestures.lmbDragSweep": "Shift+LMB Drag Sweep",
+  "onekey.settings.gestures.rmbDragRepeat": "RMB Drag Repeated Placement",
+  "onekey.settings.gestures.invertWheel": "Invert Wheel Direction",
+  "onekey.settings.gestures.wheelCarriedHandling": "Wheel Carried Placement"
 }
