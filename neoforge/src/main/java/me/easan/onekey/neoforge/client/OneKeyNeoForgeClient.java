@@ -44,6 +44,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.MerchantResultSlot;
 import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -78,7 +79,14 @@ public final class OneKeyNeoForgeClient {
     private static long lastClientSortTime = 0L;
     private static int lastDraggedSlotIndex = -1;
     private static int lastRmbSlotIndex = -1;
+    private static boolean rmbDragActive = false;
     private static boolean conflictWarned = false;
+
+    private static void resetGestureState() {
+        lastDraggedSlotIndex = -1;
+        lastRmbSlotIndex = -1;
+        rmbDragActive = false;
+    }
 
     private OneKeyNeoForgeClient() {
     }
@@ -135,6 +143,7 @@ public final class OneKeyNeoForgeClient {
 
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
+        resetGestureState();
         if (event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) {
             if (!serverSupports(RequestSlotLocksPayload.TYPE)) {
                 return; // 服务端未装 OneKey：不发锁定请求，避免无意义的未知通道包
@@ -342,15 +351,10 @@ public final class OneKeyNeoForgeClient {
             lastShiftClickItem = ItemStack.EMPTY;
         }
 
-        // 右键点击时若光标持物，初始化 RMB 重复投放会话
-        if (event.getButton() == 1 && containerScreen.getMenu() != null
-                && !containerScreen.getMenu().getCarried().isEmpty()
-                && !event.getMouseButtonEvent().hasShiftDown()) {
-            if (OneKeyNeoForge.config().gestures.rmbDragRepeat) {
-                lastRmbSlotIndex = (hovered != null ? hovered.index : -1);
-                accessor.onekey$getQuickCraftSlots().clear();
-                accessor.onekey$setIsQuickCrafting(false);
-            }
+        // 右键点击时记录起手槽位与初始状态，保持原版完整状态由拖拽状态机按需接管
+        if (event.getButton() == 1) {
+            lastRmbSlotIndex = (hovered != null ? hovered.index : -1);
+            rmbDragActive = false;
         }
     }
 
@@ -369,39 +373,66 @@ public final class OneKeyNeoForgeClient {
 
         var mouseEvent = event.getMouseButtonEvent();
         // 1. Shift + 左键拖拽滑动扫掠连续转移（LMB Drag Sweep）
-        if (OneKeyNeoForge.config().gestures.lmbDragSweep && event.getMouseButton() == 0 && mouseEvent.hasShiftDown()) {
+        // 仅在光标无持物时允许扫掠，避免与持物放置冲突
+        if (OneKeyNeoForge.config().gestures.lmbDragSweep && event.getMouseButton() == 0 && mouseEvent.hasShiftDown()
+                && containerScreen.getMenu().getCarried().isEmpty()) {
             Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
-            if (hovered != null) {
-                if (hovered.index != lastDraggedSlotIndex) {
-                    lastDraggedSlotIndex = hovered.index;
-                    if (isSafeForQuickMove(client.player, containerScreen, hovered)) {
-                        accessor.onekey$slotClicked(hovered, hovered.index, 0, ContainerInput.QUICK_MOVE);
-                    }
+            // 关键防抖：hovered == null 严禁重置 lastDraggedSlotIndex，防止槽位边缘 2px 间隙触发重复点击发包风暴
+            if (hovered != null && hovered.index != lastDraggedSlotIndex) {
+                lastDraggedSlotIndex = hovered.index;
+                if (isSafeForQuickMove(client.player, containerScreen, hovered)) {
+                    accessor.onekey$slotClicked(hovered, hovered.index, 0, ContainerInput.QUICK_MOVE);
                 }
-            } else {
-                lastDraggedSlotIndex = -1;
             }
             return;
         }
 
         // 2. 右键划动重复投放（RMB Drag Repeated Placement）
-        ItemStack carried = containerScreen.getMenu().getCarried();
-        if (OneKeyNeoForge.config().gestures.rmbDragRepeat && event.getMouseButton() == 1 && !carried.isEmpty() && !mouseEvent.hasShiftDown()) {
-            accessor.onekey$getQuickCraftSlots().clear();
-            accessor.onekey$setIsQuickCrafting(false);
+        if (OneKeyNeoForge.config().gestures.rmbDragRepeat && event.getMouseButton() == 1 && !mouseEvent.hasShiftDown()) {
+            ItemStack carried = containerScreen.getMenu().getCarried();
+            if (carried.isEmpty()) {
+                return;
+            }
 
             Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
-            if (hovered != null) {
-                if (hovered.index != lastRmbSlotIndex) {
+
+            // 惰性激活：鼠标未移出起手槽位或未进入新槽位前，放行给原版处理（保障单点容错）
+            if (!rmbDragActive) {
+                if (hovered != null && hovered.index != lastRmbSlotIndex) {
+                    rmbDragActive = true;
+                    // 起手槽补偿：若起手槽在有效索引内且可放置，补充投放起手槽的 1 件物品
+                    if (lastRmbSlotIndex >= 0 && lastRmbSlotIndex < containerScreen.getMenu().slots.size()) {
+                        Slot startSlot = containerScreen.getMenu().slots.get(lastRmbSlotIndex);
+                        if (canPlaceRmb(client.player, containerScreen, startSlot, carried)) {
+                            accessor.onekey$slotClicked(startSlot, startSlot.index, 1, ContainerInput.PICKUP);
+                            carried = containerScreen.getMenu().getCarried();
+                        }
+                    }
+                    // 清空并流产原版 QuickCraft
+                    accessor.onekey$getQuickCraftSlots().clear();
+                    accessor.onekey$setIsQuickCrafting(false);
+
+                    // 为新滑入的槽位投放 1 件物品
+                    lastRmbSlotIndex = hovered.index;
+                    if (!carried.isEmpty() && canPlaceRmb(client.player, containerScreen, hovered, carried)) {
+                        accessor.onekey$slotClicked(hovered, hovered.index, 1, ContainerInput.PICKUP);
+                    }
+                    event.setCanceled(true); // 拦截拖拽，阻止原版 quickCraft 累积
+                }
+            } else {
+                // 已处于划动投放状态：持续流产原版 QuickCraft
+                accessor.onekey$getQuickCraftSlots().clear();
+                accessor.onekey$setIsQuickCrafting(false);
+
+                // 槽位边缘防抖：hovered == null 严禁重置 lastRmbSlotIndex
+                if (hovered != null && hovered.index != lastRmbSlotIndex) {
                     lastRmbSlotIndex = hovered.index;
                     if (canPlaceRmb(client.player, containerScreen, hovered, carried)) {
                         accessor.onekey$slotClicked(hovered, hovered.index, 1, ContainerInput.PICKUP);
                     }
                 }
-            } else {
-                lastRmbSlotIndex = -1;
+                event.setCanceled(true); // 拦截拖拽
             }
-            event.setCanceled(true); // 拦截原版拖拽避免进入 quickcraft 延迟结算
         }
     }
 
@@ -412,12 +443,13 @@ public final class OneKeyNeoForgeClient {
         }
         if (event.getButton() == 1) {
             lastRmbSlotIndex = -1;
-            if (OneKeyNeoForge.config().gestures.rmbDragRepeat && !(event.getScreen() instanceof CreativeModeInventoryScreen)) {
+            if (rmbDragActive) {
+                rmbDragActive = false;
                 if (event.getScreen() instanceof AbstractContainerScreenAccessor accessor) {
                     accessor.onekey$getQuickCraftSlots().clear();
                     accessor.onekey$setIsQuickCrafting(false);
-                    accessor.onekey$setSkipNextRelease(true);
                 }
+                event.setCanceled(true); // 彻底拦截释放事件，阻止原版 quickCraft 结算或多余点击
             }
         }
     }
@@ -425,6 +457,10 @@ public final class OneKeyNeoForgeClient {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         Minecraft client = Minecraft.getInstance();
+        if (client.gui != null && client.gui.screen() == null) {
+            resetGestureState();
+        }
+
         if (!conflictWarned && client.player != null) {
             conflictWarned = true;
             List<String> conflicts = ModConflictDetector.detectConflicts();
@@ -455,16 +491,14 @@ public final class OneKeyNeoForgeClient {
     public static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
         ClientLockedSlots.clear();
         ItemConversion.clearCache();
-        lastDraggedSlotIndex = -1;
-        lastRmbSlotIndex = -1;
+        resetGestureState();
     }
 
     @SubscribeEvent
     public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         ClientLockedSlots.clear();
         ItemConversion.clearCache();
-        lastDraggedSlotIndex = -1;
-        lastRmbSlotIndex = -1;
+        resetGestureState();
     }
 
     private static boolean isSlotLockable(Minecraft client, AbstractContainerScreen<?> screen, Slot slot) {
@@ -555,14 +589,19 @@ public final class OneKeyNeoForgeClient {
     }
 
     private static boolean isSafeForQuickMove(Player player, AbstractContainerScreen<?> screen, Slot slot) {
-        if (player == null || screen == null || slot == null || !slot.isActive() || slot.isFake() || slot instanceof ResultSlot) {
+        if (player == null || screen == null || slot == null || !slot.isActive() || slot.isFake()) {
             return false;
         }
-        if (slot.container instanceof CraftingContainer) {
+        // 严格拦截产物槽与交易产物槽，防止引发高频发包合成/交易风暴
+        if (slot instanceof ResultSlot || slot instanceof MerchantResultSlot) {
             return false;
         }
         if (!slot.hasItem() || slot.getItem().isEmpty()) {
             return false;
+        }
+        // 放行合成输入格（工作台 3x3 或背包 2x2），支持扫掠快速收回材料回背包
+        if (slot.container instanceof CraftingContainer) {
+            return true;
         }
         if (slot.container == player.getInventory()) {
             int slotIdx = slot.getContainerSlot();
@@ -580,11 +619,22 @@ public final class OneKeyNeoForgeClient {
     }
 
     private static boolean canPlaceRmb(Player player, AbstractContainerScreen<?> screen, Slot slot, ItemStack carried) {
-        if (player == null || screen == null || slot == null || !slot.isActive() || slot.isFake() || slot instanceof ResultSlot) {
+        if (player == null || screen == null || slot == null || !slot.isActive() || slot.isFake()) {
+            return false;
+        }
+        if (slot instanceof ResultSlot || slot instanceof MerchantResultSlot) {
             return false;
         }
         if (carried == null || carried.isEmpty() || !slot.mayPlace(carried)) {
             return false;
+        }
+        if (slot.container instanceof CraftingContainer) {
+            ItemStack slotItem = slot.getItem();
+            if (slotItem.isEmpty()) {
+                return true;
+            }
+            int max = Math.min(slot.getMaxStackSize(carried), carried.getMaxStackSize());
+            return ItemStack.isSameItemSameComponents(slotItem, carried) && slotItem.getCount() < max;
         }
         if (slot.container == player.getInventory()) {
             int slotIdx = slot.getContainerSlot();

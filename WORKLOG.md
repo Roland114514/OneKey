@@ -12,19 +12,45 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `feat: v1.1.0 鼠标手势深度增强（Shift+LMB扫掠、RMB重复放置、滚轮反转与持物微调）` |
+| 最新提交 | `fix: 加固鼠标手势状态机、防发包风暴与起手/释放时序` |
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.0.jar` 与 `onekey-neoforge-1.1.0.jar` 构建成功 |
 | 单测状态 | ✅ 双端各 52 例（Fabric 52 + NeoForge 52 = **104 例全绿**，含 `ConfigCodecTest` 新字段往返验证） |
 | 版本状态 | ✅ `mod_version=1.1.0` |
 | 协议版本 | `ProtocolVersion.CURRENT=2` |
-| 当前任务聚焦 | 🎯 v1.1.0 鼠标手势系统与 K 键 8 行设置 GUI 全面收官 |
+| 当前任务聚焦 | 🎯 v1.1.0 鼠标手势状态机严苛自我审查与漏洞全面加固收官 |
 | 发布状态 | 🔄 v1.1.0 代码与产物就绪；Modrinth/CurseForge 由用户自行上传 |
-| 运行实测 | ✅ Shift+左键拖拽扫掠、右键划动重复放置、滚轮反转与持物微调双端对齐实测通过 |
-| 里程碑 | M0-M8 全量收官 ✅ / 创造模式与事务原子化加固 ✅ / **v1.1.0 鼠标手势系统收官 ✅** |
+| 运行实测 | ✅ 防发包风暴、RMB 惰性接管、起手补偿、单点保护、Shift+LMB 光标限制及合成格扫掠全量通过 |
+| 里程碑 | M0-M8 全量收官 ✅ / 创造模式与事务原子化加固 ✅ / v1.1.0 鼠标手势系统收官 ✅ / **手势状态机防御加固收官 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互丝滑度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 20 次会话的「v1.1.0 鼠标手势深度增强」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 21 次会话的「手势状态机严苛审查与加固」细节。
+
+---
+
+## 2026-11-05（第 3 个工作日 · 第 21 次会话：鼠标手势状态机严苛自我审查与漏洞全面加固）
+
+### 目标与背景
+在 v1.1.0 鼠标手势系统实现后，遵循用户关于“严苛自我审查，针对各类漏洞进行修复”的指示，启动 `gemini-4-argon` 对双端交互状态机、发包时序与原版 `AbstractContainerScreen` 内部机制进行深度对抗审查，全面加固潜在边缘缺陷与网络风暴风险。
+
+### 审查发现与加固实施
+1. **解决 1px/2px Gap 防抖与网络包风暴（Vulnerability 1）**：
+   - **痛点**：Minecraft 容器槽位步长 18px、图标 16px，存在 2px 的空隙。若鼠标滑入间隙将 `lastDraggedSlotIndex` / `lastRmbSlotIndex` 设为 `-1`，高回报率鼠标（1000Hz+）在槽位边缘微抖会导致同一槽位在几十毫秒内反复触发点击，向服务端狂发包，易触发反作弊封禁或背包不同步。
+   - **修复**：当 `hovered == null` 时，绝对不重置 `lastIndex`；仅当滑入合法且非当前的槽位（`hovered != null && hovered.index != lastIndex`）时才推进状态机并触发操作。
+2. **重构右键拖拽惰性接管状态机（Lazy Activation）与单点保护（Vulnerability 2 & 3）**：
+   - **痛点**：若在 `mouseClicked` 时粗暴清空 `quickCraftSlots` / `isQuickCrafting`，并拦截 `mouseReleased`，会彻底破坏原版右键单点放置（原版右键单点依赖 release 结算），导致正常单点失效或被吞；且拖拽离开第 1 个格子时起手格未能获得投放。
+   - **修复**：引入 `rmbDragActive` 标志。`mouseClicked` 仅记录起手槽位与重置标志，完全保持原版单点初始状态；`mouseDragged` 阶段若鼠标未跨出起手槽，完全放行原版；一旦移入新槽位才激活 `rmbDragActive = true`，安全补偿起手槽（含越界防护与 `canPlaceRmb` 校验），流产原版 QuickCraft，投放新槽位并拦截后续拖拽；`mouseReleased` 仅在 `rmbDragActive` 为真时拦截事件，普通单点则放行原版正常释放。
+3. **Shift + LMB 扫掠光标持物约束（Vulnerability 4）**：
+   - **修复**：严格限制仅当光标无持物（`containerScreen.getMenu().getCarried().isEmpty()`）时允许扫掠，避免光标持有物品时玩家本意是放置/分配，却意外触发将槽内物品快速移走。
+4. **合成格扫掠放行与产物槽严格拦截（Vulnerability 5）**：
+   - **修复**：在 `isSafeForQuickMove` 中放行 `slot.container instanceof CraftingContainer`，支持从工作台或背包 2x2 合成输入槽滑动扫掠收回材料；同时严格拦截 `ResultSlot` 与 `MerchantResultSlot`，避免扫掠掠过产物槽造成意外连环合成或交易。
+5. **全生命周期状态重置与跨界面防泄漏**：
+   - **修复**：在切屏（`ScreenEvents.AFTER_INIT` / `ScreenEvent.Init.Post`）、关闭界面（客户端 Tick 检测 screen 为 null）、玩家断线登出（`DISCONNECT` / `LoggingOut`）、登入连接（`JOIN` / `LoggingIn`）时，全面触发 `resetGestureState()`，彻底消除未释放鼠标关闭 GUI 引起的状态残留。
+
+### 验证与产物
+- **单元测试**：双端 104 项单测全绿（Fabric 52 + NeoForge 52）。
+- **编译检查**：双端 `build` 一次通过，生成标准发行 jar 包。
+- **对称性验证**：Fabric 与 NeoForge 逻辑保持 100% 对称一致。
 
 ---
 
