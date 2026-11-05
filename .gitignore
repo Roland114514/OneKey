@@ -33,3 +33,5 @@ secrets.properties
 *.key
 *.token
 scripts/config.json
+.bilibili*
+bili_*.png
