@@ -360,7 +360,15 @@ public final class ServerExcavatorHandler {
 
                 BlockState targetState = level.getBlockState(targetPos);
                 if (!canVeinMine(player, level, targetPos, targetState)) {
-                    break; // 工具耐久见底或环境发生变化，立即中止
+                    continue; // 该方块不满足条件（工具/环境变化），跳过它继续处理其它目标
+                }
+
+                // 保护校验：ServerPlayerGameMode#destroyBlock 不走 handleBlockBreakAction，
+                // 因此出生点保护与 mayInteract（领地插件常用）必须在这里显式复查，否则连锁可伸进保护范围。
+                if (level.getServer().isUnderSpawnProtection(level, targetPos, player)
+                        || !level.mayInteract(player, targetPos)
+                        || !player.isWithinBlockInteractionRange(targetPos, 1.0)) {
+                    continue;
                 }
 
                 // 委托原版 ServerPlayerGameMode 破坏，完整遵循领地防作弊、耐久扣除与统计

@@ -39,6 +39,30 @@
 - 断线/切服时重置按压状态（`ClientExcavatorHandler.onLogout()`），避免「登录瞬间正按着 `~`」导致首次按键不生效；
 - 掉落聚合的 `ServerLevelMixin` 配置从 `"required": true` 改为 `"required": false` + `defaultRequire: 0`：万一将来 `addFreshEntity` 签名变动，最坏结果是「不做掉落聚合」，而不是整个服务端注入失败崩服。
 
+#### 11. 默认「矿脉」模式实际从未生效（重要）
+- **根因**：Fabric 的 `PlayerBlockBreakEvents.AFTER` 与 NeoForge 的下一 tick 复核都发生在**原点方块已被破坏成空气之后**，而 `VeinFinder.findVein` 第一步就是 `if (!inspector.isDestructible(origin)) return List.of();`，`BlockInspector.isDestructible` 又会重新读 `level.getBlockState(origin)` 判空 —— 于是默认模式 `VEIN` 永远拿到空列表，连锁破坏实际只在两种隧道模式下生效。
+- **修法**：`findVein` 不再要求原点「当前可破坏」，而是把原点当作**已匹配的种子**（原点由原版负责掉落），从它的 26 邻域开始扩散；匹配仍使用事件里带过来的 `originState`，所以「深层铁矿 ↔ 普通铁矿」等等价规则不受影响。
+- **回归**：新增 `findVeinTreatsOriginAsSeedWhenOriginAlreadyBroken`，用「世界层没有原点方块、只保留被破坏前的方块类型」复刻 AFTER 回调场景。
+
+#### 12. 连锁方块绕过出生点保护与领地/交互保护（安全，重要）
+- **根因**：`ServerPlayerGameMode#destroyBlock` 内部只校验 `ItemStack.canDestroyBlock`、`GameMasterBlock`、`blockActionRestricted`；出生点保护（`isUnderSpawnProtection`）与 `mayInteract` 只在 `handleBlockBreakAction` 里校验。连锁循环直接调 `destroyBlock`，等于绕开这两道闸门 —— 原版出生点必被绕过，只覆写 `mayInteract` 的领地插件也会被绕过（可从领地外一格把连锁伸进保护范围）。
+- **修法**：每个目标方块破坏前显式复查三项，任一不通过就跳过该方块：
+  - `level.getServer().isUnderSpawnProtection(level, pos, player)`（原版出生点保护）；
+  - `level.mayInteract(player, pos)`（领地/交互保护插件）；
+  - `player.isWithinBlockInteractionRange(pos, 1.0)`（每方块触及距离，防止隔墙远程连锁）。
+
+#### 13. 单个方块不可挖时整条连锁被中止
+- **根因**：循环里 `if (!canVeinMine(...)) break;`，一旦中间某个方块因工具等级/环境变化不满足条件，后面所有合法方块都被放弃。
+- **修法**：改为 `continue`，只跳过当前方块。
+
+#### 14. 客户端预览与服务端判定不一致（火把/花/铁轨）
+- **根因**：客户端对「不需要正确工具」的方块一律要求挖掘速度 > 1.0，服务端只对 `destroySpeed > 0` 的方块要求，于是 `destroySpeed == 0` 的火把、花、铁轨在 HUD 上显示「工具不匹配」但服务端实际会连锁。
+- **修法**：客户端补 `else if (state.getDestroySpeed(...) > 0.0F)` 条件，与服务端 `canVeinMine` 逐字对齐。
+
+#### 15. `excavator.maxBlocks` 允许配置到 256 但实际上限是 128
+- **根因**：`normalized()` 夹在 1..256，GUI 只有 16/32/64/128 四档，`ExcavatorOptions.MAX_BLOCKS_LIMIT = 128`，手改配置文件写 129..256 只会生效 128 且 HUD 显示与实际不符。
+- **修法**：`normalized()` 上限改用 `ExcavatorOptions.MAX_BLOCKS_LIMIT`（128），新增 `excavatorMaxBlocksIsCappedToHardLimit` 回归用例。
+
 ### 🧹 清理与改进 (Changed)
 
 #### 5. 真正接上「每方块饥饿消耗」
@@ -56,7 +80,8 @@
 ### 🧪 测试
 
 - 新增 `ExcavatorOptionsTest`（6 例）：掩码往返、旧掩码回落、玩家只能收紧、上限夹取、边界与默认值；
-- 合计 **136 例单测全绿**（Fabric 68 + NeoForge 68），`clean build` 无错误。
+- 新增 `findVeinTreatsOriginAsSeedWhenOriginAlreadyBroken`（默认矿脉模式在 AFTER 回调下的回归）与 `excavatorMaxBlocksIsCappedToHardLimit`（配置上限夹取）；
+- 合计 **140 例单测全绿**（Fabric 70 + NeoForge 70），`clean build` 无错误。
 
 ---
 

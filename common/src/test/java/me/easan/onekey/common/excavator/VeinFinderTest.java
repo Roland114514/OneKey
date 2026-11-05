@@ -17,14 +17,20 @@ class VeinFinderTest {
     private static class SimpleBlockInspector implements BlockInspector {
         final Map<BlockPos3i, String> world = new HashMap<>();
         final Set<BlockPos3i> indestructible = new HashSet<>();
+        /** 原点已被原版破坏时，仍保留其被破坏前的方块类型（真实服务端传的是 event 里的 originState）。 */
+        String brokenOriginBlock;
 
         void set(int x, int y, int z, String blockId) {
             world.put(new BlockPos3i(x, y, z), blockId);
         }
 
+        void setBrokenOrigin(String blockId) {
+            brokenOriginBlock = blockId;
+        }
+
         @Override
         public boolean matches(BlockPos3i origin, BlockPos3i current, boolean includeLeaves) {
-            String originBlock = world.get(origin);
+            String originBlock = brokenOriginBlock != null ? brokenOriginBlock : world.get(origin);
             String currentBlock = world.get(current);
             if (originBlock == null || currentBlock == null) {
                 return false;
@@ -79,6 +85,29 @@ class VeinFinderTest {
         assertTrue(result.contains(new BlockPos3i(1, 60, 0)));
         assertTrue(result.contains(new BlockPos3i(1, 61, 1)));
         assertTrue(result.contains(new BlockPos3i(2, 61, 1)));
+        assertFalse(result.contains(new BlockPos3i(0, 59, 0)));
+    }
+
+    @Test
+    void findVeinTreatsOriginAsSeedWhenOriginAlreadyBroken() {
+        SimpleBlockInspector inspector = new SimpleBlockInspector();
+        BlockPos3i origin = new BlockPos3i(0, 60, 0);
+
+        // 模拟 Fabric PlayerBlockBreakEvents.AFTER 的真实场景：原点方块已经被原版破坏成空气，
+        // 世界层只剩邻居；若 findVein 仍要求 origin 可破坏，默认 VEIN 模式会永远返回空列表。
+        inspector.setBrokenOrigin("minecraft:iron_ore");
+        inspector.set(1, 60, 0, "minecraft:iron_ore");
+        inspector.set(2, 60, 0, "minecraft:iron_ore");
+        inspector.set(0, 61, 0, "minecraft:iron_ore");
+        inspector.set(0, 59, 0, "minecraft:stone");
+
+        List<BlockPos3i> result = VeinFinder.findVein(origin, inspector, 64, false);
+
+        assertEquals(4, result.size());
+        assertEquals(origin, result.get(0));
+        assertTrue(result.contains(new BlockPos3i(1, 60, 0)));
+        assertTrue(result.contains(new BlockPos3i(2, 60, 0)));
+        assertTrue(result.contains(new BlockPos3i(0, 61, 0)));
         assertFalse(result.contains(new BlockPos3i(0, 59, 0)));
     }
 

@@ -64,19 +64,24 @@ public final class VeinFinder {
             BlockInspector inspector,
             int maxBlocks,
             boolean includeLeaves) {
-        if (!inspector.isDestructible(origin)) {
-            return List.of();
-        }
-
         List<BlockPos3i> matches = new ArrayList<>(Math.min(maxBlocks, 128));
         Queue<BlockPos3i> queue = new ArrayDeque<>();
         Set<BlockPos3i> visited = new HashSet<>();
 
-        queue.add(origin);
-        visited.add(origin);
-
         // 最大搜索距离半径约束（32格），防止连通超大矿脉或巨型世界生成引发内存与运算爆炸
         double maxDistSqr = 32.0 * 32.0;
+
+        // 关键：原点方块在这里可能已经被原版破坏成空气（Fabric 的 AFTER 回调 / NeoForge 的下一 tick 复核），
+        // 因此不能再按「当前是否可破坏」来筛原点，否则默认 VEIN 模式会永远返回空列表。
+        // 原点本身由原版负责掉落，这里只把它当作「已匹配」的种子，从它的邻居开始扩散。
+        matches.add(origin);
+        visited.add(origin);
+        for (BlockPos3i offset : NEIGHBOR_OFFSETS) {
+            BlockPos3i neighbor = origin.offset(offset.x(), offset.y(), offset.z());
+            if (origin.distSqr(neighbor) <= maxDistSqr && visited.add(neighbor)) {
+                queue.add(neighbor);
+            }
+        }
 
         while (!queue.isEmpty() && matches.size() < maxBlocks) {
             BlockPos3i current = queue.poll();

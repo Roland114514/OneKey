@@ -209,6 +209,19 @@ class ConfigCodecTest {
     }
 
     @Test
+    void excavatorMaxBlocksIsCappedToHardLimit() {
+        OneKeyConfig config = new OneKeyConfig();
+        config.excavator.maxBlocks = 999;
+        assertEquals(128, config.normalized().excavator.maxBlocks);
+
+        config.excavator.maxBlocks = 0;
+        assertEquals(1, config.normalized().excavator.maxBlocks);
+
+        config.excavator.maxBlocks = 96;
+        assertEquals(96, config.normalized().excavator.maxBlocks);
+    }
+
+    @Test
     void excavatorDefaultsAndRoundTrip() {
         OneKeyConfig defaults = ConfigCodec.fromJson("{}");
         assertNotNull(defaults.excavator);

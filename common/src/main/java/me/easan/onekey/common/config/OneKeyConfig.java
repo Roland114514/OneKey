@@ -153,7 +153,7 @@ public final class OneKeyConfig {
         // 数值上下限约束，防止异常配置引发计算暴涨或失去冷却保护
         sort.cooldownMs = Math.clamp(sort.cooldownMs, 50, 5000);
         quickStack.radius = Math.clamp(quickStack.radius, 1, 32);
-        excavator.maxBlocks = Math.clamp(excavator.maxBlocks, 1, 256);
+        excavator.maxBlocks = Math.clamp(excavator.maxBlocks, 1, me.easan.onekey.common.excavator.ExcavatorOptions.MAX_BLOCKS_LIMIT);
         return this;
     }
 }

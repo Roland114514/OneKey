@@ -153,7 +153,9 @@ public final class ClientExcavatorHandler {
                 if (!player.hasCorrectToolForDrops(state) || tool.getDestroySpeed(state) <= 1.0F) {
                     return false;
                 }
-            } else {
+            } else if (state.getDestroySpeed(player.level(), BlockPos.ZERO) > 0.0F) {
+                // 与服务端 canVeinMine 完全对齐：只有「有硬度但不需要正确工具」的方块才要求速度 > 1.0；
+                // 火把/花/铁轨这类 destroySpeed == 0 的方块服务端直接放行，预览也必须放行。
                 boolean isOrganic = state.is(BlockTags.LEAVES) || state.is(BlockTags.CROPS);
                 if (!isOrganic && tool.getDestroySpeed(state) <= 1.0F) {
                     return false;

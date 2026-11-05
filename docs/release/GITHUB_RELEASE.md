@@ -20,6 +20,12 @@
 
 ## 🐛 v1.1.2 修复摘要
 
+### 发布前补充修复（对抗审查发现）
+
+- **默认「矿脉」模式此前完全无效**：Fabric/NeoForge 都在原点方块已被破坏成空气之后才回调，而 `VeinFinder.findVein` 第一步要求原点「当前可破坏」，于是默认模式永远返回空列表。现在原点按「已匹配种子」处理，从 26 邻域扩散（新增 `origin` 已为空气的回归用例）。
+- **连锁方块绕过出生点保护与领地/交互保护**：`ServerPlayerGameMode#destroyBlock` 不校验 `isUnderSpawnProtection` 与 `mayInteract`。现在每个目标方块破坏前显式复查出生点保护、`level.mayInteract(...)` 与每方块触及距离。
+- 单个方块不可挖时改为 `continue`（不再中止整条连锁）；客户端 HUD 预览与服务端判定对齐（火把/花/铁轨不再误报「工具不匹配」）；`excavator.maxBlocks` 配置上限统一夹到 128。
+
 1. **多人服里关掉「连锁破坏」仍然触发**：状态包新增玩家个人偏好（`optionsMask` / `maxBlocks`），服务端与服主配置逐项取交集 —— 布尔开关只能收紧不能放开，破坏上限取较小值并夹在 1..128。
 2. **连锁破坏掉落聚合在异常路径可能永久丢物品**：掉落回吐与经验结算移入 `finally`，且**先关闭聚合开关再回吐**（否则回吐的实体又被 mixin 吞回去），合并失败时退化为把原始掉落逐叠散落。
 3. **滚轮手势的快捷栏保护可被改过的客户端绕过**：服务端改为 `payload.includeHotbar() && config().gestures.includeHotbar`。
@@ -74,10 +80,10 @@
 ## 🔐 SHA-256
 
 ```
-ed128012d6d0729a4034ef50e6fe9495928644e2e4a7cdb74c4f0936ef5d5e5a  onekey-fabric-1.1.2.jar
-8a3e57947ead38d465bcf21f4caeb8cd14909483a5fdd359b8a1c579f47b1cf1  onekey-fabric-1.1.2-sources.jar
-f936b4ae8bf7c9d77ec512dddb8cdcb29403c4cfe12f8438eedf630613cbde4f  onekey-neoforge-1.1.2.jar
-23c0c4cd6276454eae66dd4c0675332a441eebc83b06f0ba18bd87ddd6c61a6b  onekey-neoforge-1.1.2-sources.jar
+20f132d18bc6f9b45c6ef4e4b550a446c4d6e7a3191177dfa69e7c87083c4130  onekey-fabric-1.1.2.jar
+a9d3b298f4c0512071dea01e9af72e89cfab85177460c59dc2aae31a4985f9bf  onekey-fabric-1.1.2-sources.jar
+a77252382ad1f87f57fb34977e40e898cc098aa0ef2b33ceb81422238aaf5a49  onekey-neoforge-1.1.2.jar
+bfc53a4e9d3a7c8398a03454bafcc6df57fe8756c50c317863382977ad689be1  onekey-neoforge-1.1.2-sources.jar
 ```
 
 **许可证**：MIT · **源码**：[github.com/Roland114514/OneKey](https://github.com/Roland114514/OneKey)

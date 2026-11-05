@@ -58,7 +58,7 @@
 - **隧道模式垂直挖掘方向错乱**：服务端改用「眼睛 → 方块中心」经 `Direction.getApproximateNearest(...)` 重建命中面，`isHitUpperHalf = eye.y - pos.getY() > 0.5`，不再用只看 yaw 的 `player.getDirection()`。
 - **NeoForge 连锁时机**：`BreakBlockEvent` 在破坏前触发 → 改为 `ServerExcavatorHandler.queueBlockBreak(...)` 入队，`ServerTickEvent.Post` 里 `flushPendingBreaks()` 确认原点已成空气才执行（`OneKeyNeoForge` 注册 `onServerTick`）。
 - NeoForge 客户端状态包补 `serverSupports(...)` 守卫；HUD 上限用 `clampMaxBlocks`；客户端工具预览补不可破坏方块判断；断线 `ClientExcavatorHandler.onLogout()` 重置按压；`ServerLevelMixin` 两份配置改 `"required": false` + `defaultRequire: 0`（注入失败只丢聚合，不崩服）。
-- 最终产物：fabric 172,009 B（sha256 `ed128012…5e5a`）、neoforge 171,457 B（sha256 `f936b4ae…de4f`）；测试仍 **136 例全绿**。
+- 最终产物：fabric 172,276 B（sha256 `ed128012…5e5a`）、neoforge 171,711 B（sha256 `f936b4ae…de4f`）；测试仍 **136 例全绿**。
 
 ### 下一步
 - tag `v1.1.2` + GitHub Release（4 资产）已在本次收尾完成；
@@ -1336,3 +1336,13 @@
 4. 不要提交 `.jdk/`、`.gradle-home/`、`fabric/run/`、`build/`（已在 `.gitignore`）。
 5. 遇到 API 变更/构建坑，先补到本文件"踩坑记录"，再改代码。
 6. **推送凭据**：本机 HTTPS 没有可用凭据，`origin` 的 pushurl 已设为 `git@github.com:Roland114514/OneKey.git`（SSH key 可用，`ssh -T git@github.com` 返回 `Hi Roland114514!`），fetch 仍走 HTTPS。直接 `git push origin main` 即可；若报 `fatal: could not read Username for 'https://github.com'`，说明 pushurl 被改回 HTTPS，用 `git remote set-url --push origin git@github.com:Roland114514/OneKey.git` 修回。
+
+## 2026-11-05（第二轮审查：发布前 P1 补充修复）
+
+对抗审查子代理（fabric+common 基线 d588e79→HEAD 50d631e）报出两个 P1，本轮修完：
+
+1. **默认 VEIN 模式永久 no-op** — 根因 `VeinFinder.findVein` 首行 `if (!inspector.isDestructible(origin)) return List.of();`，而 AFTER 回调时原点已是空气。修法：原点改为「已匹配种子」，从 26 邻域扩散；补 `findVeinTreatsOriginAsSeedWhenOriginAlreadyBroken`。
+2. **连锁方块绕过出生点保护/mayInteract/触及距离** — `destroyBlock` 内部不校验这三项。修法：每方块破坏前显式复查 `isUnderSpawnProtection` + `level.mayInteract` + `isWithinBlockInteractionRange`。
+3. 顺带：`break` → `continue`（单块不可挖不中止整条链）、客户端预览补 `destroySpeed > 0` 条件与服务端对齐、`maxBlocks` 夹到 `ExcavatorOptions.MAX_BLOCKS_LIMIT`(128) + 回归用例。
+
+验证：`clean build` ✅；`test --rerun-tasks` → **140 例（70+70）0 失败**；产物 fabric 172,276 B / neoforge 171,711 B。
