@@ -12,19 +12,41 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `fix: v1.1.3 4-argon深度审查加固与连锁挖掘距离/状态容错修复` |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.3.jar` 与 `onekey-neoforge-1.1.3.jar` 构建成功 |
-| 单测状态 | ✅ 双端各 71 例（Fabric 71 + NeoForge 71 = **142 例全绿**） |
-| 版本状态 | ✅ `mod_version=1.1.3` |
+| 最新提交 | `release: v1.1.4 连锁高亮线框增强与空手除草采木发布` |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.4.jar` 与 `onekey-neoforge-1.1.4.jar` 构建成功 |
+| 单测状态 | ✅ 双端各 73 例（Fabric 73 + NeoForge 73 = **146 例全绿**） |
+| 版本状态 | ✅ `mod_version=1.1.4` |
 | 协议版本 | **`ProtocolVersion.CURRENT=3`**（1.1.2 起双端同版本） |
-| 当前任务聚焦 | 🎯 v1.1.3 发布：4-argon 深度审查加固与距离/状态容错修复 |
-| 发布状态 | 🚀 v1.1.3 已发布到 GitHub Release |
-| 运行实测 | ✅ 巨型树木完整砍伐（不被 5.5 格距离截断）、长隧道完整贯通、容器方块免遭意外摧毁、工具耐久绝对防爆、掉落物聚合零泄露 |
-| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / **v1.1.3 深度审查加固版收官 ✅** |
+| 当前任务聚焦 | 🎯 v1.1.4 发布：连锁高亮边框实感反馈与空手/0级无需工具方块连锁 |
+| 发布状态 | 🚀 v1.1.4 已发布到 GitHub Release |
+| 运行实测 | ✅ 连锁线框青色半透明 outline 实时提交、高刷感知缓存防抖、空手砍树采木/除草/落叶正常连通、有硬度工具需求方块严格防作弊 |
+| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / **v1.1.4 视觉实感与空手采伐收官 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互自由度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 28 次会话的「v1.1.3 深度审查加固」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 29 次会话的「v1.1.4 视觉实感与空手采伐」细节。
+
+---
+
+## 2026-11-05（第 3 个工作日 · 第 29 次会话：v1.1.4 连锁方块高亮边框与空手除草采木发布）
+
+> 用户指令："接下里进行严苛的自我审查，确保不会出现重大bug，完成之后将其版本定为v1.1.4并推送到GitHub。"
+
+### 一、 核心功能与审查加固实现
+
+1. **连锁方块边框高亮渲染 (`highlightOutlines`)**：
+   - 接入 Fabric `LevelRenderEvents.BEFORE_BLOCK_OUTLINE` 与 NeoForge `ExtractBlockOutlineRenderStateEvent`。
+   - 使用 `SubmitNodeCollector.submitShapeOutline` 提交精准的高明度青色半透明线框（`0xEE00F5FF`），线宽 `2.5F`，并适配高对比度深度通道。
+   - 在矩阵变换中增加无条件 `try-finally` 块包裹 `poseStack.popPose()`，彻底杜绝渲染异常引发的 `Pose stack not empty` 状态泄漏。
+   - 采用 200ms 防抖感知缓存，避免高刷新率显示器下每帧重复执行 BFS。
+
+2. **空手与 0 级无需工具方块连锁放行**：
+   - 对 `!state.requiresCorrectToolForDrops()` 的方块放行空手与任意工具。
+   - 继承 `VegetationBlock` 的相连草花灌木互通连带，打造极佳的地皮除草体验。
+   - 树叶相连互通连带。
+   - 需要工具方块严格维持破坏等级与工具匹配（防止作弊）。
+
+3. **双端 146 项单元测试全绿**，双端正式产物构建成功并计算 SHA-256。
 
 ---
 

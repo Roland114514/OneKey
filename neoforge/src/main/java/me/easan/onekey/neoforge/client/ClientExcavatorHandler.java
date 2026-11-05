@@ -389,9 +389,12 @@ public final class ClientExcavatorHandler {
             }
 
             poseStack.pushPose();
-            poseStack.translate(bp.x() - camX, bp.y() - camY, bp.z() - camZ);
-            submitNodeCollector.submitShapeOutline(poseStack, shape, renderType, color, lineWidth, false);
-            poseStack.popPose();
+            try {
+                poseStack.translate(bp.x() - camX, bp.y() - camY, bp.z() - camZ);
+                submitNodeCollector.submitShapeOutline(poseStack, shape, renderType, color, lineWidth, false);
+            } finally {
+                poseStack.popPose();
+            }
         }
     }
 

@@ -231,6 +231,7 @@ class ConfigCodecTest {
         assertTrue(defaults.excavator.consolidateDrops);
         assertFalse(defaults.excavator.includeLeaves);
         assertTrue(defaults.excavator.requireValidTool);
+        assertTrue(defaults.excavator.highlightOutlines);
         assertEquals(0.005F, defaults.excavator.exhaustionPerBlock, 0.0001F);
         assertEquals("key.keyboard.grave.accent", defaults.hotkeys.excavate);
 
@@ -241,6 +242,7 @@ class ConfigCodecTest {
         custom.excavator.consolidateDrops = false;
         custom.excavator.includeLeaves = true;
         custom.excavator.requireValidTool = false;
+        custom.excavator.highlightOutlines = false;
         custom.excavator.exhaustionPerBlock = 0.01F;
         custom.hotkeys.excavate = "key.keyboard.grave.accent";
 
@@ -251,6 +253,7 @@ class ConfigCodecTest {
         assertFalse(loaded.excavator.consolidateDrops);
         assertTrue(loaded.excavator.includeLeaves);
         assertFalse(loaded.excavator.requireValidTool);
+        assertFalse(loaded.excavator.highlightOutlines);
         assertEquals(0.01F, loaded.excavator.exhaustionPerBlock, 0.0001F);
     }
 }
