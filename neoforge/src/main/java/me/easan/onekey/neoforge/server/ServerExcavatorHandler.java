@@ -219,6 +219,11 @@ public final class ServerExcavatorHandler {
             return;
         }
 
+        // 玩家触及原点的距离安全校验（防远距离假包）
+        if (!player.isWithinBlockInteractionRange(originPos, 2.0)) {
+            return;
+        }
+
         // 初始方块若不符合严格工具要求，直接不触发连锁破坏
         if (!canVeinMine(player, level, originPos, originState)) {
             return;
@@ -229,24 +234,35 @@ public final class ServerExcavatorHandler {
             performVeinMine(level, player, originPos, originState, playerState.shape);
         } finally {
             IS_MINING.remove();
+            COLLECTING_DROPS.remove();
+            CAPTURED_DROPS.remove();
+            CAPTURED_XP.remove();
         }
     }
 
-    /** 待确认的破坏（NeoForge 的 BreakBlockEvent 在破坏前触发，需下一 tick 复核原点是否真的变成空气）。 */
-    private record PendingBreak(ServerLevel level, ServerPlayer player, BlockPos pos, BlockState state) {
+    /** 待确认的破坏（NeoForge 的 BreakBlockEvent 在破坏前触发，需下一 tick 复核原点是否真的被破坏）。 */
+    private record PendingBreak(
+            ServerLevel level,
+            ServerPlayer player,
+            BlockPos pos,
+            BlockState state,
+            ItemStack initialTool) {
     }
 
     private static final List<PendingBreak> PENDING_BREAKS = new ArrayList<>();
 
     /** 记录一次「声称已破坏」的方块，等下一 tick 复核。 */
     public static void queueBlockBreak(ServerLevel level, ServerPlayer player, BlockPos pos, BlockState state) {
+        if (player == null || level == null || pos == null || state == null) {
+            return;
+        }
         if (PENDING_BREAKS.size() > 64) {
             PENDING_BREAKS.clear(); // 防御：异常情况下不让队列无限增长
         }
-        PENDING_BREAKS.add(new PendingBreak(level, player, pos.immutable(), state));
+        PENDING_BREAKS.add(new PendingBreak(level, player, pos.immutable(), state, player.getMainHandItem().copy()));
     }
 
-    /** 服务端 tick 末统一处理：原点确实是空气才连锁，被保护/领地拦下的直接丢弃。 */
+    /** 服务端 tick 末统一处理：原点确实已被破坏才连锁，被保护/领地拦下的直接丢弃。 */
     public static void flushPendingBreaks() {
         if (PENDING_BREAKS.isEmpty()) {
             return;
@@ -254,13 +270,20 @@ public final class ServerExcavatorHandler {
         List<PendingBreak> pending = new ArrayList<>(PENDING_BREAKS);
         PENDING_BREAKS.clear();
         for (PendingBreak entry : pending) {
-            if (entry.player().isRemoved() || entry.player().level() != entry.level()) {
+            ServerPlayer player = entry.player();
+            if (player.isRemoved() || !player.isAlive() || player.level() != entry.level()) {
                 continue;
             }
-            if (!entry.level().getBlockState(entry.pos()).isAir()) {
-                continue; // 原点没被真正破坏（保护/领地/权限拦下），不连锁
+            // 校验主手工具是否在 tick 间被掉包（防止利用网络宏切工具刷附魔/耐久）
+            ItemStack currentTool = player.getMainHandItem();
+            if (!ItemStack.isSameItemSameComponents(currentTool, entry.initialTool())) {
+                continue;
             }
-            onBlockBroken(entry.level(), entry.player(), entry.pos(), entry.state());
+            // 原点复核：当前方块不再是破坏前的方块（兼顾含水方块变成水、沙子下落等，只要不再是原来的原点方块即确认已被破坏）
+            if (entry.level().getBlockState(entry.pos()).is(entry.state().getBlock())) {
+                continue; // 原点方块仍存在，说明破坏被领地或原版保护拦截，不连锁
+            }
+            onBlockBroken(entry.level(), player, entry.pos(), entry.state());
         }
     }
 
@@ -350,6 +373,8 @@ public final class ServerExcavatorHandler {
             CAPTURED_XP.set(0);
         }
 
+        ItemStack initialTool = player.getMainHandItem().copy();
+        final double maxDistSqr = 36.0 * 36.0;
         int brokenCount = 0;
         try {
             for (BlockPos3i target : targetPositions) {
@@ -358,16 +383,47 @@ public final class ServerExcavatorHandler {
                     continue; // 初始方块跳过（由事件触发源销毁）
                 }
 
+                // 1. 若初始持有有效工具，连锁中途损坏消失（耐久归零），立即中止，绝不空手继续破坏！
+                ItemStack currentTool = player.getMainHandItem();
+                if (!initialTool.isEmpty() && currentTool.isEmpty()) {
+                    break;
+                }
+
+                // 2. 工具防爆刹车：每次破坏前动态评估最新剩余耐久（若剩余 <= 2，立即中止整条连锁，绝不爆镐爆斧）
+                if (options.preventToolBreak() && !currentTool.isEmpty() && currentTool.isDamageableItem()) {
+                    int remaining = currentTool.getMaxDamage() - currentTool.getDamageValue();
+                    if (remaining <= 2) {
+                        break;
+                    }
+                }
+
                 BlockState targetState = level.getBlockState(targetPos);
+                if (targetState.isAir()) {
+                    continue; // 已在之前的连锁或级联更新中被破坏（如高草丛、门、床等），跳过
+                }
+
                 if (!canVeinMine(player, level, targetPos, targetState)) {
                     continue; // 该方块不满足条件（工具/环境变化），跳过它继续处理其它目标
                 }
 
-                // 保护校验：ServerPlayerGameMode#destroyBlock 不走 handleBlockBreakAction，
-                // 因此出生点保护与 mayInteract（领地插件常用）必须在这里显式复查，否则连锁可伸进保护范围。
+                // 3. 禁止越界或未加载区块破坏（防止同步加载引发卡死）
+                if (!level.isLoaded(targetPos) || !level.isInWorldBounds(targetPos)) {
+                    continue;
+                }
+
+                // 4. 拓扑安全包络校验：相对原点距离约束（36 格半径）
+                if (originPos.distSqr(targetPos) > maxDistSqr) {
+                    continue;
+                }
+
+                // 5. 出生点保护与领地/交互保护插件复查
                 if (level.getServer().isUnderSpawnProtection(level, targetPos, player)
-                        || !level.mayInteract(player, targetPos)
-                        || !player.isWithinBlockInteractionRange(targetPos, 1.0)) {
+                        || !level.mayInteract(player, targetPos)) {
+                    continue;
+                }
+
+                // 6. 保护容器方块（箱子、木桶、潜影盒、漏斗等，防止连锁摧毁仓库或刷物品）
+                if (level.getBlockEntity(targetPos) instanceof net.minecraft.world.Container) {
                     continue;
                 }
 

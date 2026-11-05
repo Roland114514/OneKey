@@ -260,6 +260,9 @@ public final class ClientExcavatorHandler {
                     @Override
                     public boolean isDestructible(BlockPos3i pos) {
                         BlockPos cp = new BlockPos(pos.x(), pos.y(), pos.z());
+                        if (client.level.getBlockEntity(cp) instanceof net.minecraft.world.Container) {
+                            return false;
+                        }
                         BlockState cs = client.level.getBlockState(cp);
                         return isToolValidForBlock(client.player, cs);
                     }

@@ -207,4 +207,21 @@ class VeinFinderTest {
             }
         }
     }
+
+    @Test
+    void findVeinFindsFullHeightOfTallTree() {
+        SimpleBlockInspector inspector = new SimpleBlockInspector();
+        BlockPos3i origin = new BlockPos3i(0, 60, 0);
+
+        // 模拟高达 20 格的巨型丛林/云杉原木（高度远超玩家触及距离 4.5 格）
+        for (int y = 60; y <= 79; y++) {
+            inspector.set(0, y, 0, "minecraft:spruce_log");
+        }
+
+        List<BlockPos3i> result = VeinFinder.findVein(origin, inspector, 64, false);
+        assertEquals(20, result.size(), "20格高的树木应当被完整连续搜索并挖掘");
+        for (int y = 60; y <= 79; y++) {
+            assertTrue(result.contains(new BlockPos3i(0, y, 0)));
+        }
+    }
 }

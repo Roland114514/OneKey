@@ -26,6 +26,9 @@ public record ExcavatorStatePayload(boolean isPressed, int shapeId, int optionsM
         public ExcavatorStatePayload decode(ByteBuf buffer) {
             boolean isPressed = buffer.readBoolean();
             int shapeId = ByteBufCodecs.VAR_INT.decode(buffer);
+            if (shapeId < 0 || shapeId >= me.easan.onekey.common.excavator.MiningShape.values().length) {
+                shapeId = me.easan.onekey.common.excavator.MiningShape.VEIN.id();
+            }
             int optionsMask = ExcavatorOptions.NO_CUSTOM_OPTIONS;
             int maxBlocks = ExcavatorOptions.DEFAULT.maxBlocks();
             if (buffer.isReadable()) {
@@ -39,6 +42,7 @@ public record ExcavatorStatePayload(boolean isPressed, int shapeId, int optionsM
                     maxBlocks = ExcavatorOptions.DEFAULT.maxBlocks();
                 }
             }
+            maxBlocks = ExcavatorOptions.clampMaxBlocks(maxBlocks);
             return new ExcavatorStatePayload(isPressed, shapeId, optionsMask, maxBlocks);
         }
 

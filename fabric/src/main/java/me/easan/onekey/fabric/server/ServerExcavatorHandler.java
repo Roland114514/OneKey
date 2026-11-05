@@ -219,6 +219,11 @@ public final class ServerExcavatorHandler {
             return;
         }
 
+        // 玩家触及原点的距离安全校验（防远距离假包）
+        if (!player.isWithinBlockInteractionRange(originPos, 2.0)) {
+            return;
+        }
+
         // 初始方块若不符合严格工具要求，直接不触发连锁破坏
         if (!canVeinMine(player, level, originPos, originState)) {
             return;
@@ -229,6 +234,9 @@ public final class ServerExcavatorHandler {
             performVeinMine(level, player, originPos, originState, playerState.shape);
         } finally {
             IS_MINING.remove();
+            COLLECTING_DROPS.remove();
+            CAPTURED_DROPS.remove();
+            CAPTURED_XP.remove();
         }
     }
 
@@ -318,6 +326,8 @@ public final class ServerExcavatorHandler {
             CAPTURED_XP.set(0);
         }
 
+        ItemStack initialTool = player.getMainHandItem().copy();
+        final double maxDistSqr = 36.0 * 36.0;
         int brokenCount = 0;
         try {
             for (BlockPos3i target : targetPositions) {
@@ -326,16 +336,47 @@ public final class ServerExcavatorHandler {
                     continue; // 初始方块已被原版破坏，跳过
                 }
 
+                // 1. 若初始持有有效工具，连锁中途损坏消失（耐久归零），立即中止，绝不空手继续破坏！
+                ItemStack currentTool = player.getMainHandItem();
+                if (!initialTool.isEmpty() && currentTool.isEmpty()) {
+                    break;
+                }
+
+                // 2. 工具防爆刹车：每次破坏前动态评估最新剩余耐久（若剩余 <= 2，立即中止整条连锁，绝不爆镐爆斧）
+                if (options.preventToolBreak() && !currentTool.isEmpty() && currentTool.isDamageableItem()) {
+                    int remaining = currentTool.getMaxDamage() - currentTool.getDamageValue();
+                    if (remaining <= 2) {
+                        break;
+                    }
+                }
+
                 BlockState targetState = level.getBlockState(targetPos);
+                if (targetState.isAir()) {
+                    continue; // 已在之前的连锁或级联更新中被破坏（如高草丛、门、床等），跳过
+                }
+
                 if (!canVeinMine(player, level, targetPos, targetState)) {
                     continue; // 该方块不满足条件（工具/环境变化），跳过它继续处理其它目标
                 }
 
-                // 保护校验：ServerPlayerGameMode#destroyBlock 不走 handleBlockBreakAction，
-                // 因此出生点保护与 mayInteract（领地插件常用）必须在这里显式复查，否则连锁可伸进保护范围。
+                // 3. 禁止越界或未加载区块破坏（防止同步加载引发卡死）
+                if (!level.isLoaded(targetPos) || !level.isInWorldBounds(targetPos)) {
+                    continue;
+                }
+
+                // 4. 拓扑安全包络校验：相对原点距离约束（36 格半径）
+                if (originPos.distSqr(targetPos) > maxDistSqr) {
+                    continue;
+                }
+
+                // 5. 出生点保护与领地/交互保护插件复查
                 if (level.getServer().isUnderSpawnProtection(level, targetPos, player)
-                        || !level.mayInteract(player, targetPos)
-                        || !player.isWithinBlockInteractionRange(targetPos, 1.0)) {
+                        || !level.mayInteract(player, targetPos)) {
+                    continue;
+                }
+
+                // 6. 保护容器方块（箱子、木桶、潜影盒、漏斗等，防止连锁摧毁仓库或刷物品）
+                if (level.getBlockEntity(targetPos) instanceof net.minecraft.world.Container) {
                     continue;
                 }
 

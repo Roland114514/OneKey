@@ -12,19 +12,49 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `fix: v1.1.2 连锁破坏多人一致性与健壮性修复（个人偏好交集、掉落 finally 回吐、协议升 3）` |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.2.jar`（168 KB）与 `onekey-neoforge-1.1.2.jar`（166 KB）构建成功 |
-| 单测状态 | ✅ 双端各 68 例（Fabric 68 + NeoForge 68 = **136 例全绿**） |
-| 版本状态 | ✅ `mod_version=1.1.2` |
-| 协议版本 | **`ProtocolVersion.CURRENT=3`**（1.1.2 起必须双端同版本） |
-| 当前任务聚焦 | 🎯 v1.1.2 维护版：连锁破坏多人一致性与健壮性（4 修 + 2 清理） |
-| 发布状态 | 🔄 v1.1.2 待打 tag 与创建 GitHub Release |
-| 运行实测 | ✅ 连锁按键与滚轮模式切换丝滑、屏幕左上角半透明 HUD 实时预览、严格工具匹配防作弊、伐木默认排除树叶、掉落物/经验聚合零卡顿、工具耐久防爆保护 |
-| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / **原生连锁破坏 Vein Mining 收官 ✅** |
+| 最新提交 | `fix: v1.1.3 4-argon深度审查加固与连锁挖掘距离/状态容错修复` |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.3.jar` 与 `onekey-neoforge-1.1.3.jar` 构建成功 |
+| 单测状态 | ✅ 双端各 71 例（Fabric 71 + NeoForge 71 = **142 例全绿**） |
+| 版本状态 | ✅ `mod_version=1.1.3` |
+| 协议版本 | **`ProtocolVersion.CURRENT=3`**（1.1.2 起双端同版本） |
+| 当前任务聚焦 | 🎯 v1.1.3 发布：4-argon 深度审查加固与距离/状态容错修复 |
+| 发布状态 | 🚀 v1.1.3 已发布到 GitHub Release |
+| 运行实测 | ✅ 巨型树木完整砍伐（不被 5.5 格距离截断）、长隧道完整贯通、容器方块免遭意外摧毁、工具耐久绝对防爆、掉落物聚合零泄露 |
+| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / **v1.1.3 深度审查加固版收官 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互自由度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 26 次会话的「原生连锁破坏 Vein Mining」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 28 次会话的「v1.1.3 深度审查加固」细节。
+
+---
+
+## 2026-11-05（第 3 个工作日 · 第 28 次会话：v1.1.3 4-argon 深度代码审查加固与安全发布）
+
+### 目标与背景（用户原话）
+> "接下来以严苛的眼光审查当前的代码，另一个智能体发现了一些问题并提交了报告，你修完之后再检查一遍，最终完成之后以版本号v1.1.3发布到GitHub上，以4-argon模型操作"
+
+调用 `gemini-4-argon` 攻坚模型对整体连锁破坏系统及网络协议进行深度白盒审查，推导并根除了 6 大隐蔽缺陷，升级版本至 v1.1.3。
+
+### 核心审查与修复内容
+1. **距离校验重构（解决巨树与长隧道截断 Bug）**：
+   - 根因：原先在循环内对每个 `targetPos` 校验 `player.isWithinBlockInteractionRange(targetPos, 1.0)`，原版生存玩家触及仅约 4.5~5.0 格，导致超过 5.5 格的树冠、深层矿脉和长隧道被全部跳过。
+   - 修法：重构为两级分层防护：进入连锁前校验原点 `player.isWithinBlockInteractionRange(originPos, 2.0)` 防远距离假包；循环内校验目标方块相对原点的欧氏距离 `originPos.distSqr(targetPos) <= 36.0 * 36.0`，并校验区块加载 `level.isLoaded(targetPos)` 与世界边界 `level.isInWorldBounds(targetPos)`。
+2. **实时工具防爆与损坏空手防作弊**：
+   - 根因：循环中未跟踪工具随方块破坏扣减的最新耐久，耐久剩 2 时破坏可能爆镐；工具损坏后可能空手继续破坏后续方块。
+   - 修法：循环每次破坏前动态获取主手最新状态：若初始有工具但中途损坏变空，立即 `break` 终止连锁；若启用防爆且最新剩余耐久 `<= 2`，立即 `break` 终止整条连锁，杜绝爆镐爆斧。
+3. **保护玩家容器方块（箱子/木桶/潜影盒/漏斗等）**：
+   - 修法：在客户端 HUD 预览与服务端破坏逻辑中统一跳过所有 `instanceof Container` 的方块实体，防止 3x3 隧道或连锁意外摧毁基地仓库导致海量掉落物或刷物品隐患。
+4. **ThreadLocal 掉落聚合异常安全性与双重泄露防护**：
+   - 修法：在 `onBlockBroken` 最外层 `finally` 中显式调用 `remove()` 清理所有 ThreadLocal，实现无条件零泄漏保底。
+5. **NeoForge 延迟破坏防切工具作弊与原点状态复核**：
+   - 修法：入队时快照记录触发时的工具，复核时比对 `ItemStack.isSameItemSameComponents`，被调包则拒绝连锁；原点复核改为确认方块不再是破坏前的方块（`!getBlockState(pos).is(state.getBlock())`），含水方块和落沙场景均可正常连锁。
+6. **网络状态包枚举索引与方块上限安全夹取**：
+   - 修法：`ExcavatorStatePayload` 解码时对 `shapeId` 与 `maxBlocks` 进行严格范围夹取，防止发包注入异常。
+
+### 测试与构建验证
+- 新增 `VeinFinderTest.findVeinFindsFullHeightOfTallTree`（验证 20 格高树木完整连续搜索）。
+- 双端各 71 例单测全绿（**合计 142 例**）：`bash scripts/with-jdk25.sh test`。
+- 完整全量清理构建：`bash scripts/with-jdk25.sh clean build` 成功。
 
 ---
 
