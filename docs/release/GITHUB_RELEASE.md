@@ -89,10 +89,10 @@
 ## 🔐 SHA-256
 
 ```
-20f132d18bc6f9b45c6ef4e4b550a446c4d6e7a3191177dfa69e7c87083c4130  onekey-fabric-1.1.2.jar
-a9d3b298f4c0512071dea01e9af72e89cfab85177460c59dc2aae31a4985f9bf  onekey-fabric-1.1.2-sources.jar
-a77252382ad1f87f57fb34977e40e898cc098aa0ef2b33ceb81422238aaf5a49  onekey-neoforge-1.1.2.jar
-bfc53a4e9d3a7c8398a03454bafcc6df57fe8756c50c317863382977ad689be1  onekey-neoforge-1.1.2-sources.jar
+e0637a0c7c391ab28bf8ad59eb8555dca4d197e80ba55be34f2849a231d9d7c2  onekey-fabric-1.1.3.jar
+fbbc5647e41710daa28bdb7db0d8b6ec8290171f2daa841ecbf22ff0ef57c872  onekey-fabric-1.1.3-sources.jar
+05e4a114a0b649c50067916d846d0629d9c48ad48cb80008efc8071ab3c04d03  onekey-neoforge-1.1.3.jar
+4c56c6954f9452dd2083c9b3c0a2e851bda721ca06e4082c8f7aba48b190c235  onekey-neoforge-1.1.3-sources.jar
 ```
 
 **许可证**：MIT · **源码**：[github.com/Roland114514/OneKey](https://github.com/Roland114514/OneKey)
