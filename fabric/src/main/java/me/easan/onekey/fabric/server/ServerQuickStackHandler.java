@@ -136,7 +136,8 @@ public final class ServerQuickStackHandler {
         Container openMenuContainer = getOpenMenuContainer(currentMenu);
 
         // 1. 高性能区块检索附近纯存储容器并匹配准星目标（含告示牌穿透与大箱子归一化）
-        List<ScannedContainer> targetContainers = findNearbyContainers(player, radius, config, validTargetPos, openMenuContainer, stashMode);
+        List<ScannedContainer> targetContainers = findNearbyContainers(
+                player, radius, config, validTargetPos, openMenuContainer, stashMode, request.smartMatching());
 
         // 末影箱界面：容器是玩家个人存储，不在方块扫描范围内，显式绑定为当前 GUI 目标（需求③界面强绑定）
         if (openMenuContainer instanceof PlayerEnderChestContainer enderChest
@@ -366,7 +367,8 @@ public final class ServerQuickStackHandler {
             OneKeyConfig config,
             BlockPos clientTargetPos,
             Container openMenuContainer,
-            boolean stashMode
+            boolean stashMode,
+            boolean clientSmartMatching
     ) {
         ServerLevel level = player.level();
         int px = player.getBlockX();
@@ -385,7 +387,7 @@ public final class ServerQuickStackHandler {
         // 「智能分类防污染」或「准星瞄准优先」任一关闭，都退回旧版范围存入：
         // 只关准星时若仍强制 isTargeted，B 键将永远找不到目标（等于废掉该键）。
         boolean allowDumpAnywhere = stashMode
-                && (!config.quickStack.smartMatching || !config.quickStack.crosshairPriority);
+                && (!clientSmartMatching || !config.quickStack.crosshairPriority);
 
         for (int cx = minChunkX; cx <= maxChunkX; cx++) {
             for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {

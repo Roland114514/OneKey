@@ -16,11 +16,22 @@ public record SortRequestPayload(SortRequest request) implements CustomPacketPay
     public static final Type<SortRequestPayload> TYPE =
             new Type<>(Identifier.fromNamespaceAndPath(OneKeyNeoForge.MOD_ID, "sort_request"));
 
-    public static final StreamCodec<ByteBuf, SortRequestPayload> CODEC = StreamCodec.composite(
-            ByteBufCodecs.VAR_INT, p -> p.request().syncId(),
-            ByteBufCodecs.VAR_INT, p -> p.request().mode(),
-            (syncId, mode) -> new SortRequestPayload(new SortRequest(syncId, mode))
-    );
+    public static final StreamCodec<ByteBuf, SortRequestPayload> CODEC = new StreamCodec<>() {
+        @Override
+        public SortRequestPayload decode(ByteBuf buffer) {
+            int syncId = ByteBufCodecs.VAR_INT.decode(buffer);
+            int mode = ByteBufCodecs.VAR_INT.decode(buffer);
+            int options = buffer.isReadable() ? ByteBufCodecs.VAR_INT.decode(buffer) : SortRequest.NO_CUSTOM_OPTIONS;
+            return new SortRequestPayload(new SortRequest(syncId, mode, options));
+        }
+
+        @Override
+        public void encode(ByteBuf buffer, SortRequestPayload value) {
+            ByteBufCodecs.VAR_INT.encode(buffer, value.request().syncId());
+            ByteBufCodecs.VAR_INT.encode(buffer, value.request().mode());
+            ByteBufCodecs.VAR_INT.encode(buffer, value.request().optionsBitmask());
+        }
+    };
 
     @Override
     public Type<? extends CustomPacketPayload> type() {

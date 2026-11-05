@@ -171,8 +171,13 @@ public final class ServerSortingHandler {
             return;
         }
 
+        // 确定本轮整理使用的规则配置（优先采用客户端上报的玩家个性化配置，未提供时回退到服务端默认配置）
+        boolean includeHotbar = request.hasCustomOptions() ? request.includeHotbar() : config.sort.includeHotbar;
+        boolean mergeStacks = request.hasCustomOptions() ? request.mergeStacks() : config.sort.mergeStacks;
+        me.easan.onekey.common.sort.SortRule sortRule = request.hasCustomOptions() ? request.toRule() : config.sort.toRule();
+
         // 筛选待排序槽位
-        List<Slot> slotsToSort = resolveSlotsToSort(menu, player, request.mode(), config.sort.includeHotbar);
+        List<Slot> slotsToSort = resolveSlotsToSort(menu, player, request.mode(), includeHotbar);
         if (slotsToSort.isEmpty()) {
             menu.sendAllDataToRemote();
             replyResult(context, false, 0);
@@ -199,7 +204,7 @@ public final class ServerSortingHandler {
 
         // 合并同类堆叠：把散在不同槽位的「同物品 + 同组件」先并成满堆，再排序
         boolean condensedChanged = false;
-        if (OneKeyNeoForge.config().sort.mergeStacks) {
+        if (mergeStacks) {
             condensedChanged = condenseSnapshot(slotsToSort, snapshot, lockedPositions);
         }
 
@@ -210,7 +215,7 @@ public final class ServerSortingHandler {
         }
 
         // 计算排序置换（Sorter 保证为空格置后、锁定槽不动、且恒为双射）
-        int[] permutation = Sorter.permutation(views, lockedPositions, config.sort.toRule());
+        int[] permutation = Sorter.permutation(views, lockedPositions, sortRule);
 
         // 计算发生移动的槽位数量
         int moved = 0;

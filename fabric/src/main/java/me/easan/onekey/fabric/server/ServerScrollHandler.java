@@ -106,8 +106,8 @@ public final class ServerScrollHandler {
         if (sourceIsPlayer) {
             int slotIdx = sourceSlot.getContainerSlot();
             if (!PlayerSlotFilter.isPlainPlayerInventorySlot(player, sourceSlot,
-                    OneKeyFabric.config().gestures.includeHotbar)) {
-                return; // 盔甲 / 副手永不参与；快捷栏由「手势影响快捷栏」开关决定
+                    payload.includeHotbar())) {
+                return; // 盔甲 / 副手永不参与；快捷栏由玩家上报的「手势影响快捷栏」开关决定
             }
             if (LockedSlotsStorage.isSlotLocked(player.getUUID(), "player_inventory", slotIdx)) {
                 return;
@@ -136,7 +136,7 @@ public final class ServerScrollHandler {
                 if (slot.container == player.getInventory()) {
                     int slotIdx = slot.getContainerSlot();
                     if (PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot,
-                            OneKeyFabric.config().gestures.includeHotbar)
+                            payload.includeHotbar())
                             && !LockedSlotsStorage.isSlotLocked(player.getUUID(), "player_inventory", slotIdx)) {
                         oppositeSlots.add(slot);
                     }

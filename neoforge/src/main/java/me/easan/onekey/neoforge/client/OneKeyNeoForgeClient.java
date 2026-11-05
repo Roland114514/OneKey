@@ -277,7 +277,12 @@ public final class OneKeyNeoForgeClient {
         if (!serverSupports(ScrollItemTransferPayload.TYPE)) {
             return;
         }
-        ClientPacketDistributor.sendToServer(new ScrollItemTransferPayload(containerScreen.getMenu().containerId, hovered.index, scrollUp));
+        ClientPacketDistributor.sendToServer(new ScrollItemTransferPayload(
+                containerScreen.getMenu().containerId,
+                hovered.index,
+                scrollUp,
+                OneKeyNeoForge.config().gestures.includeHotbar
+        ));
         client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, scrollUp ? 1.4F : 1.1F));
         event.setCanceled(true);
     }
@@ -707,7 +712,16 @@ public final class OneKeyNeoForgeClient {
         lastClientSortTime = now;
 
         applyOptimisticSort(client, syncId, mode);
-        ClientPacketDistributor.sendToServer(new SortRequestPayload(new SortRequest(syncId, mode)));
+
+        var sortCfg = OneKeyNeoForge.config().sort;
+        int options = SortRequest.packOptions(
+                sortCfg.mergeStacks,
+                sortCfg.includeHotbar,
+                sortCfg.groupByCategory,
+                sortCfg.sortByName,
+                sortCfg.sortByCountDesc
+        );
+        ClientPacketDistributor.sendToServer(new SortRequestPayload(new SortRequest(syncId, mode, options)));
     }
 
     /**
@@ -877,10 +891,11 @@ public final class OneKeyNeoForgeClient {
         }
         int syncId = client.player.containerMenu != null ? client.player.containerMenu.containerId : -1;
         int radius = OneKeyNeoForge.config().quickStack.radius;
+        boolean smartMatching = OneKeyNeoForge.config().quickStack.smartMatching;
         // 「准星瞄准优先」关闭时不再做射线检测，退回纯范围扫描（看哪存哪失效）
         Optional<TargetPos> targetPos = OneKeyNeoForge.config().quickStack.crosshairPriority
                 ? getCrosshairTarget(client)
                 : Optional.empty();
-        ClientPacketDistributor.sendToServer(new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos)));
+        ClientPacketDistributor.sendToServer(new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos, smartMatching)));
     }
 }

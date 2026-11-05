@@ -12,19 +12,54 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `fix: 修复26.3鼠标按键码以激活Shift左键扫掠，重构K键GUI为三标签分页防重叠` |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.0.jar` 与 `onekey-neoforge-1.1.0.jar` 构建成功 |
-| 单测状态 | ✅ 双端各 52 例（Fabric 52 + NeoForge 52 = **104 例全绿**） |
-| 版本状态 | ✅ `mod_version=1.1.0` |
-| 协议版本 | `ProtocolVersion.CURRENT=2` |
-| 当前任务聚焦 | 🎯 修复 26.3 鼠标按键码以激活 Shift 左键扫掠，重构 K 键 GUI 为三标签分页防重叠 |
-| 发布状态 | 🔄 v1.1.0 补丁发布（GitHub Release 产物已同步替换，B 站 ID「25时的奇迹」已展示） |
-| 运行实测 | ✅ Shift+LMB 扫掠装箱/取出、RMB 连点投掷、滚轮增减、三标签分页切换与文字无重叠实测完好 |
-| 里程碑 | M0-M8 全量收官 ✅ / 创造模式与事务原子化加固 ✅ / v1.1.0 鼠标手势系统收官 ✅ / **按键码修复与三标签GUI收官 ✅** |
+| 最新提交 | `feat: v1.1.1 联机个性化一致性与GUI直观度升级` |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.1.jar` 与 `onekey-neoforge-1.1.1.jar` 构建成功 |
+| 单测状态 | ✅ 双端各 55 例（Fabric 55 + NeoForge 55 = **110 例全绿**，含 `SortRequestTest` 位掩码与规则解析验证） |
+| 版本状态 | ✅ `mod_version=1.1.1` |
+| 协议版本 | `ProtocolVersion.CURRENT=2`（保持向后兼容动态降级） |
+| 当前任务聚焦 | 🎯 v1.1.1 联机服务端与多玩家个性化一致性 + K 键 GUI 全量 Hover Tooltip + 锁定槽位浮窗说明 + 恢复默认设置 |
+| 发布状态 | 🔄 v1.1.1 代码、文档与构建产物全量就绪 |
+| 运行实测 | ✅ 联机千人千面整理、手势独立保护、按钮悬浮气泡、加锁槽位浮窗提示全覆盖 |
+| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / **v1.1.1 联机个性化与GUI直观度升级收官 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互丝滑度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 22 次会话的「按键码修复与三标签GUI重构」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 23 次会话的「v1.1.1 联机一致性与GUI升级」细节。
+
+---
+
+## 2026-11-05（第 3 个工作日 · 第 23 次会话：v1.1.1 联机个性化一致性与 GUI 直观度升级）
+
+### 目标与背景
+用户提出明确指示：针对联机方面与 GUI 易用度进行专项升级，保证联机服务端与多玩家个性化一致性，提升 GUI 易用性与直观性，并将本版本正式发布为 **v1.1.1**。
+
+### 核心实现与技术细节
+1. **联机服务端与多玩家个性化一致性（千人千面整理与独立保护）**：
+   - **痛点**：在多人独立服务器（Dedicated Server）或局域网联机时，原有服务端 `ServerSortingHandler` 读取的是服务端全局配置。若客户端玩家调整了个人偏好（如按名称排序或按数量降序），在联机整理时会被服主设置强行覆盖，且客户端乐观 UI 预测与服务端广播状态会产生肉眼可见的闪烁与回弹。
+   - **位掩码随包传输**：在 `SortRequest` 中引入 `optionsBitmask`（包含 `FLAG_MERGE_STACKS`, `FLAG_INCLUDE_HOTBAR`, `FLAG_GROUP_BY_CATEGORY`, `FLAG_SORT_BY_NAME`, `FLAG_SORT_BY_COUNT_DESC`）。
+   - **服务端动态应用**：服务端整理时优先根据客户端上报的位掩码生成该玩家的专属 `SortRule` 与合并策略；若未提供（如旧客户端）平滑回退到服务端默认值。
+   - **手势快捷栏与智能分类独立性**：
+     - `ScrollItemTransferPayload` 携带客户端玩家的 `includeHotbar` 手势偏好，服务端单件微调严格遵循该玩家个人的快捷栏防护意图；
+     - `QuickStackRequestPayload` 携带客户端玩家的 `smartMatching` 偏好，智能分类防污染规则对每位玩家独立生效；
+     - StreamCodec 支持容错动态降级，混版本联机不崩溃、不踢下线。
+2. **K 键设置 GUI 全量 Hover Tooltip（原生悬浮气泡提示）**：
+   - 为设置界面三标签页（一键整理、快速堆叠、鼠标手势）中全部 16 个按钮与 3 个 Tab 分类按钮绑定原版 `Tooltip.create(...)`；
+   - 包含中英文双语全量词条（`zh_cn.json` 与 `en_us.json`），鼠标悬停即刻清晰浮现详细操作逻辑与建议，彻底告别盲点试错。
+3. **锁定槽位 Tooltip 标签（视觉与文字双重反馈）**：
+   - 优化 `AbstractContainerScreenMixin`：
+     - 当鼠标悬停在已加锁的物品上时，在原版物品 Tooltip 底部追加显示 `§6🔒 [已锁定] §7(Alt+左键解锁)`；
+     - 当鼠标悬停在已加锁的空槽位上且光标无持物时，即时弹出 `§6🔒 [空槽位已锁定] §7(Alt+左键解锁)`；
+     - 彻底消除玩家对物品为何无法被整理或堆叠移动的疑惑。
+4. **一键「恢复默认设置」（Reset Defaults）**：
+   - 设置界面底部栏新增自适应「恢复默认」按钮，居于「配置按键绑定」与「完成」之间；
+   - 点击后重置所有配置项为推荐默认值，播放 UI 点击音效，即时刷新界面控件并持久化落盘。
+5. **版本号升级**：
+   - `gradle.properties` 正式升级为 `mod_version=1.1.1`；
+   - 同步更新 `CHANGELOG.md` 与 `README.md`。
+
+### 验证与产物
+- **单元测试**：双端各 55 例（Fabric 55 + NeoForge 55 = **110 例全绿**），新增 `SortRequestTest` 位掩码与规则解析单测。
+- **构建测试**：Gradle `:fabric:build` 与 `:neoforge:build` 成功打出 `onekey-fabric-1.1.1.jar` (~129 KB) 与 `onekey-neoforge-1.1.1.jar` (~127 KB)。
 
 ---
 

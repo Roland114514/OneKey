@@ -266,7 +266,12 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                     }
                     lastScrollTime = now;
 
-                    ClientPlayNetworking.send(new ScrollItemTransferPayload(containerScreen.getMenu().containerId, hovered.index, isUp));
+                    ClientPlayNetworking.send(new ScrollItemTransferPayload(
+                            containerScreen.getMenu().containerId,
+                            hovered.index,
+                            isUp,
+                            OneKeyFabric.config().gestures.includeHotbar
+                    ));
                     client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, isUp ? 1.4F : 1.1F));
                     return false;
                 });
@@ -706,7 +711,15 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         // 乐观 UI 预测：客户端本地即刻执行纯逻辑排序置换与音效
         applyOptimisticSort(client, syncId, mode);
 
-        ClientPlayNetworking.send(new SortRequestPayload(new SortRequest(syncId, mode)));
+        var sortCfg = OneKeyFabric.config().sort;
+        int options = SortRequest.packOptions(
+                sortCfg.mergeStacks,
+                sortCfg.includeHotbar,
+                sortCfg.groupByCategory,
+                sortCfg.sortByName,
+                sortCfg.sortByCountDesc
+        );
+        ClientPlayNetworking.send(new SortRequestPayload(new SortRequest(syncId, mode, options)));
     }
 
     /**
@@ -883,11 +896,12 @@ public final class OneKeyFabricClient implements ClientModInitializer {
 
         int syncId = client.player.containerMenu != null ? client.player.containerMenu.containerId : -1;
         int radius = OneKeyFabric.config().quickStack.radius;
+        boolean smartMatching = OneKeyFabric.config().quickStack.smartMatching;
         // 「准星瞄准优先」关闭时不再做射线检测，退回纯范围扫描（看哪存哪失效）
         Optional<TargetPos> targetPos = OneKeyFabric.config().quickStack.crosshairPriority
                 ? getCrosshairTarget(client)
                 : Optional.empty();
-        ClientPlayNetworking.send(new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos)));
+        ClientPlayNetworking.send(new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos, smartMatching)));
     }
 
     private static KeyMapping register(String translationKey, int defaultKey) {

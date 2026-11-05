@@ -28,13 +28,26 @@ public record QuickStackRequestPayload(QuickStackRequest request) implements Cus
     private static final StreamCodec<ByteBuf, Optional<TargetPos>> OPTIONAL_TARGET_POS_CODEC =
             ByteBufCodecs.optional(TARGET_POS_CODEC);
 
-    private static final StreamCodec<ByteBuf, QuickStackRequestPayload> RAW_CODEC = StreamCodec.composite(
-            ByteBufCodecs.VAR_INT, r -> r.request().syncId(),
-            ByteBufCodecs.VAR_INT, r -> r.request().radius(),
-            ByteBufCodecs.BOOL, r -> r.request().stash(),
-            OPTIONAL_TARGET_POS_CODEC, r -> r.request().targetPos(),
-            (syncId, radius, stash, targetPos) -> new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos))
-    );
+    private static final StreamCodec<ByteBuf, QuickStackRequestPayload> RAW_CODEC = new StreamCodec<>() {
+        @Override
+        public QuickStackRequestPayload decode(ByteBuf buffer) {
+            int syncId = ByteBufCodecs.VAR_INT.decode(buffer);
+            int radius = ByteBufCodecs.VAR_INT.decode(buffer);
+            boolean stash = ByteBufCodecs.BOOL.decode(buffer);
+            Optional<TargetPos> targetPos = OPTIONAL_TARGET_POS_CODEC.decode(buffer);
+            boolean smartMatching = buffer.isReadable() ? ByteBufCodecs.BOOL.decode(buffer) : true;
+            return new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos, smartMatching));
+        }
+
+        @Override
+        public void encode(ByteBuf buffer, QuickStackRequestPayload value) {
+            ByteBufCodecs.VAR_INT.encode(buffer, value.request().syncId());
+            ByteBufCodecs.VAR_INT.encode(buffer, value.request().radius());
+            ByteBufCodecs.BOOL.encode(buffer, value.request().stash());
+            OPTIONAL_TARGET_POS_CODEC.encode(buffer, value.request().targetPos());
+            ByteBufCodecs.BOOL.encode(buffer, value.request().smartMatching());
+        }
+    };
 
     /**
      * 容错解码：1.0.1 及更早的客户端数据包不含「目标坐标」字段，直接按新格式解码会抛异常，
