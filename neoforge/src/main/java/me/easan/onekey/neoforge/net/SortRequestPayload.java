@@ -21,7 +21,14 @@ public record SortRequestPayload(SortRequest request) implements CustomPacketPay
         public SortRequestPayload decode(ByteBuf buffer) {
             int syncId = ByteBufCodecs.VAR_INT.decode(buffer);
             int mode = ByteBufCodecs.VAR_INT.decode(buffer);
-            int options = buffer.isReadable() ? ByteBufCodecs.VAR_INT.decode(buffer) : SortRequest.NO_CUSTOM_OPTIONS;
+            int options = SortRequest.NO_CUSTOM_OPTIONS;
+            if (buffer.isReadable()) {
+                try {
+                    options = ByteBufCodecs.VAR_INT.decode(buffer);
+                } catch (Exception ignored) {
+                    options = SortRequest.NO_CUSTOM_OPTIONS;
+                }
+            }
             return new SortRequestPayload(new SortRequest(syncId, mode, options));
         }
 

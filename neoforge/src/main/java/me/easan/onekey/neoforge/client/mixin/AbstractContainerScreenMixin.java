@@ -44,21 +44,31 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
     @Inject(method = "getTooltipFromContainerItem", at = @At("RETURN"), cancellable = true)
     private void onekey$appendLockedItemTooltip(ItemStack itemStack, CallbackInfoReturnable<List<Component>> cir) {
-        if (this.hoveredSlot != null && this.hoveredSlot.isActive() && ClientLockedSlots.isSlotLocked(this.menu, this.hoveredSlot)) {
-            List<Component> list = new ArrayList<>(cir.getReturnValue());
-            list.add(Component.translatable("onekey.gui.slot_locked_tooltip"));
-            cir.setReturnValue(list);
+        if (this.menu == null || itemStack == null || itemStack.isEmpty()) {
+            return;
+        }
+        Slot currentSlot = this.hoveredSlot;
+        if (currentSlot == null || !currentSlot.isActive() || !currentSlot.hasItem() || currentSlot.getItem() != itemStack) {
+            return;
+        }
+        if (ClientLockedSlots.isSlotLocked(this.menu, currentSlot)) {
+            List<Component> original = cir.getReturnValue();
+            if (original != null) {
+                List<Component> list = new ArrayList<>(original);
+                list.add(Component.translatable("onekey.gui.slot_locked_tooltip"));
+                cir.setReturnValue(list);
+            }
         }
     }
 
     @Inject(method = "extractTooltip", at = @At("RETURN"))
     private void onekey$renderEmptyLockedSlotTooltip(GuiGraphicsExtractor extractor, int mouseX, int mouseY, CallbackInfo ci) {
-        if (this.menu.getCarried().isEmpty()
-                && this.hoveredSlot != null
-                && !this.hoveredSlot.hasItem()
-                && this.hoveredSlot.isActive()
-                && ClientLockedSlots.isSlotLocked(this.menu, this.hoveredSlot)) {
-            extractor.setTooltipForNextFrame(Component.translatable("onekey.gui.slot_locked_empty_tooltip"), mouseX, mouseY);
+        if (this.menu != null && this.menu.getCarried().isEmpty()) {
+            Slot currentSlot = this.hoveredSlot;
+            if (currentSlot != null && currentSlot.isActive() && !currentSlot.hasItem()
+                    && ClientLockedSlots.isSlotLocked(this.menu, currentSlot)) {
+                extractor.setTooltipForNextFrame(Component.translatable("onekey.gui.slot_locked_empty_tooltip"), mouseX, mouseY);
+            }
         }
     }
 }

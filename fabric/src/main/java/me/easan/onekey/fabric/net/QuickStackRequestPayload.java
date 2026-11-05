@@ -35,7 +35,14 @@ public record QuickStackRequestPayload(QuickStackRequest request) implements Cus
             int radius = ByteBufCodecs.VAR_INT.decode(buffer);
             boolean stash = ByteBufCodecs.BOOL.decode(buffer);
             Optional<TargetPos> targetPos = OPTIONAL_TARGET_POS_CODEC.decode(buffer);
-            boolean smartMatching = buffer.isReadable() ? ByteBufCodecs.BOOL.decode(buffer) : true;
+            boolean smartMatching = true;
+            if (buffer.isReadable()) {
+                try {
+                    smartMatching = ByteBufCodecs.BOOL.decode(buffer);
+                } catch (Exception ignored) {
+                    smartMatching = true;
+                }
+            }
             return new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos, smartMatching));
         }
 

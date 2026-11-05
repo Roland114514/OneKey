@@ -89,11 +89,11 @@ public final class OneKeyNeoForgeClient {
     }
 
     private static boolean isLeftButton(int button) {
-        return button == InputConstants.MOUSE_BUTTON_LEFT || button == 0;
+        return button == InputConstants.MOUSE_BUTTON_LEFT;
     }
 
     private static boolean isRightButton(int button) {
-        return button == InputConstants.MOUSE_BUTTON_RIGHT || button == 1;
+        return button == InputConstants.MOUSE_BUTTON_RIGHT;
     }
 
     private OneKeyNeoForgeClient() {

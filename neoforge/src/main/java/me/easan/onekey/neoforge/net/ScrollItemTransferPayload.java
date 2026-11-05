@@ -30,7 +30,14 @@ public record ScrollItemTransferPayload(int syncId, int slotIndex, boolean scrol
             int syncId = ByteBufCodecs.VAR_INT.decode(buffer);
             int slotIndex = ByteBufCodecs.VAR_INT.decode(buffer);
             boolean scrollUp = ByteBufCodecs.BOOL.decode(buffer);
-            boolean includeHotbar = buffer.isReadable() ? ByteBufCodecs.BOOL.decode(buffer) : false;
+            boolean includeHotbar = false;
+            if (buffer.isReadable()) {
+                try {
+                    includeHotbar = ByteBufCodecs.BOOL.decode(buffer);
+                } catch (Exception ignored) {
+                    includeHotbar = false;
+                }
+            }
             return new ScrollItemTransferPayload(syncId, slotIndex, scrollUp, includeHotbar);
         }
 
