@@ -157,6 +157,7 @@ public final class OneKeyFabric implements ModInitializer {
             if (handler.player != null) {
                 ServerSortingHandler.onPlayerDisconnect(handler.player.getUUID());
                 ServerQuickStackHandler.onPlayerDisconnect(handler.player.getUUID());
+                ServerScrollHandler.onPlayerDisconnect(handler.player.getUUID());
             }
         });
 

@@ -33,6 +33,12 @@ public final class ServerScrollHandler {
     private ServerScrollHandler() {
     }
 
+    public static void onPlayerDisconnect(UUID playerUuid) {
+        if (playerUuid != null) {
+            LAST_SCROLL_TIME.remove(playerUuid);
+        }
+    }
+
     public static void handle(ScrollItemTransferPayload payload, ServerPlayNetworking.Context context) {
         try {
             process(payload, context);

@@ -30,6 +30,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
@@ -445,7 +446,7 @@ public final class OneKeyNeoForgeClient {
     }
 
     private static void triggerScreenSort(Minecraft client, AbstractContainerScreen<?> screen) {
-        if (client.player == null) {
+        if (client.player == null || screen instanceof CreativeModeInventoryScreen) {
             return;
         }
 
@@ -486,36 +487,34 @@ public final class OneKeyNeoForgeClient {
     }
 
     /**
-     * 合并散落在多个槽位的同类堆叠（同物品 + 同组件），返回是否发生了数量变化。
+     * 合并散落在多个槽位的同类堆叠（同物品 + 同组件），直接修改快照，返回是否发生了数量变化。
      * 必须在排序之前调用：否则「16 个楼梯 + 10 个楼梯」会被当成两叠独立物品分别排序，
      * 玩家看到的仍然是被拆开的两堆。
      */
-    private static boolean condenseStacks(List<Slot> slots, Set<Integer> lockedPositions) {
+    private static boolean condenseSnapshot(List<Slot> slots, List<ItemStack> snapshot, Set<Integer> lockedPositions) {
         int size = slots.size();
         int[] counts = new int[size];
         int[] maxCounts = new int[size];
         for (int i = 0; i < size; i++) {
-            ItemStack stack = slots.get(i).getItem();
+            ItemStack stack = snapshot.get(i);
             counts[i] = stack.getCount();
-            maxCounts[i] = stack.isEmpty() ? 64 : stack.getMaxStackSize();
+            maxCounts[i] = stack.isEmpty() ? 64 : Math.min(slots.get(i).getMaxStackSize(stack), stack.getMaxStackSize());
         }
 
         int[] condensed = StackCondenser.condense(counts, maxCounts, lockedPositions,
                 (first, second) -> ItemStack.isSameItemSameComponents(
-                        slots.get(first).getItem(), slots.get(second).getItem()));
+                        snapshot.get(first), snapshot.get(second)));
 
         boolean changed = false;
         for (int i = 0; i < size; i++) {
             if (condensed[i] == counts[i]) {
                 continue;
             }
-            Slot slot = slots.get(i);
             if (condensed[i] <= 0) {
-                slot.set(ItemStack.EMPTY);
+                snapshot.set(i, ItemStack.EMPTY);
             } else {
-                slot.getItem().setCount(condensed[i]);
+                snapshot.get(i).setCount(condensed[i]);
             }
-            slot.setChanged();
             changed = true;
         }
         return changed;
@@ -545,15 +544,21 @@ public final class OneKeyNeoForgeClient {
         }
         Set<Integer> lockedPositions = Sorter.resolveLockedPositions(slotLockKeys, lockedKeys);
 
+        // 快照原始槽位物品：纯内存快照中合并与重排，避免直接原地脏写导致异常时半污染
+        List<ItemStack> snapshot = new ArrayList<>(slotsToSort.size());
+        for (Slot slot : slotsToSort) {
+            snapshot.add(slot.getItem().copy());
+        }
+
         // 合并同类堆叠：把散在不同槽位的「同物品 + 同组件」先并成满堆，再排序
         boolean condensedChanged = false;
         if (OneKeyNeoForge.config().sort.mergeStacks) {
-            condensedChanged = condenseStacks(slotsToSort, lockedPositions);
+            condensedChanged = condenseSnapshot(slotsToSort, snapshot, lockedPositions);
         }
 
         List<StackView> views = new ArrayList<>(slotsToSort.size());
-        for (Slot slot : slotsToSort) {
-            views.add(ItemConversion.toStackView(slot.getItem()));
+        for (ItemStack stack : snapshot) {
+            views.add(ItemConversion.toStackView(stack));
         }
 
         int[] permutation = Sorter.permutation(views, lockedPositions, OneKeyNeoForge.config().sort.toRule());
@@ -565,15 +570,10 @@ public final class OneKeyNeoForgeClient {
         }
 
         if (moved > 0 || condensedChanged) {
-            List<ItemStack> originals = new ArrayList<>(slotsToSort.size());
-            for (Slot slot : slotsToSort) {
-                originals.add(slot.getItem().copy());
-            }
-
             for (int target = 0; target < permutation.length; target++) {
                 int source = permutation[target];
                 Slot slot = slotsToSort.get(target);
-                slot.set(originals.get(source));
+                slot.set(snapshot.get(source));
                 slot.setChanged();
             }
 
@@ -604,11 +604,7 @@ public final class OneKeyNeoForgeClient {
 
     private static List<Slot> clientPlayerMainInventorySlots(AbstractContainerMenu menu, LocalPlayer player) {
         List<Slot> result = new ArrayList<>();
-        // 26.3 创造模式「生存模式物品栏」页签会用 SlotWrapper 包装背包槽位，报告的容器槽位是
-        // InventoryMenu 下标（装备 5..8、快捷栏 36..44），与 Inventory 下标不一致。玩家背包一律从
-        // player.inventoryMenu 取槽位对象，保证容器槽位号与 Inventory 一一对应。
-        AbstractContainerMenu sourceMenu = player.inventoryMenu != null ? player.inventoryMenu : menu;
-        for (Slot slot : sourceMenu.slots) {
+        for (Slot slot : menu.slots) {
             if (PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot,
                     OneKeyNeoForge.config().sort.includeHotbar)) {
                 result.add(slot);

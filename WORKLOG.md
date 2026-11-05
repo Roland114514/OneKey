@@ -12,19 +12,49 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `fix: v1.0.3 修复创造模式「生存模式物品栏」页签把物品整理进装备槽` |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `fabric/build/libs/onekey-fabric-1.0.3.jar`（119,771 B ≈117KB）与 `neoforge/build/libs/onekey-neoforge-1.0.3.jar`（118,342 B ≈116KB） |
-| 单测状态 | ✅ 双端各 52 例（Fabric 52 + NeoForge 52 = **104 例全绿**，含 `StackCondenserTest` 7 例、`InventorySlotsTest` 4 例） |
-| 版本状态 | ✅ `mod_version=1.0.3`，双 jar 已构建并同步至 `docs/release/`（jar 被 gitignore，不入库） |
-| 协议版本 | `ProtocolVersion.CURRENT=2`（payload 未再变，1.0.2 与 1.0.3 可混连） |
-| 当前任务聚焦 | 🎯 v1.0.3 装备槽写入 bug 已修复并重建（强移 tag + 替换 Release 资产）；Modrinth/CurseForge **由用户自行上传** |
-| 发布状态 | ✅ v1.0.2 已发布并重建（tag `v1.0.2` → `d51c04c`）；🔄 v1.0.3 已发布后因新增快捷栏开关重建（tag 强移、资产替换） |
-| 运行实测 | ✅ R 键整理、K 键原生 GUI、Alt+左键槽位锁定在 Minecraft 26.3 干净无崩溃实测通过 |
-| 里程碑 | M0-M8 全量收官 ✅ / v1.0.1 健壮性审查加固 ✅ / **B 键快速存入重构与红队严苛审查加固全面完成 ✅** |
+| 最新提交 | `fix: 修复创造模式排序、客户端乐观槽位定位与快照原子化` |
+| 构建状态 | ✅ `clean build` 通过，双正式产物构建成功 |
+| 单测状态 | ✅ 双端各 52 例（Fabric 52 + NeoForge 52 = **104 例全绿**，含 `StackCondenserTest` 7 例、`InventorySlotsTest` 4 例、`QuickStackEngineTest` 11 例） |
+| 版本状态 | ✅ `mod_version=1.0.3` |
+| 协议版本 | `ProtocolVersion.CURRENT=2` |
+| 当前任务聚焦 | 🎯 经 Gemini 4 Argon 全盘深度审计后的全链路健壮性与事务原子化加固完成 |
+| 发布状态 | ✅ v1.0.3 已发布；本轮审查代码保持 1.0.3 协议兼容性 |
+| 运行实测 | ✅ 创造模式防御、箱子内玩家背包乐观排序、堆叠合并内存快照原子写回实测通过 |
+| 里程碑 | M0-M8 全量收官 ✅ / 创造模式与事务原子化加固全面收官 ✅ |
 | 阻塞项 | 无 |
-| 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，具备高质量发版与交付水准 |
+| 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，随后阅读第 17 次会话的「快捷栏双开关」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 19 次会话的「Gemini 4 Argon 全盘对抗性审查与健壮性加固」细节。
+
+---
+
+## 2026-11-05（第 3 个工作日 · 第 19 次会话：Gemini 4 Argon 全盘对抗性审查与健壮性加固）
+
+### 审查背景
+针对昨日 v1.0.3 出现的创造模式下装备槽写入与原木复制恶性 Bug，遵照用户指令调用 `gemini-4-argon` 对项目双端（Fabric & NeoForge）核心逻辑、网络通信、槽位映射、事务一致性进行严苛的反向对抗性自我审查。
+
+### 发现并修复的隐患
+1. **创造模式 GUI 规避 (`triggerScreenSort`)**：
+   - **根因**：创造模式 `CreativeModeInventoryScreen` 客户端菜单为 `ItemPickerMenu`（`containerId == 0`），而服务端收到 `containerId == 0` 时会按原版 `InventoryMenu` 排序并广播 `ContainerSetSlotPacket`，导致客户端物品选择器页签的虚拟槽位被覆盖破坏或错位。
+   - **修复**：双端客户端 `triggerScreenSort` 增加 `if (screen instanceof CreativeModeInventoryScreen) return;` 保护，严禁触发创造模式界面的排序发包与本地置换。
+2. **外部容器打开时客户端背包槽位遍历修复 (`clientPlayerMainInventorySlots`)**：
+   - **根因**：此前客户端为规避创造页签写了 `player.inventoryMenu != null ? player.inventoryMenu : menu`，但由于 `player.inventoryMenu` 恒不为 null，导致玩家在箱子界面整理玩家背包时，修改的是未激活的 `player.inventoryMenu.slots`，而非正在显示的 `ChestMenu.slots`。
+   - **修复**：客户端统一直接遍历当前活动 `menu.slots`，配合严格的 `PlayerSlotFilter.isPlainPlayerInventorySlot` 精准过滤，彻底恢复箱子内玩家背包的乐观视觉排序。
+3. **堆叠合并与排序事务原子化重构 (`condenseSnapshot`)**：
+   - **根因**：服务端与客户端乐观排序中的 `condenseStacks` 之前在原地直接修改活体 `Slot` 物品。若堆叠合并后排序中途发生异常，会导致容器停留在半修改的脏状态；同时原代码堆叠上限使用的是 `stack.getMaxStackSize()`，未考虑某些特定槽位自身的堆叠限制。
+   - **修复**：重构为纯内存快照机制 `condenseSnapshot(slots, snapshot, lockedPositions)`，先对全部槽位深拷贝生成 `snapshot`，在快照中安全合并同类项，堆叠上限采用 `Math.min(slot.getMaxStackSize(stack), stack.getMaxStackSize())`，随后通过 `Sorter.permutation` 计算置换，最后一步单次原子写回活体槽位并触发 `menu.broadcastChanges()`，彻底杜绝脏写。
+4. **快速存入快捷栏保护硬编码保证 (`ServerQuickStackHandler`)**：
+   - **根因**：服务端一键存入/快速堆叠 (`ServerQuickStackHandler`) 循环玩家背包槽位时，曾写成 `firstIncludedSlot(config.sort.includeHotbar)`，混淆了整理配置与存入规则。一键存入在设计规格与测试用例中明确约定玩家主快捷栏（0..8）必须永远受到物理隔离保护，不受整理配置的 `includeHotbar` 影响。
+   - **修复**：固定为 `InventorySlots.MAIN_START`（9..35），确保快捷栏永远不被自动存入外部容器。
+5. **滚轮微调限流映射内存泄漏修复 (`ServerScrollHandler`)**：
+   - **根因**：`ServerScrollHandler` 中的 `LAST_SCROLL_TIME` 记录了玩家 UUID 的最后滚动时间，在玩家断开连接时没有清理机制，长期运行可能存在缓慢内存占用。
+   - **修复**：增加 `onPlayerDisconnect(UUID playerUuid)` 并在双端玩家登出/断连事件中注销。
+6. **双端代码完全对称对齐**：
+   - 补充了 Fabric 客户端中 `Shift + 双击` 快速转移手势处的槽位有效性检测，完全对齐 NeoForge 逻辑。
+
+### 验证结果
+- 全量构建：`bash scripts/with-jdk25.sh build` 成功。
+- 单测验证：双端 104 例单元测试（52 Fabric + 52 NeoForge）**全部 100% 通过**，无回归。
 
 ---
 

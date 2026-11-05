@@ -205,7 +205,8 @@ public final class ServerQuickStackHandler {
                                                        List<ScannedContainer> containers, OneKeyConfig config,
                                                        Set<Container> modifiedContainers) {
         int totalMoved = 0;
-        for (int slotIdx = InventorySlots.firstIncludedSlot(config.sort.includeHotbar); slotIdx < InventorySlots.MAIN_END; slotIdx++) {
+        // 快捷栏 0..8 为玩家武器工具食物，快速堆叠与存入严格永久隔离，仅转移主背包 9..35
+        for (int slotIdx = InventorySlots.MAIN_START; slotIdx < InventorySlots.MAIN_END; slotIdx++) {
             if (lockedSlots.contains(slotIdx)) {
                 continue;
             }

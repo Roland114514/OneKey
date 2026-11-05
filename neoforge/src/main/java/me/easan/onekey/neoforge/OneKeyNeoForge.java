@@ -190,6 +190,7 @@ public final class OneKeyNeoForge {
         if (event.getEntity() instanceof ServerPlayer player) {
             ServerSortingHandler.onPlayerDisconnect(player.getUUID());
             ServerQuickStackHandler.onPlayerDisconnect(player.getUUID());
+            ServerScrollHandler.onPlayerDisconnect(player.getUUID());
         }
     }
 }
