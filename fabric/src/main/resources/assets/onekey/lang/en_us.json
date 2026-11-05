@@ -60,6 +60,7 @@
   "onekey.settings.excavator.preventToolBreak": "Prevent Tool Break",
   "onekey.settings.excavator.requireValidTool": "Strict Tool Match",
   "onekey.settings.excavator.consolidateDrops": "Consolidate Drops & XP",
+  "onekey.settings.excavator.highlightOutlines": "Highlight Outlines",
   "onekey.settings.resetDefaults": "Reset Defaults",
   "onekey.settings.openKeybinds.tooltip": "Open vanilla Controls & Key Binds menu to configure hotkeys like R/V/B/K and slot locking",
   "onekey.settings.resetDefaults.tooltip": "Reset all configuration options across all tabs to factory defaults",
@@ -90,6 +91,7 @@
   "onekey.settings.excavator.preventToolBreak.tooltip": "Automatically stops mining when tool durability drops to 2 or below",
   "onekey.settings.excavator.requireValidTool.tooltip": "Requires an effective, matching tool to prevent bare-hand or exploit mining",
   "onekey.settings.excavator.consolidateDrops.tooltip": "Merges drops into full stacks and groups XP orbs at the origin block to eliminate lag",
+  "onekey.settings.excavator.highlightOutlines.tooltip": "Renders a cyan wireframe outline around all candidate blocks while holding the vein mining key, providing clear visual tactile feedback",
   "onekey.gui.slot_locked_tooltip": "§6🔒 [Locked] §7(%s to unlock)",
   "onekey.gui.slot_locked_empty_tooltip": "§6🔒 [Empty Slot Locked] §7(%s to unlock)"
 }

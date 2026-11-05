@@ -187,6 +187,11 @@ public final class OneKeySettingsScreen extends Screen {
             this.addRenderableWidget(withTooltip(CycleButton.onOffBuilder(config.excavator.consolidateDrops)
                     .create(rightX, rowStartY + 2 * rowGap, btnWidth, btnHeight, Component.translatable("onekey.settings.excavator.consolidateDrops"),
                             (button, value) -> config.excavator.consolidateDrops = value), "onekey.settings.excavator.consolidateDrops.tooltip"));
+
+            // Row 4: 边框高亮显示
+            this.addRenderableWidget(withTooltip(CycleButton.onOffBuilder(config.excavator.highlightOutlines)
+                    .create(leftX, rowStartY + 3 * rowGap, btnWidth, btnHeight, Component.translatable("onekey.settings.excavator.highlightOutlines"),
+                            (button, value) -> config.excavator.highlightOutlines = value), "onekey.settings.excavator.highlightOutlines.tooltip"));
         }
 
         // 3. 底部操作按钮：配置原版按键绑定 / 恢复默认 / 完成

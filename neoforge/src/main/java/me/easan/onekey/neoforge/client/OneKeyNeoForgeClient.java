@@ -54,6 +54,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.ExtractBlockOutlineRenderStateEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
@@ -1035,5 +1036,15 @@ public final class OneKeyNeoForgeClient {
                 ? getCrosshairTarget(client)
                 : Optional.empty();
         ClientPacketDistributor.sendToServer(new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos, smartMatching)));
+    }
+
+    @SubscribeEvent
+    public static void onExtractBlockOutline(ExtractBlockOutlineRenderStateEvent event) {
+        if (ClientExcavatorHandler.isExcavateKeyDown() && OneKeyNeoForge.config().excavator.highlightOutlines) {
+            event.addCustomRenderer((outlineState, submitNodeCollector, poseStack, levelRenderState) -> {
+                ClientExcavatorHandler.renderBlockOutlines(outlineState, submitNodeCollector, poseStack, levelRenderState);
+                return false;
+            });
+        }
     }
 }

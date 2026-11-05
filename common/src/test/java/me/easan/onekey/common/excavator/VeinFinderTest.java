@@ -41,7 +41,17 @@ class VeinFinderTest {
             if (includeLeaves && originBlock.contains("log") && currentBlock.contains("leaves")) {
                 return true;
             }
+            if (originBlock.contains("leaves") && currentBlock.contains("leaves")) {
+                return true;
+            }
+            if (isVegetation(originBlock) && isVegetation(currentBlock)) {
+                return true;
+            }
             return false;
+        }
+
+        private boolean isVegetation(String id) {
+            return id.contains("grass") || id.contains("flower") || id.contains("dandelion") || id.contains("poppy");
         }
 
         @Override
@@ -223,5 +233,44 @@ class VeinFinderTest {
         for (int y = 60; y <= 79; y++) {
             assertTrue(result.contains(new BlockPos3i(0, y, 0)));
         }
+    }
+
+    @Test
+    void findVeinMatchesConnectedLeavesDirectly() {
+        SimpleBlockInspector inspector = new SimpleBlockInspector();
+        BlockPos3i origin = new BlockPos3i(0, 65, 0);
+
+        inspector.set(0, 65, 0, "minecraft:oak_leaves");
+        inspector.set(1, 65, 0, "minecraft:oak_leaves");
+        inspector.set(0, 65, 1, "minecraft:birch_leaves"); // 异种相连树叶
+        inspector.set(0, 64, 0, "minecraft:oak_log"); // 原木，不应该被反向连入树叶连锁
+
+        List<BlockPos3i> result = VeinFinder.findVein(origin, inspector, 64, false);
+        assertEquals(3, result.size());
+        assertTrue(result.contains(new BlockPos3i(0, 65, 0)));
+        assertTrue(result.contains(new BlockPos3i(1, 65, 0)));
+        assertTrue(result.contains(new BlockPos3i(0, 65, 1)));
+        assertFalse(result.contains(new BlockPos3i(0, 64, 0)));
+    }
+
+    @Test
+    void findVeinMatchesConnectedVegetation() {
+        SimpleBlockInspector inspector = new SimpleBlockInspector();
+        BlockPos3i origin = new BlockPos3i(0, 64, 0);
+
+        // 地皮除草：短草、高草、蒲公英、虞美人相连，一次性清理
+        inspector.set(0, 64, 0, "minecraft:short_grass");
+        inspector.set(1, 64, 0, "minecraft:dandelion");
+        inspector.set(2, 64, 0, "minecraft:poppy");
+        inspector.set(2, 64, 1, "minecraft:tall_grass");
+        inspector.set(0, 63, 0, "minecraft:dirt"); // 泥土不被连入除草
+
+        List<BlockPos3i> result = VeinFinder.findVein(origin, inspector, 64, false);
+        assertEquals(4, result.size());
+        assertTrue(result.contains(new BlockPos3i(0, 64, 0)));
+        assertTrue(result.contains(new BlockPos3i(1, 64, 0)));
+        assertTrue(result.contains(new BlockPos3i(2, 64, 0)));
+        assertTrue(result.contains(new BlockPos3i(2, 64, 1)));
+        assertFalse(result.contains(new BlockPos3i(0, 63, 0)));
     }
 }

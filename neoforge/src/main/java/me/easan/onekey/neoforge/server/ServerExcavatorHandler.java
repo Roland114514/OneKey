@@ -55,6 +55,16 @@ public final class ServerExcavatorHandler {
     private static final ThreadLocal<List<ItemStack>> CAPTURED_DROPS = ThreadLocal.withInitial(ArrayList::new);
     private static final ThreadLocal<Integer> CAPTURED_XP = ThreadLocal.withInitial(() -> 0);
 
+    private static boolean isVegetation(BlockState state) {
+        if (state == null) {
+            return false;
+        }
+        if (state.is(BlockTags.FLOWERS) || state.is(BlockTags.CROPS)) {
+            return true;
+        }
+        return state.getBlock() instanceof net.minecraft.world.level.block.VegetationBlock;
+    }
+
     private static boolean isEquivalentOre(Block origin, Block current) {
         if (origin == current) {
             return true;
@@ -185,14 +195,9 @@ public final class ServerExcavatorHandler {
                 if (tool.getDestroySpeed(targetState) <= 1.0F) {
                     return false;
                 }
-            } else if (destroySpeed > 0.0F) {
-                // 不需要特定工具掉落但有硬度的方块（如原木、泥土）：手持工具挖掘速度必须大于 1.0
-                // 树叶与农作物允许空手采集，免除挖掘速度 > 1.0 的强制限制
-                boolean isOrganic = targetState.is(BlockTags.LEAVES) || targetState.is(BlockTags.CROPS);
-                if (!isOrganic && tool.getDestroySpeed(targetState) <= 1.0F) {
-                    return false;
-                }
             }
+            // 不需要特定工具掉落的方块（挖掘等级为 0，如原木、草、花、树叶、泥土）：
+            // 原版允许空手破坏并正常掉落，放行空手与任意工具连锁
         }
 
         return true;
@@ -334,7 +339,17 @@ public final class ServerExcavatorHandler {
                     return true;
                 }
 
-                // 4. 砍树携带相连树叶（由配置开关决定）
+                // 4. 树叶互相连通匹配（玩家直接破坏树叶时连锁相连树叶）
+                if (originState.is(BlockTags.LEAVES) && cState.is(BlockTags.LEAVES)) {
+                    return true;
+                }
+
+                // 5. 地上的草、花、灌木等植被连通匹配（除草整理地皮神器）
+                if (isVegetation(originState) && isVegetation(cState)) {
+                    return true;
+                }
+
+                // 6. 砍树携带相连树叶（由配置开关决定）
                 if (leavesAllowed && originState.is(BlockTags.LOGS) && cState.is(BlockTags.LEAVES)) {
                     return true;
                 }

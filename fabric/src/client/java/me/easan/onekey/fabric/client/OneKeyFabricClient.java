@@ -226,6 +226,17 @@ public final class OneKeyFabricClient implements ClientModInitializer {
 
         ClientExcavatorHandler.init(excavateKey);
 
+        // 注册方块线框高亮渲染事件（在原版选择框前提交连锁方块的青色高亮线框，return true 保持原版框体）
+        net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents.BEFORE_BLOCK_OUTLINE.register((context, outlineState) -> {
+            ClientExcavatorHandler.renderBlockOutlines(
+                    outlineState,
+                    context.submitNodeCollector(),
+                    context.poseStack(),
+                    context.levelState()
+            );
+            return true;
+        });
+
         // 1. 注册客户端整理结果与锁定槽位网络接收器
         ClientPlayNetworking.registerGlobalReceiver(SortResultPayload.TYPE, (payload, context) -> {
             ClientSortingHandler.handle(payload.result(), context);

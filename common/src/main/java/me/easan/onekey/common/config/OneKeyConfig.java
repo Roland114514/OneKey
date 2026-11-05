@@ -108,6 +108,8 @@ public final class OneKeyConfig {
         public boolean consolidateDrops = true;
         public boolean includeLeaves = false;
         public boolean requireValidTool = true;
+        /** 是否高亮显示连锁方块的边框线框。 */
+        public boolean highlightOutlines = true;
         /** 每个被连锁破坏的方块额外附加的饥饿消耗（与原版 0.005 一致）。 */
         public float exhaustionPerBlock = 0.005F;
     }

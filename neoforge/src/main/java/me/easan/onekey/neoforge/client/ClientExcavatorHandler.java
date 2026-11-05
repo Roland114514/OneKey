@@ -1,5 +1,7 @@
 package me.easan.onekey.neoforge.client;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import java.util.Collections;
 import java.util.List;
 
 import me.easan.onekey.common.excavator.BlockInspector;
@@ -16,6 +18,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.state.level.BlockOutlineRenderState;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -24,13 +31,17 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.VegetationBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /**
- * NeoForge 客户端连锁按键、滚轮模式切换与 HUD 信息渲染中心。
+ * NeoForge 客户端连锁按键、滚轮模式切换、方块线框高亮与 HUD 信息渲染中心。
  */
 public final class ClientExcavatorHandler {
 
@@ -38,6 +49,17 @@ public final class ClientExcavatorHandler {
     private static boolean wasPressed = false;
     private static MiningShape currentShape = MiningShape.VEIN;
     private static long lastModeSwitchTime = 0L;
+
+    // 预览计算缓存（大幅减轻高刷新率下每帧重复 BFS 的性能开销）
+    private static BlockPos cachedTargetPos = null;
+    private static MiningShape cachedShape = null;
+    private static Direction cachedFace = null;
+    private static Direction cachedPlayerDir = null;
+    private static BlockState cachedTargetState = null;
+    private static ItemStack cachedTool = ItemStack.EMPTY;
+    private static long lastComputeTime = 0L;
+    private static List<BlockPos3i> cachedPreviewBlocks = Collections.emptyList();
+    private static boolean cachedToolValid = false;
 
     private ClientExcavatorHandler() {
     }
@@ -98,9 +120,11 @@ public final class ClientExcavatorHandler {
         }
     }
 
-    /** 断线/切服时清空按压状态，避免「登录时正按着 ~」导致首次 tick 不发包。 */
+    /** 断线/切服时清空按压状态与预览缓存，避免「登录时正按着 ~」导致首次 tick 不发包。 */
     public static void onLogout() {
         wasPressed = false;
+        cachedTargetPos = null;
+        cachedPreviewBlocks = Collections.emptyList();
     }
 
     public static void onClientTick(Minecraft client) {
@@ -111,7 +135,13 @@ public final class ClientExcavatorHandler {
         boolean isDown = isExcavateKeyDown();
         if (isDown != wasPressed) {
             wasPressed = isDown;
-            ClientPacketDistributor.sendToServer(currentPayload(isDown));
+            if (!isDown) {
+                cachedTargetPos = null;
+                cachedPreviewBlocks = Collections.emptyList();
+            }
+            if (OneKeyNeoForgeClient.serverSupports(ExcavatorStatePayload.TYPE)) {
+                ClientPacketDistributor.sendToServer(currentPayload(isDown));
+            }
         }
     }
 
@@ -128,10 +158,25 @@ public final class ClientExcavatorHandler {
         currentShape = currentShape.cycle(forward);
         lastModeSwitchTime = System.currentTimeMillis();
 
-        ClientPacketDistributor.sendToServer(currentPayload(true));
+        // 切换模式后立即使预览缓存失效并重新计算
+        cachedShape = null;
+
+        if (OneKeyNeoForgeClient.serverSupports(ExcavatorStatePayload.TYPE)) {
+            ClientPacketDistributor.sendToServer(currentPayload(true));
+        }
 
         client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.2F));
         return true;
+    }
+
+    private static boolean isVegetation(BlockState state) {
+        if (state == null) {
+            return false;
+        }
+        if (state.is(BlockTags.FLOWERS) || state.is(BlockTags.CROPS)) {
+            return true;
+        }
+        return state.getBlock() instanceof VegetationBlock;
     }
 
     public static boolean isToolValidForBlock(LocalPlayer player, BlockState state) {
@@ -153,14 +198,9 @@ public final class ClientExcavatorHandler {
                 if (!player.hasCorrectToolForDrops(state) || tool.getDestroySpeed(state) <= 1.0F) {
                     return false;
                 }
-            } else if (state.getDestroySpeed(player.level(), BlockPos.ZERO) > 0.0F) {
-                // 与服务端 canVeinMine 完全对齐：只有「有硬度但不需要正确工具」的方块才要求速度 > 1.0；
-                // 火把/花/铁轨这类 destroySpeed == 0 的方块服务端直接放行，预览也必须放行。
-                boolean isOrganic = state.is(BlockTags.LEAVES) || state.is(BlockTags.CROPS);
-                if (!isOrganic && tool.getDestroySpeed(state) <= 1.0F) {
-                    return false;
-                }
             }
+            // 不需要特定工具掉落的方块（挖掘等级为 0，如原木、草、花、树叶、泥土）：
+            // 原版允许空手破坏并正常掉落，放行空手与任意工具
         }
         return true;
     }
@@ -174,6 +214,185 @@ public final class ClientExcavatorHandler {
         String origBase = origId.startsWith("deepslate_") ? origId.substring("deepslate_".length()) : origId;
         String currBase = currId.startsWith("deepslate_") ? currId.substring("deepslate_".length()) : currId;
         return origBase.equals(currBase);
+    }
+
+    /**
+     * 获取或按需计算连锁方块预览集合（带 200ms 防抖及按键/目标变动缓存）。
+     */
+    public static List<BlockPos3i> getOrUpdatePreviewBlocks(Minecraft client) {
+        if (client == null || client.player == null || client.level == null) {
+            cachedPreviewBlocks = Collections.emptyList();
+            cachedTargetPos = null;
+            return cachedPreviewBlocks;
+        }
+        if (!isExcavateKeyDown()) {
+            cachedPreviewBlocks = Collections.emptyList();
+            cachedTargetPos = null;
+            return cachedPreviewBlocks;
+        }
+
+        HitResult hit = client.hitResult;
+        if (!(hit instanceof BlockHitResult bhr) || bhr.getType() != HitResult.Type.BLOCK) {
+            cachedPreviewBlocks = Collections.emptyList();
+            cachedTargetPos = null;
+            return cachedPreviewBlocks;
+        }
+
+        BlockPos targetPos = bhr.getBlockPos();
+        BlockState targetState = client.level.getBlockState(targetPos);
+        Direction hitSide = bhr.getDirection();
+        Direction playerDir = client.player.getDirection();
+        ItemStack currentTool = client.player.getMainHandItem();
+        long now = System.currentTimeMillis();
+
+        boolean samePos = targetPos.equals(cachedTargetPos);
+        boolean sameState = targetState.equals(cachedTargetState);
+        boolean sameShape = currentShape == cachedShape;
+        boolean sameFace = hitSide == cachedFace;
+        boolean samePlayerDir = playerDir == cachedPlayerDir;
+        boolean sameTool = ItemStack.matches(currentTool, cachedTool);
+        boolean fresh = (now - lastComputeTime) < 200L;
+
+        if (samePos && sameState && sameShape && sameFace && samePlayerDir && sameTool && fresh) {
+            return cachedPreviewBlocks;
+        }
+
+        cachedTargetPos = targetPos.immutable();
+        cachedTargetState = targetState;
+        cachedShape = currentShape;
+        cachedFace = hitSide;
+        cachedPlayerDir = playerDir;
+        cachedTool = currentTool.copy();
+        lastComputeTime = now;
+
+        cachedToolValid = isToolValidForBlock(client.player, targetState);
+        if (!cachedToolValid) {
+            cachedPreviewBlocks = Collections.emptyList();
+            return cachedPreviewBlocks;
+        }
+
+        int maxBlocks = ExcavatorOptions.clampMaxBlocks(OneKeyNeoForge.config().excavator.maxBlocks);
+        boolean includeLeaves = OneKeyNeoForge.config().excavator.includeLeaves;
+        Direction3i playerFacing = Direction3i.valueOf(playerDir.name());
+        Direction3i hitFace = Direction3i.valueOf(hitSide.name());
+        boolean isUpperHalf = (bhr.getLocation().y - targetPos.getY()) > 0.5;
+
+        BlockInspector inspector = new BlockInspector() {
+            @Override
+            public boolean matches(BlockPos3i origin, BlockPos3i current, boolean leavesAllowed) {
+                BlockPos cp = new BlockPos(current.x(), current.y(), current.z());
+                BlockState cs = client.level.getBlockState(cp);
+                if (cs.isAir()) {
+                    return false;
+                }
+                if (cs.is(targetState.getBlock())) {
+                    return true;
+                }
+                if (isEquivalentOre(targetState.getBlock(), cs.getBlock())) {
+                    return true;
+                }
+                if ((targetState.is(BlockTags.IRON_ORES) && cs.is(BlockTags.IRON_ORES))
+                        || (targetState.is(BlockTags.GOLD_ORES) && cs.is(BlockTags.GOLD_ORES))
+                        || (targetState.is(BlockTags.COPPER_ORES) && cs.is(BlockTags.COPPER_ORES))) {
+                    return true;
+                }
+                if (targetState.is(BlockTags.LOGS) && cs.is(BlockTags.LOGS)) {
+                    return true;
+                }
+                if (targetState.is(BlockTags.LEAVES) && cs.is(BlockTags.LEAVES)) {
+                    return true;
+                }
+                if (isVegetation(targetState) && isVegetation(cs)) {
+                    return true;
+                }
+                if (leavesAllowed && targetState.is(BlockTags.LOGS) && cs.is(BlockTags.LEAVES)) {
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public boolean isDestructible(BlockPos3i pos) {
+                BlockPos cp = new BlockPos(pos.x(), pos.y(), pos.z());
+                if (client.level.getBlockEntity(cp) instanceof net.minecraft.world.Container) {
+                    return false;
+                }
+                BlockState cs = client.level.getBlockState(cp);
+                return isToolValidForBlock(client.player, cs);
+            }
+        };
+
+        BlockPos3i origin3i = new BlockPos3i(targetPos.getX(), targetPos.getY(), targetPos.getZ());
+        cachedPreviewBlocks = VeinFinder.findBlocks(
+                currentShape,
+                origin3i,
+                hitFace,
+                playerFacing,
+                inspector,
+                maxBlocks,
+                includeLeaves,
+                isUpperHalf
+        );
+
+        return cachedPreviewBlocks;
+    }
+
+    /**
+     * 在世界渲染层提交被连锁方块的青色高亮线框（仅边框 outline，增强连锁操作实感）。
+     */
+    public static void renderBlockOutlines(
+            BlockOutlineRenderState outlineState,
+            SubmitNodeCollector submitNodeCollector,
+            PoseStack poseStack,
+            LevelRenderState levelRenderState
+    ) {
+        if (!OneKeyNeoForge.config().excavator.enabled || !OneKeyNeoForge.config().excavator.highlightOutlines) {
+            return;
+        }
+        if (!isExcavateKeyDown()) {
+            return;
+        }
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.level == null || levelRenderState == null || levelRenderState.cameraRenderState == null) {
+            return;
+        }
+
+        List<BlockPos3i> blocks = getOrUpdatePreviewBlocks(client);
+        if (blocks.isEmpty()) {
+            return;
+        }
+
+        Vec3 camPos = levelRenderState.cameraRenderState.pos;
+        if (camPos == null) {
+            return;
+        }
+        double camX = camPos.x;
+        double camY = camPos.y;
+        double camZ = camPos.z;
+
+        boolean highContrast = outlineState != null && outlineState.highContrast();
+        RenderType renderType = highContrast ? RenderTypes.linesDepthBias() : RenderTypes.linesTranslucent();
+        // 连锁高亮线框颜色：高明度青色半透明线框 (0xEE00F5FF)
+        int color = 0xEE00F5FF;
+        float lineWidth = 2.5F;
+
+        BlockPos.MutableBlockPos mpos = new BlockPos.MutableBlockPos();
+        for (BlockPos3i bp : blocks) {
+            mpos.set(bp.x(), bp.y(), bp.z());
+            BlockState bs = client.level.getBlockState(mpos);
+            if (bs.isAir()) {
+                continue;
+            }
+            VoxelShape shape = bs.getShape(client.level, mpos);
+            if (shape.isEmpty()) {
+                shape = Shapes.block();
+            }
+
+            poseStack.pushPose();
+            poseStack.translate(bp.x() - camX, bp.y() - camY, bp.z() - camZ);
+            submitNodeCollector.submitShapeOutline(poseStack, shape, renderType, color, lineWidth, false);
+            poseStack.popPose();
+        }
     }
 
     public static void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
@@ -219,66 +438,8 @@ public final class ClientExcavatorHandler {
             } else {
                 line2 = "§7目标: §e" + blockName + " §a[就绪]";
 
-                // 实时预估方块数
                 int maxBlocks = ExcavatorOptions.clampMaxBlocks(OneKeyNeoForge.config().excavator.maxBlocks);
-                boolean includeLeaves = OneKeyNeoForge.config().excavator.includeLeaves;
-
-                Direction playerDir = client.player.getDirection();
-                Direction3i playerFacing = Direction3i.valueOf(playerDir.name());
-                Direction hitSide = bhr.getDirection();
-                Direction3i hitFace = Direction3i.valueOf(hitSide.name());
-                boolean isUpperHalf = (bhr.getLocation().y - targetPos.getY()) > 0.5;
-
-                BlockInspector inspector = new BlockInspector() {
-                    @Override
-                    public boolean matches(BlockPos3i origin, BlockPos3i current, boolean leavesAllowed) {
-                        BlockPos cp = new BlockPos(current.x(), current.y(), current.z());
-                        BlockState cs = client.level.getBlockState(cp);
-                        if (cs.isAir()) {
-                            return false;
-                        }
-                        if (cs.is(targetState.getBlock())) {
-                            return true;
-                        }
-                        if (isEquivalentOre(targetState.getBlock(), cs.getBlock())) {
-                            return true;
-                        }
-                        if ((targetState.is(BlockTags.IRON_ORES) && cs.is(BlockTags.IRON_ORES))
-                                || (targetState.is(BlockTags.GOLD_ORES) && cs.is(BlockTags.GOLD_ORES))
-                                || (targetState.is(BlockTags.COPPER_ORES) && cs.is(BlockTags.COPPER_ORES))) {
-                            return true;
-                        }
-                        if (targetState.is(BlockTags.LOGS) && cs.is(BlockTags.LOGS)) {
-                            return true;
-                        }
-                        if (leavesAllowed && targetState.is(BlockTags.LOGS) && cs.is(BlockTags.LEAVES)) {
-                            return true;
-                        }
-                        return false;
-                    }
-
-                    @Override
-                    public boolean isDestructible(BlockPos3i pos) {
-                        BlockPos cp = new BlockPos(pos.x(), pos.y(), pos.z());
-                        if (client.level.getBlockEntity(cp) instanceof net.minecraft.world.Container) {
-                            return false;
-                        }
-                        BlockState cs = client.level.getBlockState(cp);
-                        return isToolValidForBlock(client.player, cs);
-                    }
-                };
-
-                BlockPos3i origin3i = new BlockPos3i(targetPos.getX(), targetPos.getY(), targetPos.getZ());
-                List<BlockPos3i> previewBlocks = VeinFinder.findBlocks(
-                        currentShape,
-                        origin3i,
-                        hitFace,
-                        playerFacing,
-                        inspector,
-                        maxBlocks,
-                        includeLeaves,
-                        isUpperHalf
-                );
+                List<BlockPos3i> previewBlocks = getOrUpdatePreviewBlocks(client);
 
                 line3 = "§7预计破坏: §6" + previewBlocks.size() + " §7/ " + maxBlocks + " 块";
             }
