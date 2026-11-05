@@ -207,7 +207,8 @@ public final class OneKeySettingsScreen extends Screen {
             int tipY2 = Math.max(174, bottomButtonY - 18);
             if (tipY1 < bottomButtonY - 14) {
                 extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.sort_1"), this.width / 2, tipY1, 0xFFFFB300);
-                extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.locking"), this.width / 2, tipY2, 0xFFAAAAAA);
+                extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.locking",
+                        me.easan.onekey.fabric.client.OneKeyFabricClient.getLockKeyComboComponent()), this.width / 2, tipY2, 0xFFAAAAAA);
             }
         } else if (activeTab == 1) {
             int tipY1 = Math.max(115, bottomButtonY - 32);

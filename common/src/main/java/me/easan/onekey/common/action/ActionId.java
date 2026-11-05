@@ -9,6 +9,8 @@ public final class ActionId {
     public static final String QUICK_STACK = "onekey.quick_stack";
     public static final String QUICK_STASH = "onekey.quick_stash";
     public static final String SETTINGS = "onekey.settings";
+    public static final String LOCK_SLOT_MODIFIER = "onekey.lock_slot_modifier";
+    public static final String LOCK_SLOT = "onekey.lock_slot";
 
     private ActionId() {
     }

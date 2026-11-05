@@ -71,6 +71,99 @@ public final class OneKeyNeoForgeClient {
     private static KeyMapping quickStackKey;
     private static KeyMapping quickStashKey;
     private static KeyMapping settingsKey;
+    private static KeyMapping lockSlotModifierKey;
+    private static KeyMapping lockSlotTriggerKey;
+
+    public static final class CustomKeyMapping extends KeyMapping {
+        public CustomKeyMapping(String name, InputConstants.Type type, int keyCode, KeyMapping.Category category) {
+            super(name, type, keyCode, category);
+        }
+
+        public InputConstants.Key getKey() {
+            return this.key != null ? this.key : this.getDefaultKey();
+        }
+    }
+
+    public static KeyMapping getLockSlotModifierKey() {
+        return lockSlotModifierKey;
+    }
+
+    public static KeyMapping getLockSlotTriggerKey() {
+        return lockSlotTriggerKey;
+    }
+
+    public static InputConstants.Key getKey(KeyMapping mapping) {
+        if (mapping instanceof CustomKeyMapping custom) {
+            return custom.getKey();
+        }
+        if (mapping == null) {
+            return InputConstants.UNKNOWN;
+        }
+        try {
+            return InputConstants.getKey(mapping.saveString());
+        } catch (Throwable ignored) {
+            return InputConstants.UNKNOWN;
+        }
+    }
+
+    public static Component getLockKeyComboComponent() {
+        KeyMapping modifier = lockSlotModifierKey;
+        KeyMapping trigger = lockSlotTriggerKey;
+        if (trigger == null || trigger.isUnbound()) {
+            return Component.translatable("key.keyboard.unknown");
+        }
+        if (modifier == null || modifier.isUnbound()) {
+            return trigger.getTranslatedKeyMessage();
+        }
+        return Component.empty()
+                .append(modifier.getTranslatedKeyMessage())
+                .append(Component.literal(" + "))
+                .append(trigger.getTranslatedKeyMessage());
+    }
+
+    public static boolean isModifierActive(KeyMapping modifierMapping, net.minecraft.client.input.InputWithModifiers event) {
+        if (modifierMapping == null || modifierMapping.isUnbound()) {
+            return true;
+        }
+        InputConstants.Key key = getKey(modifierMapping);
+        if (key == null || key == InputConstants.UNKNOWN) {
+            return true;
+        }
+        if (event != null) {
+            if ((key.getValue() == InputConstants.KEY_LALT || key.getValue() == InputConstants.KEY_RALT) && event.hasAltDown()) {
+                return true;
+            }
+            if ((key.getValue() == InputConstants.KEY_LCONTROL || key.getValue() == InputConstants.KEY_RCONTROL) && event.hasControlDown()) {
+                return true;
+            }
+            if ((key.getValue() == InputConstants.KEY_LSHIFT || key.getValue() == InputConstants.KEY_RSHIFT) && event.hasShiftDown()) {
+                return true;
+            }
+        }
+        if (key.getType() == InputConstants.Type.KEYBOARD && key.getValue() > 0) {
+            try {
+                if (InputConstants.isKeyDown(key.getValue())) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        if (key.getType() == InputConstants.Type.MOUSE) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.mouseHandler != null) {
+                if (key.getValue() == InputConstants.MOUSE_BUTTON_LEFT && mc.mouseHandler.isLeftPressed()) {
+                    return true;
+                }
+                if (key.getValue() == InputConstants.MOUSE_BUTTON_RIGHT && mc.mouseHandler.isRightPressed()) {
+                    return true;
+                }
+                if (key.getValue() == InputConstants.MOUSE_BUTTON_MIDDLE && mc.mouseHandler.isMiddlePressed()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
     private static long lastShiftClickTime = 0L;
     private static int lastShiftClickSlot = -1;
@@ -109,19 +202,25 @@ public final class OneKeyNeoForgeClient {
         // 默认键位来自 config/onekey.json 的 hotkeys 段（非法键名自动回退内置默认值），
         // 真正的按键重绑仍在原版「选项 → 控制 → 按键绑定」中完成。
         var hotkeys = OneKeyNeoForge.config().hotkeys;
-        sortKey = new KeyMapping(ActionRegistry.get(ActionId.SORT).orElseThrow().translationKey(),
+        sortKey = new CustomKeyMapping(ActionRegistry.get(ActionId.SORT).orElseThrow().translationKey(),
                 InputConstants.Type.KEYBOARD, configuredKey(hotkeys.sort, InputConstants.KEY_R), CATEGORY);
-        quickStackKey = new KeyMapping(ActionRegistry.get(ActionId.QUICK_STACK).orElseThrow().translationKey(),
+        quickStackKey = new CustomKeyMapping(ActionRegistry.get(ActionId.QUICK_STACK).orElseThrow().translationKey(),
                 InputConstants.Type.KEYBOARD, configuredKey(hotkeys.quickStack, InputConstants.KEY_V), CATEGORY);
-        quickStashKey = new KeyMapping(ActionRegistry.get(ActionId.QUICK_STASH).orElseThrow().translationKey(),
+        quickStashKey = new CustomKeyMapping(ActionRegistry.get(ActionId.QUICK_STASH).orElseThrow().translationKey(),
                 InputConstants.Type.KEYBOARD, configuredKey(hotkeys.quickStash, InputConstants.KEY_B), CATEGORY);
-        settingsKey = new KeyMapping(ActionRegistry.get(ActionId.SETTINGS).orElseThrow().translationKey(),
+        settingsKey = new CustomKeyMapping(ActionRegistry.get(ActionId.SETTINGS).orElseThrow().translationKey(),
                 InputConstants.Type.KEYBOARD, configuredKey(hotkeys.settings, InputConstants.KEY_K), CATEGORY);
+        lockSlotModifierKey = new CustomKeyMapping(ActionRegistry.get(ActionId.LOCK_SLOT_MODIFIER).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD, configuredKey(hotkeys.lockSlotModifier, InputConstants.KEY_LALT), CATEGORY);
+        lockSlotTriggerKey = new CustomKeyMapping(ActionRegistry.get(ActionId.LOCK_SLOT).orElseThrow().translationKey(),
+                InputConstants.Type.MOUSE, configuredKey(hotkeys.lockSlot, InputConstants.MOUSE_BUTTON_LEFT), CATEGORY);
 
         event.register(sortKey);
         event.register(quickStackKey);
         event.register(quickStashKey);
         event.register(settingsKey);
+        event.register(lockSlotModifierKey);
+        event.register(lockSlotTriggerKey);
     }
 
     /**
@@ -192,6 +291,17 @@ public final class OneKeyNeoForgeClient {
             if (settingsKey.matches(event.getKeyEvent())) {
                 client.setScreenAndShow(new OneKeySettingsScreen(containerScreen));
                 event.setCanceled(true);
+                return;
+            }
+            if (lockSlotTriggerKey != null && lockSlotTriggerKey.matches(event.getKeyEvent()) && isModifierActive(lockSlotModifierKey, event.getKeyEvent())) {
+                if (containerScreen instanceof AbstractContainerScreenAccessor accessor) {
+                    Slot hovered = accessor.onekey$getHoveredSlot();
+                    if (hovered != null && isSlotLockable(client, containerScreen, hovered)) {
+                        toggleSlotLock(client, containerScreen, hovered);
+                        event.setCanceled(true);
+                        return;
+                    }
+                }
             }
         }
     }
@@ -305,9 +415,9 @@ public final class OneKeyNeoForgeClient {
             hovered = accessor.onekey$getHoveredSlot();
         }
 
-        // Alt + 左键：锁定/解锁槽位
-        if (event.getMouseButtonEvent().hasAltDown() && isLeftButton(event.getButton())) {
-            if (hovered != null) {
+        // 自定义按键绑定：锁定/解锁槽位（默认 Left Alt + 鼠标左键，支持任意组合或单键）
+        if (lockSlotTriggerKey != null && lockSlotTriggerKey.matchesMouse(event.getMouseButtonEvent()) && isModifierActive(lockSlotModifierKey, event.getMouseButtonEvent())) {
+            if (hovered != null && isSlotLockable(client, containerScreen, hovered)) {
                 toggleSlotLock(client, containerScreen, hovered);
                 event.setCanceled(true);
                 return;
@@ -520,7 +630,7 @@ public final class OneKeyNeoForgeClient {
         resetGestureState();
     }
 
-    private static boolean isSlotLockable(Minecraft client, AbstractContainerScreen<?> screen, Slot slot) {
+    public static boolean isSlotLockable(Minecraft client, AbstractContainerScreen<?> screen, Slot slot) {
         if (client.player == null || slot == null || screen == null || screen.getMenu() == null) {
             return false;
         }

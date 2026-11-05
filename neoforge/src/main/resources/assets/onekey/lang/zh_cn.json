@@ -3,6 +3,8 @@
   "key.onekey.quick_stack": "快速堆叠",
   "key.onekey.quick_stash": "存入附近容器",
   "key.onekey.settings": "OneKey 设置",
+  "key.onekey.lock_slot_modifier": "栏位锁定修饰键",
+  "key.onekey.lock_slot": "栏位锁定按键",
   "key.category.onekey.keys": "OneKey",
   "onekey.sort.success": "已整理 %s 格物品",
   "onekey.sort.already_sorted": "物品已经整齐，无需整理",
@@ -27,7 +29,7 @@
   "onekey.settings.quickStack.smartMatching": "智能分类防污染",
   "onekey.settings.compat.enabled": "兼容模式（v1.1 生效）",
   "onekey.settings.openKeybinds": "配置原版按键绑定...",
-  "onekey.settings.tip.locking": "提示：Alt + 鼠标左键点击槽位可锁定/解锁，锁定槽位不参与整理",
+  "onekey.settings.tip.locking": "提示：指向槽位按 %s 可锁定/解锁，锁定槽位不参与整理",
   "onekey.settings.tip.hotbar": "规则：快捷栏是否参与整理/手势由上排开关决定；加锁的槽位始终不参与",
   "onekey.settings.tab.sort": "一键整理",
   "onekey.settings.tab.stack": "快速堆叠",
@@ -46,7 +48,7 @@
   "onekey.settings.gestures.invertWheel": "滚轮方向反转",
   "onekey.settings.gestures.wheelCarriedHandling": "持物滚轮微调",
   "onekey.settings.resetDefaults": "恢复默认",
-  "onekey.settings.openKeybinds.tooltip": "打开 Minecraft 原版控制与按键绑定设置界面，可修改 R/V/B/K 等热键",
+  "onekey.settings.openKeybinds.tooltip": "打开 Minecraft 原版控制与按键绑定设置界面，可修改 R/V/B/K 及栏位锁定等热键",
   "onekey.settings.resetDefaults.tooltip": "将当前所有标签页的设置项恢复为出厂推荐默认值",
   "onekey.settings.done.tooltip": "保存并立即应用所有设置，返回游戏",
   "onekey.settings.tab.sort.tooltip": "切换到一键整理功能配置（按键整理规则、合并堆叠、排序顺序）",
@@ -68,6 +70,6 @@
   "onekey.settings.gestures.invertWheel.tooltip": "反转鼠标滚轮的进出方向，完美适配 macOS 触控板自然滚动习惯",
   "onekey.settings.gestures.wheelCarriedHandling.tooltip": "光标抓着物品悬停在槽位上时，向下滚动滚轮精准向槽位放置 1 件持物",
   "onekey.settings.gestures.includeHotbar.tooltip": "鼠标手势（Shift扫掠转移、滚轮微调）是否允许对快捷栏物品生效",
-  "onekey.gui.slot_locked_tooltip": "§6🔒 [已锁定] §7(Alt+左键解锁)",
-  "onekey.gui.slot_locked_empty_tooltip": "§6🔒 [空槽位已锁定] §7(Alt+左键解锁)"
+  "onekey.gui.slot_locked_tooltip": "§6🔒 [已锁定] §7(%s解锁)",
+  "onekey.gui.slot_locked_empty_tooltip": "§6🔒 [空槽位已锁定] §7(%s解锁)"
 }

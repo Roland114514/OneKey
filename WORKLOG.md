@@ -12,19 +12,62 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `fix: 4-argon审查加固：根除按键码歧义碰撞、网络流容错与Mixin跨模组上下文保护` |
+| 最新提交 | `feat: 栏位锁定组合键支持玩家自定义与原版按键绑定系统深度打通` |
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.1.jar` 与 `onekey-neoforge-1.1.1.jar` 构建成功 |
 | 单测状态 | ✅ 双端各 55 例（Fabric 55 + NeoForge 55 = **110 例全绿**） |
-| 版本状态 | ✅ `mod_version=1.1.1` |
+| 版本状态 | ✅ `mod_version=1.1.1`（保持 v1.1.1） |
 | 协议版本 | `ProtocolVersion.CURRENT=2`（保持向后兼容动态降级） |
-| 当前任务聚焦 | 🎯 4-argon 严苛深度自我审查：彻底根除左右按键码碰撞、网络畸形包防御与 Mixin 跨模组安全加固 |
+| 当前任务聚焦 | 🎯 栏位锁定按键与组合键由玩家自主自定义，深度接入原版「控制 → 按键绑定」系统 |
 | 发布状态 | 🔄 v1.1.1 产物已同步覆盖更新至 GitHub Release，代码与文档已推至远程 |
-| 运行实测 | ✅ 左右键完全解耦、扫掠/拖拽状态机精准执行、网络包容错无异常、Tooltip 零崩溃 |
-| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / **4-argon 严苛加固收官 ✅** |
+| 运行实测 | ✅ 栏位锁定修饰键与触发键完全支持自定义、双端键盘与鼠标双重事件监听响应丝滑、Tooltip 动态渲染当前绑定键位 |
+| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / **栏位锁定自定义键位收官 ✅** |
 | 阻塞项 | 无 |
-| 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互丝滑度 |
+| 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互自由度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 24 次会话的「4-argon 审查加固」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 25 次会话的「栏位锁定自定义键位」细节。
+
+---
+
+## 2026-11-05（第 3 个工作日 · 第 25 次会话：栏位锁定组合键支持玩家自定义与原版按键绑定系统深度打通）
+
+### 目标与背景
+用户提出明确指示：
+1. 将栏位锁定的按键改为可以由玩家自定义；
+2. 将栏位锁定的修饰/组合键也加进按键绑定中，让玩家可以自主选择哪两个按键组合（或单键）触发锁定；
+3. 本次不升级版本号，继续保持 `v1.1.1`。
+
+### 核心实现与技术细节
+1. **统一动作与双 KeyMapping 注册（接入原版按键绑定）**：
+   - 在 `ActionId` 与 `ActionRegistry` 中扩展两个全新动作：
+     - `onekey.lock_slot_modifier`（修饰键，默认 `Left Alt`，`key.keyboard.left.alt`）；
+     - `onekey.lock_slot`（触发键，默认 `Left Click` / 鼠标左键，`key.mouse.left`）；
+   - 在 Fabric（`OneKeyFabricClient`）与 NeoForge（`OneKeyNeoForgeClient`）中通过轻量派生类 `CustomKeyMapping extends KeyMapping` 注册入 `OneKey` 分类（`key.category.onekey.keys`）；
+   - 玩家可直接在 Minecraft「选项 → 控制 → 按键绑定」中对修饰键与触发键进行任意自定义、重绑或解绑。
+2. **极高自由度的组合判定状态机（鼠标与键盘双向支持）**：
+   - **修饰键判定（`isModifierActive`）**：
+     - 若修饰键未绑定（`isUnbound()`），则判定始终为 true（支持单键直按触发锁定）；
+     - 若修饰键绑定为 `Alt` / `Control` / `Shift` 等修饰键，优先通过输入事件原生标志（`hasAltDown` / `hasControlDown` / `hasShiftDown`）进行最稳健的跨系统判断；
+     - 若修饰键绑定为常规键盘按键，直接通过底层硬件状态 `InputConstants.isKeyDown(val)` 检测；若绑定为鼠标键，通过 `MouseHandler` 状态检测；
+   - **触发键双通道响应**：
+     - **鼠标点击通道**：在 `allowMouseClick` / `MouseButtonPressed.Pre` 中检测 `matchesMouse(event)`，当修饰键满足且悬停有效槽位时，切换锁定并拦截点击事件，防止误抓取物品；
+     - **键盘按键通道**：在 `allowKeyPress` / `KeyPressed.Pre` 中检测 `matches(event)`，当修饰键满足且光标悬停有效槽位时（排除输入框打字），即时切换锁定并拦截按键；
+     - 槽位有效性防护：只有在 `isSlotLockable` 成立时才拦截事件，避免非锁定槽位操作被无辜吞掉。
+3. **动态 Tooltip 与 GUI 说明即时渲染**：
+   - 提供 `getLockKeyComboComponent()` 助手：根据玩家当前绑定的按键动态合成 `Component`（如 `[Left Alt] + [按键 1]`、`[Left Control] + [按键 2]` 或 `[X]`）；
+   - `AbstractContainerScreenMixin`：
+     - 悬停锁定物品提示动态渲染：`§6🔒 [已锁定] §7(%s解锁)`；
+     - 悬停空锁定槽位提示动态渲染：`§6🔒 [空槽位已锁定] §7(%s解锁)`；
+   - `OneKeySettingsScreen`：
+     - 底部说明文字动态格式化当前组合键：`提示：指向槽位按 %s 可锁定/解锁，锁定槽位不参与整理`；
+     - 玩家在设置界面点击「配置原版按键绑定」修改热键后返回，文字帧级自动更新。
+4. **配置模型兼容与 i18n 完整覆盖**：
+   - `OneKeyConfig.Hotkeys` 补充 `lockSlotModifier` 与 `lockSlot`，`normalized()` 保证旧存档缺失字段安全补齐；
+   - 双端 `zh_cn.json` 与 `en_us.json` 补充 `key.onekey.lock_slot_modifier` 与 `key.onekey.lock_slot`，优化所有相关提示词条。
+
+### 验证与产物
+- **单元测试**：双端各 55 例（Fabric 55 + NeoForge 55 = **110 例全绿**），包含配置编解码与动作注册表断言。
+- **构建测试**：Gradle `:fabric:build` 与 `:neoforge:build` 成功打出最新 `onekey-fabric-1.1.1.jar` 与 `onekey-neoforge-1.1.1.jar`。
+- **版本保持**：严格保持 `v1.1.1`，无版本号递增。
 
 ---
 

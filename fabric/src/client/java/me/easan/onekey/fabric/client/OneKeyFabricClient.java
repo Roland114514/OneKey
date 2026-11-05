@@ -74,6 +74,99 @@ public final class OneKeyFabricClient implements ClientModInitializer {
     private static KeyMapping quickStackKey;
     private static KeyMapping quickStashKey;
     private static KeyMapping settingsKey;
+    private static KeyMapping lockSlotModifierKey;
+    private static KeyMapping lockSlotTriggerKey;
+
+    public static final class CustomKeyMapping extends KeyMapping {
+        public CustomKeyMapping(String name, InputConstants.Type type, int keyCode, KeyMapping.Category category) {
+            super(name, type, keyCode, category);
+        }
+
+        public InputConstants.Key getKey() {
+            return this.key != null ? this.key : this.getDefaultKey();
+        }
+    }
+
+    public static KeyMapping getLockSlotModifierKey() {
+        return lockSlotModifierKey;
+    }
+
+    public static KeyMapping getLockSlotTriggerKey() {
+        return lockSlotTriggerKey;
+    }
+
+    public static InputConstants.Key getKey(KeyMapping mapping) {
+        if (mapping instanceof CustomKeyMapping custom) {
+            return custom.getKey();
+        }
+        if (mapping == null) {
+            return InputConstants.UNKNOWN;
+        }
+        try {
+            return InputConstants.getKey(mapping.saveString());
+        } catch (Throwable ignored) {
+            return InputConstants.UNKNOWN;
+        }
+    }
+
+    public static Component getLockKeyComboComponent() {
+        KeyMapping modifier = lockSlotModifierKey;
+        KeyMapping trigger = lockSlotTriggerKey;
+        if (trigger == null || trigger.isUnbound()) {
+            return Component.translatable("key.keyboard.unknown");
+        }
+        if (modifier == null || modifier.isUnbound()) {
+            return trigger.getTranslatedKeyMessage();
+        }
+        return Component.empty()
+                .append(modifier.getTranslatedKeyMessage())
+                .append(Component.literal(" + "))
+                .append(trigger.getTranslatedKeyMessage());
+    }
+
+    public static boolean isModifierActive(KeyMapping modifierMapping, net.minecraft.client.input.InputWithModifiers event) {
+        if (modifierMapping == null || modifierMapping.isUnbound()) {
+            return true;
+        }
+        InputConstants.Key key = getKey(modifierMapping);
+        if (key == null || key == InputConstants.UNKNOWN) {
+            return true;
+        }
+        if (event != null) {
+            if ((key.getValue() == InputConstants.KEY_LALT || key.getValue() == InputConstants.KEY_RALT) && event.hasAltDown()) {
+                return true;
+            }
+            if ((key.getValue() == InputConstants.KEY_LCONTROL || key.getValue() == InputConstants.KEY_RCONTROL) && event.hasControlDown()) {
+                return true;
+            }
+            if ((key.getValue() == InputConstants.KEY_LSHIFT || key.getValue() == InputConstants.KEY_RSHIFT) && event.hasShiftDown()) {
+                return true;
+            }
+        }
+        if (key.getType() == InputConstants.Type.KEYBOARD && key.getValue() > 0) {
+            try {
+                if (InputConstants.isKeyDown(key.getValue())) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        if (key.getType() == InputConstants.Type.MOUSE) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.mouseHandler != null) {
+                if (key.getValue() == InputConstants.MOUSE_BUTTON_LEFT && mc.mouseHandler.isLeftPressed()) {
+                    return true;
+                }
+                if (key.getValue() == InputConstants.MOUSE_BUTTON_RIGHT && mc.mouseHandler.isRightPressed()) {
+                    return true;
+                }
+                if (key.getValue() == InputConstants.MOUSE_BUTTON_MIDDLE && mc.mouseHandler.isMiddlePressed()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
     private static long lastShiftClickTime = 0L;
     private static int lastShiftClickSlot = -1;
@@ -105,13 +198,23 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         // 真正的按键重绑仍走原版「选项 → 控制 → 按键绑定」，此处只负责首次注册的默认值。
         var hotkeys = OneKeyFabric.config().hotkeys;
         sortKey = register(ActionRegistry.get(ActionId.SORT).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD,
                 configuredKey(hotkeys.sort, InputConstants.KEY_R));
         quickStackKey = register(ActionRegistry.get(ActionId.QUICK_STACK).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD,
                 configuredKey(hotkeys.quickStack, InputConstants.KEY_V));
         quickStashKey = register(ActionRegistry.get(ActionId.QUICK_STASH).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD,
                 configuredKey(hotkeys.quickStash, InputConstants.KEY_B));
         settingsKey = register(ActionRegistry.get(ActionId.SETTINGS).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD,
                 configuredKey(hotkeys.settings, InputConstants.KEY_K));
+        lockSlotModifierKey = register(ActionRegistry.get(ActionId.LOCK_SLOT_MODIFIER).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD,
+                configuredKey(hotkeys.lockSlotModifier, InputConstants.KEY_LALT));
+        lockSlotTriggerKey = register(ActionRegistry.get(ActionId.LOCK_SLOT).orElseThrow().translationKey(),
+                InputConstants.Type.MOUSE,
+                configuredKey(hotkeys.lockSlot, InputConstants.MOUSE_BUTTON_LEFT));
 
         // 1. 注册客户端整理结果与锁定槽位网络接收器
         ClientPlayNetworking.registerGlobalReceiver(SortResultPayload.TYPE, (payload, context) -> {
@@ -183,6 +286,18 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                         }
                         client.setScreenAndShow(new OneKeySettingsScreen(screen));
                         return false;
+                    }
+                    if (lockSlotTriggerKey != null && lockSlotTriggerKey.matches(event) && isModifierActive(lockSlotModifierKey, event)) {
+                        if (scr.getFocused() instanceof EditBox editBox && editBox.canConsumeInput()) {
+                            return true;
+                        }
+                        if (containerScreen instanceof AbstractContainerScreenAccessor accessor) {
+                            Slot hovered = accessor.onekey$getHoveredSlot();
+                            if (hovered != null && isSlotLockable(client, containerScreen, hovered)) {
+                                toggleSlotLock(client, containerScreen, hovered);
+                                return false;
+                            }
+                        }
                     }
                     return true;
                 });
@@ -287,9 +402,9 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                             hovered = accessor.onekey$getHoveredSlot();
                         }
 
-                        // Alt + 左键：锁定/解锁槽位
-                        if (event.hasAltDown() && isLeftButton(event.button())) {
-                            if (hovered != null) {
+                        // 自定义按键绑定：锁定/解锁槽位（默认 Left Alt + 鼠标左键，支持任意组合或单键）
+                        if (lockSlotTriggerKey != null && lockSlotTriggerKey.matchesMouse(event) && isModifierActive(lockSlotModifierKey, event)) {
+                            if (hovered != null && isSlotLockable(client, containerScreen, hovered)) {
                                 toggleSlotLock(client, containerScreen, hovered);
                                 return false; // 拦截事件，避免原版拾取/移动物品
                             }
@@ -493,10 +608,10 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         });
 
 
-        OneKeyFabric.LOGGER.info("[OneKey] 客户端已初始化，注册 4 个热键（默认 R / V / B / K）与手势系统");
+        OneKeyFabric.LOGGER.info("[OneKey] 客户端已初始化，注册热键与手势系统");
     }
 
-    private static boolean isSlotLockable(Minecraft client, AbstractContainerScreen<?> screen, Slot slot) {
+    public static boolean isSlotLockable(Minecraft client, AbstractContainerScreen<?> screen, Slot slot) {
         if (client.player == null || slot == null || screen == null || screen.getMenu() == null) {
             return false;
         }
@@ -904,10 +1019,10 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         ClientPlayNetworking.send(new QuickStackRequestPayload(new QuickStackRequest(syncId, radius, stash, targetPos, smartMatching)));
     }
 
-    private static KeyMapping register(String translationKey, int defaultKey) {
-        return KeyMappingHelper.registerKeyMapping(new KeyMapping(
+    private static KeyMapping register(String translationKey, InputConstants.Type type, int defaultKey) {
+        return KeyMappingHelper.registerKeyMapping(new CustomKeyMapping(
                 translationKey,
-                InputConstants.Type.KEYBOARD,
+                type,
                 defaultKey,
                 CATEGORY));
     }

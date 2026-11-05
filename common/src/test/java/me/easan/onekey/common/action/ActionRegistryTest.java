@@ -14,6 +14,8 @@ class ActionRegistryTest {
         assertTrue(ActionRegistry.get(ActionId.QUICK_STACK).isPresent());
         assertTrue(ActionRegistry.get(ActionId.QUICK_STASH).isPresent());
         assertTrue(ActionRegistry.get(ActionId.SETTINGS).isPresent());
+        assertTrue(ActionRegistry.get(ActionId.LOCK_SLOT_MODIFIER).isPresent());
+        assertTrue(ActionRegistry.get(ActionId.LOCK_SLOT).isPresent());
     }
 
     @Test
@@ -25,6 +27,14 @@ class ActionRegistryTest {
         ActionDefinition settings = ActionRegistry.get(ActionId.SETTINGS).orElseThrow();
         assertEquals("key.onekey.settings", settings.translationKey());
         assertEquals("key.keyboard.k", settings.defaultKeyName());
+
+        ActionDefinition lockMod = ActionRegistry.get(ActionId.LOCK_SLOT_MODIFIER).orElseThrow();
+        assertEquals("key.onekey.lock_slot_modifier", lockMod.translationKey());
+        assertEquals("key.keyboard.left.alt", lockMod.defaultKeyName());
+
+        ActionDefinition lockSlot = ActionRegistry.get(ActionId.LOCK_SLOT).orElseThrow();
+        assertEquals("key.onekey.lock_slot", lockSlot.translationKey());
+        assertEquals("key.mouse.left", lockSlot.defaultKeyName());
     }
 
     @Test

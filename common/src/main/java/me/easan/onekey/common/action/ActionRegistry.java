@@ -18,6 +18,8 @@ public final class ActionRegistry {
         register(new ActionDefinition(ActionId.QUICK_STACK, "key.onekey.quick_stack", "key.keyboard.v"));
         register(new ActionDefinition(ActionId.QUICK_STASH, "key.onekey.quick_stash", "key.keyboard.b"));
         register(new ActionDefinition(ActionId.SETTINGS, "key.onekey.settings", "key.keyboard.k"));
+        register(new ActionDefinition(ActionId.LOCK_SLOT_MODIFIER, "key.onekey.lock_slot_modifier", "key.keyboard.left.alt"));
+        register(new ActionDefinition(ActionId.LOCK_SLOT, "key.onekey.lock_slot", "key.mouse.left"));
     }
 
     private ActionRegistry() {

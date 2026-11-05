@@ -28,6 +28,8 @@ public final class OneKeyConfig {
         public String quickStack = "key.keyboard.v";
         public String quickStash = "key.keyboard.b";
         public String settings = "key.keyboard.k";
+        public String lockSlotModifier = "key.keyboard.left.alt";
+        public String lockSlot = "key.mouse.left";
     }
 
     /** 一键整理设置。 */
@@ -108,6 +110,12 @@ public final class OneKeyConfig {
     public OneKeyConfig normalized() {
         if (hotkeys == null) {
             hotkeys = new Hotkeys();
+        }
+        if (hotkeys.lockSlotModifier == null) {
+            hotkeys.lockSlotModifier = "key.keyboard.left.alt";
+        }
+        if (hotkeys.lockSlot == null) {
+            hotkeys.lockSlot = "key.mouse.left";
         }
         if (sort == null) {
             sort = new Sort();

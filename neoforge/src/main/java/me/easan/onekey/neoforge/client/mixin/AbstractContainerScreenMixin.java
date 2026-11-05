@@ -3,6 +3,7 @@ package me.easan.onekey.neoforge.client.mixin;
 import java.util.ArrayList;
 import java.util.List;
 import me.easan.onekey.neoforge.client.ClientLockedSlots;
+import me.easan.onekey.neoforge.client.OneKeyNeoForgeClient;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
@@ -55,7 +56,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
             List<Component> original = cir.getReturnValue();
             if (original != null) {
                 List<Component> list = new ArrayList<>(original);
-                list.add(Component.translatable("onekey.gui.slot_locked_tooltip"));
+                list.add(Component.translatable("onekey.gui.slot_locked_tooltip", OneKeyNeoForgeClient.getLockKeyComboComponent()));
                 cir.setReturnValue(list);
             }
         }
@@ -67,7 +68,9 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
             Slot currentSlot = this.hoveredSlot;
             if (currentSlot != null && currentSlot.isActive() && !currentSlot.hasItem()
                     && ClientLockedSlots.isSlotLocked(this.menu, currentSlot)) {
-                extractor.setTooltipForNextFrame(Component.translatable("onekey.gui.slot_locked_empty_tooltip"), mouseX, mouseY);
+                extractor.setTooltipForNextFrame(
+                        Component.translatable("onekey.gui.slot_locked_empty_tooltip", OneKeyNeoForgeClient.getLockKeyComboComponent()),
+                        mouseX, mouseY);
             }
         }
     }

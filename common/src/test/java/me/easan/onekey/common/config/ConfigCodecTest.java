@@ -20,6 +20,8 @@ class ConfigCodecTest {
     void roundTripPreservesValues() {
         OneKeyConfig config = new OneKeyConfig();
         config.hotkeys.sort = "key.keyboard.g";
+        config.hotkeys.lockSlotModifier = "key.keyboard.left.control";
+        config.hotkeys.lockSlot = "key.keyboard.x";
         config.sort.cooldownMs = 500;
         config.quickStack.radius = 8;
         config.quickStack.whitelist.add("minecraft:chest");
@@ -27,6 +29,8 @@ class ConfigCodecTest {
         OneKeyConfig loaded = ConfigCodec.fromJson(ConfigCodec.toJson(config));
 
         assertEquals("key.keyboard.g", loaded.hotkeys.sort);
+        assertEquals("key.keyboard.left.control", loaded.hotkeys.lockSlotModifier);
+        assertEquals("key.keyboard.x", loaded.hotkeys.lockSlot);
         assertEquals(500, loaded.sort.cooldownMs);
         assertEquals(8, loaded.quickStack.radius);
         assertEquals(List.of("minecraft:chest"), loaded.quickStack.whitelist);
@@ -38,6 +42,8 @@ class ConfigCodecTest {
 
         assertEquals(900, config.sort.cooldownMs);
         assertEquals("key.keyboard.r", config.hotkeys.sort);
+        assertEquals("key.keyboard.left.alt", config.hotkeys.lockSlotModifier);
+        assertEquals("key.mouse.left", config.hotkeys.lockSlot);
         assertEquals(6, config.quickStack.radius);
         assertTrue(config.sort.enabled);
         assertEquals(1, config.schema);

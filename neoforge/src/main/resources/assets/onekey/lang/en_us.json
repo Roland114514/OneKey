@@ -3,6 +3,8 @@
   "key.onekey.quick_stack": "Quick Stack",
   "key.onekey.quick_stash": "Stash to Nearby",
   "key.onekey.settings": "OneKey Settings",
+  "key.onekey.lock_slot_modifier": "Slot Lock Modifier",
+  "key.onekey.lock_slot": "Lock / Unlock Slot",
   "key.category.onekey.keys": "OneKey",
   "onekey.sort.success": "Sorted %s slots",
   "onekey.sort.already_sorted": "Already sorted",
@@ -27,7 +29,7 @@
   "onekey.settings.quickStack.smartMatching": "Smart Category Protection",
   "onekey.settings.compat.enabled": "Compat Mode (v1.1)",
   "onekey.settings.openKeybinds": "Configure Controls...",
-  "onekey.settings.tip.locking": "Tip: Alt + Left Click on any slot to lock/unlock it from sorting",
+  "onekey.settings.tip.locking": "Tip: Hover over slot and press %s to lock/unlock it",
   "onekey.settings.tip.hotbar": "Rule: hotbar involvement is controlled by the toggles above; locked slots never move",
   "onekey.settings.tab.sort": "Sorting",
   "onekey.settings.tab.stack": "Quick Stack",
@@ -46,7 +48,7 @@
   "onekey.settings.gestures.invertWheel": "Invert Wheel Direction",
   "onekey.settings.gestures.wheelCarriedHandling": "Wheel Carried Placement",
   "onekey.settings.resetDefaults": "Reset Defaults",
-  "onekey.settings.openKeybinds.tooltip": "Open vanilla Controls & Key Binds menu to configure hotkeys like R/V/B/K",
+  "onekey.settings.openKeybinds.tooltip": "Open vanilla Controls & Key Binds menu to configure hotkeys like R/V/B/K and slot locking",
   "onekey.settings.resetDefaults.tooltip": "Reset all configuration options across all tabs to factory defaults",
   "onekey.settings.done.tooltip": "Save and immediately apply all changes, returning to game",
   "onekey.settings.tab.sort.tooltip": "Switch to One-Key Sorting configuration (sorting rules, stack merging, orders)",
@@ -68,6 +70,6 @@
   "onekey.settings.gestures.invertWheel.tooltip": "Invert mouse scroll wheel transfer direction (ideal for macOS natural scrolling)",
   "onekey.settings.gestures.wheelCarriedHandling.tooltip": "Scroll down while holding an item on cursor to place 1 item into hovered slot",
   "onekey.settings.gestures.includeHotbar.tooltip": "Whether mouse gestures (Shift sweep, wheel tweaks) are allowed to touch hotbar items",
-  "onekey.gui.slot_locked_tooltip": "§6🔒 [Locked] §7(Alt+LMB to unlock)",
-  "onekey.gui.slot_locked_empty_tooltip": "§6🔒 [Empty Slot Locked] §7(Alt+LMB to unlock)"
+  "onekey.gui.slot_locked_tooltip": "§6🔒 [Locked] §7(%s to unlock)",
+  "onekey.gui.slot_locked_empty_tooltip": "§6🔒 [Empty Slot Locked] §7(%s to unlock)"
 }
