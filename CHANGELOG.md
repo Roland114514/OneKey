@@ -33,6 +33,29 @@
   - `持物滚轮微调`（开启 / 关闭）
 - 优化了底部提示排版，自适应任何 GUI 缩放比例。
 
+### 🐛 修复与安全加固 (Fixed & Hardened)
+
+#### 1. 消除槽位 2px 间隙引起的网络发包风暴（1px/2px Gap Packet Storm）
+- **痛点**：Minecraft 原版 GUI 网格步长通常为 18px，而槽位图标为 16px，存在 2px 的无槽位间隙（`findSlotAt == null`）。若在此间隙将 `lastDraggedSlotIndex` 或 `lastRmbSlotIndex` 重置为 `-1`，高回报率鼠标（1000Hz+）在槽位边缘微抖时，会在极短时间内发生 `Slot A -> Gap -> Slot A` 的高频震颤，导致向服务端密集轰炸发包，极易触发反作弊踢出或容器不同步。
+- **加固**：在 `mouseDragged` 中，当 `hovered == null` 时坚决不重置 `lastIndex`，仅当鼠标真正移入非空且与上次不同的新槽位（`hovered != null && hovered.index != lastIndex`）时才推进状态机并触发点击，只有在按键松开（`mouseReleased`）时才重置。
+
+#### 2. 重构右键画线重复放置惰性接管状态机（Lazy Activation）与单点保护
+- **痛点**：若在 `mouseClicked` 时直接清空原版 `quickCraftSlots` 并置 `isQuickCrafting = false`，且在 `mouseReleased` 时无条件拦截释放，直接导致原版的右键单点放置被彻底破坏或吞掉（原版单点依赖 release 结算）；同时由于按下的第 1 个槽位索引已被记录，滑出时起手槽位无法获得投放补偿。
+- **加固**：引入 `rmbDragActive` 标志位。`mouseClicked` 时仅记录起手槽位，置 `rmbDragActive = false`，完全不触碰原版 QuickCraft 状态，保持单点初始完整性；`mouseDragged` 阶段若鼠标未跨出起手槽位，完全放行给原版；一旦移入不同槽位且光标持物，正式激活 `rmbDragActive = true`，安全补偿起手槽投放 1 件物品（包含数组防越界防护与 `canPlaceRmb` 校验），随后强制流产原版 QuickCraft，投放新槽位并拦截后续拖拽事件；`mouseReleased` 若 `rmbDragActive` 为真，则彻底拦截/取消释放事件以阻止原版多余点击；若未激活（普通单点），完全放行原版正常释放逻辑。
+
+#### 3. Shift + LMB 扫掠光标持物限制
+- **加固**：严格限制仅当光标无持物（`containerScreen.getMenu().getCarried().isEmpty()`）时允许扫掠，避免光标持有物品时与原版持物分配意图冲突。
+
+#### 4. 合成格扫掠放行与产物槽严格拦截
+- **加固**：在 `isSafeForQuickMove` 中明确放行 `CraftingContainer` 输入格，允许快速扫掠收回工作台 3x3 与背包 2x2 合成原材料；同时严格拦截 `ResultSlot` 与 `MerchantResultSlot`（村民交易产物槽），杜绝滑过产物槽造成意外连环交易与高频合成包风暴。
+
+#### 5. 全生命周期状态重置与跨界面防泄漏
+- **加固**：在界面初始化（`ScreenEvents.AFTER_INIT` / `ScreenEvent.Init.Post`）、关闭检测（Client Tick 检测 `screen == null`）、断开连接与登入世界时，统一调用 `resetGestureState()`，彻底杜绝未松开鼠标退出 GUI 导致的手势状态跨屏残留。
+
+### 🧪 测试与构建 (Tests & Build)
+- 双端 104 项单元测试（Fabric 52 + NeoForge 52）持续保持 100% 全绿通过，含手势配置字段 JSON 序列化/反序列化及损坏容错验证。
+- 双端发布 jar 包构建成功，体积保持在 ~120 KB 超轻量级标准。
+
 ---
 
 ## [1.0.3] - 2026-11-04
