@@ -1,17 +1,17 @@
 # OneKey 模组全平台发布操作指南 (Publishing Guide)
 
-本指南汇总了将 **OneKey v1.0.3** 发布至 **GitHub Releases**、**Modrinth** 与 **CurseForge** 的现成物料与填报步骤。
+本指南汇总了将 **OneKey v1.1.2** 发布至 **GitHub Releases**、**Modrinth** 与 **CurseForge** 的现成物料与填报步骤。
 
 ---
 
-## 一、GitHub Releases（v1.0.3）
+## 一、GitHub Releases（v1.1.2）
 
-- **发布链接**：[https://github.com/Roland114514/OneKey/releases/tag/v1.0.3](https://github.com/Roland114514/OneKey/releases/tag/v1.0.3)
+- **发布链接**：[https://github.com/Roland114514/OneKey/releases/tag/v1.1.2](https://github.com/Roland114514/OneKey/releases/tag/v1.1.2)
 - **已挂载产物**：
-  - `onekey-fabric-1.0.3.jar` (116 KB)
-  - `onekey-fabric-1.0.3-sources.jar`
-  - `onekey-neoforge-1.0.3.jar` (114 KB)
-  - `onekey-neoforge-1.0.3-sources.jar`
+  - `onekey-fabric-1.1.2.jar` (168 KB)
+  - `onekey-fabric-1.1.2-sources.jar`
+  - `onekey-neoforge-1.1.2.jar` (167 KB)
+  - `onekey-neoforge-1.1.2-sources.jar`
 - **校验和**：
   - Fabric: `7bc1754b0b60bbe992bea6481b4788f0be65444629cd23ff1abd84b979c903e8`
   - NeoForge: `a5baac52a3eba3d055923cdc35567147a41bacdc3425971876b49a01298696e2`
@@ -38,8 +38,8 @@
 4. **提交审核与上传文件**：
    - 点击 **Submit** 完成项目创建（Modrinth 审核极快）；
    - 在项目页的 **Versions** 标签点击 **Create version**：
-     - 上传 [`docs/release/onekey-fabric-1.0.3.jar`](onekey-fabric-1.0.3.jar)，勾选 `Fabric`、MC 版本 `26.3`、Release Channel `Release`；
-     - 上传 [`docs/release/onekey-neoforge-1.0.3.jar`](onekey-neoforge-1.0.3.jar)，勾选 `NeoForge`、MC 版本 `26.3`、Release Channel `Release`。
+     - 上传 [`docs/release/onekey-fabric-1.1.2.jar`](onekey-fabric-1.1.2.jar)，勾选 `Fabric`、MC 版本 `26.3`、Release Channel `Release`；
+     - 上传 [`docs/release/onekey-neoforge-1.1.2.jar`](onekey-neoforge-1.1.2.jar)，勾选 `NeoForge`、MC 版本 `26.3`、Release Channel `Release`。
 
 ---
 
@@ -59,8 +59,8 @@ CurseForge 同样支持直接提交审核：
    - **Issues URL**：`https://github.com/Roland114514/OneKey/issues`
 3. **文件上传 (Files)**：
    - 审核通过后在 **Files** 页面上传：
-     - `onekey-fabric-1.0.3.jar`（勾选 Java 25、Minecraft 26.3、Fabric）
-     - `onekey-neoforge-1.0.3.jar`（勾选 Java 25、Minecraft 26.3、NeoForge）
+     - `onekey-fabric-1.1.2.jar`（勾选 Java 25、Minecraft 26.3、Fabric）
+     - `onekey-neoforge-1.1.2.jar`（勾选 Java 25、Minecraft 26.3、NeoForge）
 
 ---
 
@@ -71,18 +71,18 @@ CurseForge 同样支持直接提交审核：
 ```bash
 # Modrinth：项目需先在网页创建，token 在 https://modrinth.com/settings/account 生成（scope: create_version, read_project）
 export MODRINTH_TOKEN=xxxx
-python3 scripts/publish_modrinth.py --project <slug> --version 1.0.3 --loader fabric \
-    --file fabric/build/libs/onekey-fabric-1.0.3.jar
-python3 scripts/publish_modrinth.py --project <slug> --version 1.0.3 --loader neoforge \
-    --file neoforge/build/libs/onekey-neoforge-1.0.3.jar
+python3 scripts/publish_modrinth.py --project <slug> --version 1.1.2 --loader fabric \
+    --file fabric/build/libs/onekey-fabric-1.1.2.jar
+python3 scripts/publish_modrinth.py --project <slug> --version 1.1.2 --loader neoforge \
+    --file neoforge/build/libs/onekey-neoforge-1.1.2.jar
 
 # CurseForge：Project ID 是项目页 URL 里的数字，token 在 https://legacy.curseforge.com/account/api-tokens 生成
 export CURSEFORGE_PROJECT_ID=1234567
 export CURSEFORGE_TOKEN=xxxx
-python3 scripts/publish_curseforge.py --version 1.0.3 --loader fabric \
-    --file fabric/build/libs/onekey-fabric-1.0.3.jar
-python3 scripts/publish_curseforge.py --version 1.0.3 --loader neoforge \
-    --file neoforge/build/libs/onekey-neoforge-1.0.3.jar
+python3 scripts/publish_curseforge.py --version 1.1.2 --loader fabric \
+    --file fabric/build/libs/onekey-fabric-1.1.2.jar
+python3 scripts/publish_curseforge.py --version 1.1.2 --loader neoforge \
+    --file neoforge/build/libs/onekey-neoforge-1.1.2.jar
 ```
 
 - 两个脚本都支持从项目根 `.env` 读取 token（`.env` 已在 `.gitignore` 中，不会被提交）；

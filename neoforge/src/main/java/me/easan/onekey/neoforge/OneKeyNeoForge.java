@@ -37,6 +37,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -87,6 +88,9 @@ public final class OneKeyNeoForge {
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedOut);
         NeoForge.EVENT_BUS.addListener(this::onBlockBreak);
+        // 连锁破坏延后到下一 tick 执行：NeoForge 的 BreakBlockEvent 在「破坏前」触发，
+        // 此时原点方块还在、工具耐久未扣、领地/保护检查也还没跑完。等一 tick 再校验更接近 Fabric 的"破坏后"语义。
+        NeoForge.EVENT_BUS.addListener(this::onServerTick);
         // 数据包重载（含 /reload）时刷新物品分类缓存，与 Fabric 端 START_DATA_PACK_RELOAD 行为对齐
         NeoForge.EVENT_BUS.addListener((AddServerReloadListenersEvent reloadEvent) -> ItemConversion.clearCache());
     }
@@ -131,7 +135,8 @@ public final class OneKeyNeoForge {
         registrar.playToServer(ExcavatorStatePayload.TYPE, ExcavatorStatePayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> {
                     if (ctx.player() instanceof ServerPlayer player) {
-                        ServerExcavatorHandler.updateState(player.getUUID(), payload.isPressed(), payload.shapeId());
+                        ServerExcavatorHandler.updateState(player.getUUID(), payload.isPressed(), payload.shapeId(),
+                                payload.optionsMask(), payload.maxBlocks());
                     }
                 }));
 
@@ -213,7 +218,12 @@ public final class OneKeyNeoForge {
             return;
         }
         if (event.getLevel() instanceof ServerLevel sl && event.getPlayer() instanceof ServerPlayer sp) {
-            ServerExcavatorHandler.onBlockBroken(sl, sp, event.getPos(), event.getState());
+            // 不立即连锁：先记下来，下一 tick 确认原点方块真的被破坏（未被保护/领地拦下）再展开
+            ServerExcavatorHandler.queueBlockBreak(sl, sp, event.getPos(), event.getState());
         }
+    }
+
+    private void onServerTick(ServerTickEvent.Post event) {
+        ServerExcavatorHandler.flushPendingBreaks();
     }
 }

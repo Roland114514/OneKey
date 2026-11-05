@@ -253,7 +253,7 @@ public final class OneKeyNeoForgeClient {
      * 判断当前连接是否与服务端协商过某个 OneKey 通道。
      * 服务端未安装模组时该通道不会被协商，据此做友好降级提示（与 Fabric 端 canSend 行为对齐）。
      */
-    private static boolean serverSupports(CustomPacketPayload.Type<?> type) {
+    public static boolean serverSupports(CustomPacketPayload.Type<?> type) {
         var connection = Minecraft.getInstance().getConnection();
         return connection != null && connection.hasChannel(type);
     }
@@ -646,6 +646,8 @@ public final class OneKeyNeoForgeClient {
         ClientLockedSlots.clear();
         ItemConversion.clearCache();
         resetGestureState();
+        // 登录后立即把连锁破坏偏好同步给服务端，避免服务端在玩家第一次改配置前用默认值跑
+        ClientExcavatorHandler.syncState();
     }
 
     @SubscribeEvent
@@ -653,6 +655,7 @@ public final class OneKeyNeoForgeClient {
         ClientLockedSlots.clear();
         ItemConversion.clearCache();
         resetGestureState();
+        ClientExcavatorHandler.onLogout();
     }
 
     public static boolean isSlotLockable(Minecraft client, AbstractContainerScreen<?> screen, Slot slot) {

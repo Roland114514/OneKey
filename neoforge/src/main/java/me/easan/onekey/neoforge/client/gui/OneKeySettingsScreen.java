@@ -1,6 +1,7 @@
 package me.easan.onekey.neoforge.client.gui;
 
 import me.easan.onekey.common.config.OneKeyConfig;
+import me.easan.onekey.neoforge.client.ClientExcavatorHandler;
 import me.easan.onekey.neoforge.OneKeyNeoForge;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -216,6 +217,7 @@ public final class OneKeySettingsScreen extends Screen {
         current.gestures = defaults.gestures;
         current.excavator = defaults.excavator;
         OneKeyNeoForge.saveConfig();
+        ClientExcavatorHandler.syncState();
         if (this.minecraft != null) {
             this.minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.2F));
         }

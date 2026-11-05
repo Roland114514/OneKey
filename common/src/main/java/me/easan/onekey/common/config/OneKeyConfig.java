@@ -21,7 +21,6 @@ public final class OneKeyConfig {
     public QuickStack quickStack = new QuickStack();
     public Gestures gestures = new Gestures();
     public Excavator excavator = new Excavator();
-    public ClientCompat compat = new ClientCompat();
 
     /** 热键映射：值形如 {@code key.keyboard.r}。 */
     public static final class Hotkeys {
@@ -101,13 +100,6 @@ public final class OneKeyConfig {
         public boolean wheelCarriedHandling = true;
     }
 
-    /** 纯客户端点击模拟（用于公共服务器）的开关，默认关闭。 */
-    public static final class ClientCompat {
-        public boolean enabled = false;
-        /** 每个模拟点击之间的间隔，越大越安全。 */
-        public int clickDelayMs = 60;
-    }
-
     /** 连锁破坏设置。 */
     public static final class Excavator {
         public boolean enabled = true;
@@ -116,8 +108,8 @@ public final class OneKeyConfig {
         public boolean consolidateDrops = true;
         public boolean includeLeaves = false;
         public boolean requireValidTool = true;
+        /** 每个被连锁破坏的方块额外附加的饥饿消耗（与原版 0.005 一致）。 */
         public float exhaustionPerBlock = 0.005F;
-        public boolean showPreviewOutline = true;
     }
 
     /** 补全 null 字段，保证下游逻辑不需要判空。 */
@@ -145,9 +137,6 @@ public final class OneKeyConfig {
         }
         if (excavator == null) {
             excavator = new Excavator();
-        }
-        if (compat == null) {
-            compat = new ClientCompat();
         }
         if (quickStack.whitelist == null) {
             quickStack.whitelist = new ArrayList<>();

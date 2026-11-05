@@ -116,7 +116,8 @@ public final class OneKeyFabric implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(ExcavatorStatePayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();
             if (player != null) {
-                ServerExcavatorHandler.updateState(player.getUUID(), payload.isPressed(), payload.shapeId());
+                ServerExcavatorHandler.updateState(player.getUUID(), payload.isPressed(), payload.shapeId(),
+                        payload.optionsMask(), payload.maxBlocks());
             }
         });
 

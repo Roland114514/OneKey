@@ -12,19 +12,60 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `feat: 原生实现工业级连锁破坏 (Vein Mining)，支持三模式滚轮切换与 HUD 实时反馈` |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.1.jar` 与 `onekey-neoforge-1.1.1.jar` 构建成功 |
-| 单测状态 | ✅ 双端各 60 例（Fabric 60 + NeoForge 60 = **120 例全绿**） |
-| 版本状态 | ✅ `mod_version=1.1.1`（保持 v1.1.1） |
-| 协议版本 | `ProtocolVersion.CURRENT=2`（保持向后兼容动态降级） |
-| 当前任务聚焦 | 🎯 原生实现工业级连锁破坏 (Vein Mining / FTB-Ultimine 26.3 平替)，三大挖掘模式、滚轮轮换、HUD、严格防作弊、掉落物聚合 |
-| 发布状态 | 🔄 v1.1.1 产物已同步覆盖更新至 GitHub Release，代码与文档已推至远程 |
+| 最新提交 | `fix: v1.1.2 连锁破坏多人一致性与健壮性修复（个人偏好交集、掉落 finally 回吐、协议升 3）` |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.2.jar`（168 KB）与 `onekey-neoforge-1.1.2.jar`（166 KB）构建成功 |
+| 单测状态 | ✅ 双端各 68 例（Fabric 68 + NeoForge 68 = **136 例全绿**） |
+| 版本状态 | ✅ `mod_version=1.1.2` |
+| 协议版本 | **`ProtocolVersion.CURRENT=3`**（1.1.2 起必须双端同版本） |
+| 当前任务聚焦 | 🎯 v1.1.2 维护版：连锁破坏多人一致性与健壮性（4 修 + 2 清理） |
+| 发布状态 | 🔄 v1.1.2 待打 tag 与创建 GitHub Release |
 | 运行实测 | ✅ 连锁按键与滚轮模式切换丝滑、屏幕左上角半透明 HUD 实时预览、严格工具匹配防作弊、伐木默认排除树叶、掉落物/经验聚合零卡顿、工具耐久防爆保护 |
 | 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / **原生连锁破坏 Vein Mining 收官 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互自由度 |
 
 **接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 26 次会话的「原生连锁破坏 Vein Mining」细节。
+
+---
+
+## 2026-11-05（第 3 个工作日 · 第 27 次会话：v1.1.2 连锁破坏多人一致性与健壮性修复）
+
+### 目标与背景（用户原话）
+> "全部修理，结束后发v1.1.2"
+
+上一轮审查（第 26 次会话末）列出 1.1.x 的 P1/P2 问题，本次逐条修完并发布 v1.1.2。
+
+### 修了什么
+1. **P1-1 多人服「连锁破坏」开关无效**：状态包新增玩家个人偏好位掩码与破坏上限（`ExcavatorStatePayload(isPressed, shapeId, optionsMask, maxBlocks)`）；新增 `common/.../excavator/ExcavatorOptions.java`，服务端用 `ExcavatorOptions.resolve(服主配置, 玩家掩码, 玩家上限)` 逐项取交集 —— 布尔开关只能收紧、上限取较小值并夹 1..128。`ServerExcavatorHandler.effectiveOptions(state)` 是唯一入口，`canVeinMine`/`onBlockBroken`/`performVeinMine` 全部改用它。
+2. **P1-2 掉落聚合异常路径丢物品**：`performVeinMine` 改为 `try { 循环 } finally { flushCapturedDrops(...) }`；新增 `flushCapturedDrops` 先 `COLLECTING_DROPS.set(false)` 再回吐（否则回吐实体又被 `ServerLevelMixin` 吞回，形成死循环），合并失败时退化为按原始掉落逐叠散落。
+3. **P2-3 滚轮快捷栏保护可绕过**：两端 `ServerScrollHandler` 两处判断改为 `payload.includeHotbar() && <Loader>.config().gestures.includeHotbar`。
+4. **P2-4 协议号脱节**：`ProtocolVersion.CURRENT` 2 → **3**，javadoc 记录 1→2→3 演进；NeoForge `versioned(...)` 自动跟随。
+5. **P2-5 死配置清理**：`OneKeyConfig` 删除 `ClientCompat`（类 + `compat` 字段 + normalized 兜底）与 `Excavator.showPreviewOutline`；`exhaustionPerBlock` 真正接上（`brokenCount × 配置值` → `player.causeFoodExhaustion`）。
+6. **P3**：`updateState` 对 20ms 内完全重复状态去重；客户端新增 `syncState()`，在**登录后**（Fabric `ClientPlayConnectionEvents.JOIN` / NeoForge `ClientPlayerNetworkEvent.LoggingIn`）与**关闭设置界面后**主动重发状态；连锁破坏页签总开关气泡补充「多人服只能收紧服主配置；创造/旁观不触发」。
+
+### 测试与构建
+- 新增 `common/src/test/java/me/easan/onekey/common/excavator/ExcavatorOptionsTest.java` 6 例（掩码往返、旧掩码回落、玩家只能收紧、上限夹取、边界、默认值）。
+- `clean build` ✅；`:fabric:test :neoforge:test --rerun-tasks` → **136 例（68 + 68）0 失败**。
+- 产物：`onekey-fabric-1.1.2.jar` 171,528 B（sha256 `e2774de7…aad7`）、`onekey-neoforge-1.1.2.jar` 169,225 B（sha256 `579848c7…eb40`）；sources 108,922 / 105,765 B。
+- 语言文件 4 份对齐为 93 键（删掉 `onekey.settings.compat.enabled`）。
+
+### 踩坑记录
+- `OneKeyConfig.Excavator` 是 `OneKeyConfig` 的嵌套类，写 `OneKeyFabric.Excavator` 会编译失败（第一版补丁就这么写，已改为全限定名）。
+- 掉落回吐必须**先关聚合再 pop**，顺序反了会自我吞噬成死循环。
+- `excavator.exhaustionPerBlock` 之前是死配置，接上后要按「实际破坏方块数」累计，不能按循环次数（初始方块已被原版扣过一次）。
+
+### 收尾时并入的第二轮修复（NeoForge 审查报告）
+- **隧道模式垂直挖掘方向错乱**：服务端改用「眼睛 → 方块中心」经 `Direction.getApproximateNearest(...)` 重建命中面，`isHitUpperHalf = eye.y - pos.getY() > 0.5`，不再用只看 yaw 的 `player.getDirection()`。
+- **NeoForge 连锁时机**：`BreakBlockEvent` 在破坏前触发 → 改为 `ServerExcavatorHandler.queueBlockBreak(...)` 入队，`ServerTickEvent.Post` 里 `flushPendingBreaks()` 确认原点已成空气才执行（`OneKeyNeoForge` 注册 `onServerTick`）。
+- NeoForge 客户端状态包补 `serverSupports(...)` 守卫；HUD 上限用 `clampMaxBlocks`；客户端工具预览补不可破坏方块判断；断线 `ClientExcavatorHandler.onLogout()` 重置按压；`ServerLevelMixin` 两份配置改 `"required": false` + `defaultRequire: 0`（注入失败只丢聚合，不崩服）。
+- 最终产物：fabric 172,009 B（sha256 `ed128012…5e5a`）、neoforge 171,457 B（sha256 `f936b4ae…de4f`）；测试仍 **136 例全绿**。
+
+### 下一步
+- tag `v1.1.2` + GitHub Release（4 资产）已在本次收尾完成；
+- 后续 v1.2 候选：按容器坐标锁定、外部容器锁定槽豁免、标签匹配防污染、协议协商失败提示、快速堆叠是否应包含快捷栏（当前固定只搬主背包 9..35，已写入 README 已知限制）。
+
+### 快速堆叠的既有行为（新增说明）
+- `ServerQuickStackHandler` 扫描起点固定为 `InventorySlots.MAIN_START`（9）→ **快捷栏 0..8 不参与 V/B 存取**，这是 v1.0.3 起的既有设计，本次未改动，已补进 README「已知限制」。
 
 ---
 

@@ -71,12 +71,12 @@ class ConfigCodecTest {
     void saveCreatesParentDirectoriesAndLoadsBack(@TempDir Path tempDir) throws IOException {
         Path file = tempDir.resolve("nested").resolve("onekey.json");
         OneKeyConfig config = new OneKeyConfig();
-        config.compat.enabled = true;
+        config.sort.enabled = false;
 
         ConfigCodec.save(file, config);
 
         assertTrue(Files.exists(file));
-        assertTrue(ConfigCodec.load(file).compat.enabled);
+        assertFalse(ConfigCodec.load(file).sort.enabled);
     }
 
     @Test
@@ -219,7 +219,6 @@ class ConfigCodecTest {
         assertFalse(defaults.excavator.includeLeaves);
         assertTrue(defaults.excavator.requireValidTool);
         assertEquals(0.005F, defaults.excavator.exhaustionPerBlock, 0.0001F);
-        assertTrue(defaults.excavator.showPreviewOutline);
         assertEquals("key.keyboard.grave.accent", defaults.hotkeys.excavate);
 
         OneKeyConfig custom = new OneKeyConfig();
@@ -230,7 +229,6 @@ class ConfigCodecTest {
         custom.excavator.includeLeaves = true;
         custom.excavator.requireValidTool = false;
         custom.excavator.exhaustionPerBlock = 0.01F;
-        custom.excavator.showPreviewOutline = false;
         custom.hotkeys.excavate = "key.keyboard.grave.accent";
 
         OneKeyConfig loaded = ConfigCodec.fromJson(ConfigCodec.toJson(custom));
@@ -241,6 +239,5 @@ class ConfigCodecTest {
         assertTrue(loaded.excavator.includeLeaves);
         assertFalse(loaded.excavator.requireValidTool);
         assertEquals(0.01F, loaded.excavator.exhaustionPerBlock, 0.0001F);
-        assertFalse(loaded.excavator.showPreviewOutline);
     }
 }

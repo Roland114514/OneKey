@@ -4,6 +4,62 @@
 
 ---
 
+## [1.1.2] - 2026-11-05
+
+### 🐛 修复 (Fixed)
+
+#### 1. 多人服务器里玩家关掉「连锁破坏」却依然触发（重要）
+- **根因**：连锁破坏的开关只从服务端 `config/onekey.json` 读取，客户端设置界面里的开关从未上传，玩家以为关掉了，服务端仍按服主配置继续连锁。
+- **修法**：`ExcavatorStatePayload` 增加玩家个人偏好位掩码与破坏上限（`optionsMask` / `maxBlocks`），服务端用 `ExcavatorOptions.resolve(...)` 与服主配置**逐项取交集**：布尔开关只能收紧不能放开（服主关掉，玩家开也无效），破坏上限取两者较小值并夹在 1..128。单人游戏同样走这条路径，行为不变。
+
+#### 2. 连锁破坏掉落聚合在异常路径可能永久丢物品（重要）
+- **根因**：掉落物被 `ServerLevelMixin` 在 `addFreshEntity` 处捕获（实体不入世界），而「回吐掉落物」写在挖掘循环之后的正常路径；一旦循环中途抛异常（区块卸载、面板插件抛错等），已捕获的掉落永远不会生成。
+- **修法**：回吐与经验结算移入 `finally`（`flushCapturedDrops`），并且**先关闭聚合开关再回吐**，避免回吐的实体被 mixin 重新吞掉形成死循环；若合并过程本身抛异常，退化为把原始掉落逐叠散落，宁可散落也不丢。
+
+#### 3. 滚轮手势的「快捷栏」保护可被客户端绕过
+- **根因**：滚轮包里的 `includeHotbar` 完全由客户端上报，服务端直接采信，服主把 `gestures.includeHotbar` 关掉也拦不住改过的客户端。
+- **修法**：服务端改为 `payload.includeHotbar() && config().gestures.includeHotbar`，服主拥有最终否决权。
+
+#### 4. 网络协议版本号与实际包结构脱节
+- **根因**：1.0.3 → 1.1.0/1.1.1 期间 `SortRequest` / `QuickStackRequest` / `ScrollItemTransfer` / `ExcavatorState` 都加了字段，但 `ProtocolVersion.CURRENT` 一直是 2，`neoforge` 的 `versioned("2")` 也就拦不住 1.0.x 与 1.1.x 混连。
+- **修法**：`ProtocolVersion.CURRENT` 升到 **3**，javadoc 记录 1→2→3 的演进；旧客户端仍因「尾部可读才解码」的容错逻辑保持单向兼容（新服务端忽略多余字节，旧服务端按默认值回落），但**从 1.1.2 起请双端保持同版本**。
+
+#### 8. 隧道模式在垂直挖掘时方向错乱（最多白挖 128 格）
+- **根因**：服务端用 `player.getDirection()`（只看 yaw 的水平四向）冒充命中面，`isHitUpperHalf` 还写死 `false`；客户端 HUD 预览却用真实的 `BlockHitResult`。对着脚下/头顶方块按住 `~` 时，预览画的是竖井，服务端却沿玩家朝向横挖。
+- **修法**：服务端改用「眼睛 → 方块中心」向量经 `Direction.getApproximateNearest(...)` 重建真实命中面，并按 `eye.y - pos.getY() > 0.5` 计算上半格，与客户端预览一致。
+
+#### 9. NeoForge 端连锁破坏的触发时机早于真正破坏（可白送方块）
+- **根因**：Fabric 用 `PlayerBlockBreakEvents.AFTER`（破坏后），NeoForge 却挂在 `BreakBlockEvent`（破坏前）。原点方块被领地/权限拦下时，连锁出来的方块等于白送；工具耐久也还没扣原点那一格。
+- **修法**：NeoForge 改为「先入队、下一 tick 复核」：确认原点已变成空气才连锁，否则整次丢弃（`queueBlockBreak` / `flushPendingBreaks`）。
+
+#### 10. 零散一致性修复
+- NeoForge 客户端连锁状态包补 `serverSupports(...)` 通道守卫（此前会因未协商通道被服务端踢下线，Fabric 早就有 `canSend`）；
+- HUD 的「预计破坏上限」改用 `ExcavatorOptions.clampMaxBlocks(...)`，配置写 256 也不会显示与真实不符的 `/256`；
+- 客户端工具预览补「不可破坏方块（`getDestroySpeed < 0`）不参与连锁」判断，基岩/屏障不再显示为可连锁；
+- 断线/切服时重置按压状态（`ClientExcavatorHandler.onLogout()`），避免「登录瞬间正按着 `~`」导致首次按键不生效；
+- 掉落聚合的 `ServerLevelMixin` 配置从 `"required": true` 改为 `"required": false` + `defaultRequire: 0`：万一将来 `addFreshEntity` 签名变动，最坏结果是「不做掉落聚合」，而不是整个服务端注入失败崩服。
+
+### 🧹 清理与改进 (Changed)
+
+#### 5. 真正接上「每方块饥饿消耗」
+- `excavator.exhaustionPerBlock`（默认 0.005）此前是死配置，现在按「本次连锁实际破坏方块数 × 配置值」调用 `player.causeFoodExhaustion(...)`，与同类模组一致，避免无限连锁零代价。
+
+#### 6. 删除死配置与死界面项
+- 移除始终没有运行时读取的 `compat.enabled` / `compat.clickDelayMs`（残留的「纯客户端点击降级」占位方案）与 `excavator.showPreviewOutline`（预览描边从未实现）；
+- 同步删除语言文件里的 `onekey.settings.compat.enabled` 死键（4 个语言文件重新对齐为 93 键）。
+
+#### 7. 状态同步更省、更稳
+- 服务端对 20ms 内完全重复的连锁状态包做去重，挡住刷包；
+- 客户端在**登录后**与**关闭设置界面/改配置后**都会主动重发一次状态，避免「先改配置再进服」时服务端仍拿默认值跑一轮；
+- 连锁破坏页签的总开关气泡补充说明：多人服务器中只能收紧服主配置，创造模式与旁观模式不触发。
+
+### 🧪 测试
+
+- 新增 `ExcavatorOptionsTest`（6 例）：掩码往返、旧掩码回落、玩家只能收紧、上限夹取、边界与默认值；
+- 合计 **136 例单测全绿**（Fabric 68 + NeoForge 68），`clean build` 无错误。
+
+---
+
 ## [1.1.1] - 2026-11-05
 
 ### ✨ 新增功能与体验打磨 (Added & Polished)

@@ -1,6 +1,7 @@
 package me.easan.onekey.fabric.client.gui;
 
 import me.easan.onekey.common.config.OneKeyConfig;
+import me.easan.onekey.fabric.client.ClientExcavatorHandler;
 import me.easan.onekey.fabric.OneKeyFabric;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -216,6 +217,7 @@ public final class OneKeySettingsScreen extends Screen {
         current.gestures = defaults.gestures;
         current.excavator = defaults.excavator;
         OneKeyFabric.saveConfig();
+        ClientExcavatorHandler.syncState();
         if (this.minecraft != null) {
             this.minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.2F));
         }

@@ -244,11 +244,14 @@ public final class OneKeyFabricClient implements ClientModInitializer {
             ClientLockedSlots.clear();
             ItemConversion.clearCache();
             resetGestureState();
+            ClientExcavatorHandler.onLogout();
         });
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             ClientLockedSlots.clear();
             ItemConversion.clearCache();
             resetGestureState();
+            // 登录后立即把连锁破坏偏好同步给服务端，避免服务端在玩家第一次改配置前用默认值跑
+            ClientExcavatorHandler.syncState();
         });
 
         // 2. 监听容器界面内的按键与鼠标事件

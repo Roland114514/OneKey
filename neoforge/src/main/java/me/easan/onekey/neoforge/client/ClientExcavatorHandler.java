@@ -5,6 +5,7 @@ import java.util.List;
 import me.easan.onekey.common.excavator.BlockInspector;
 import me.easan.onekey.common.excavator.BlockPos3i;
 import me.easan.onekey.common.excavator.Direction3i;
+import me.easan.onekey.common.excavator.ExcavatorOptions;
 import me.easan.onekey.common.excavator.MiningShape;
 import me.easan.onekey.common.excavator.VeinFinder;
 import me.easan.onekey.neoforge.OneKeyNeoForge;
@@ -59,6 +60,49 @@ public final class ClientExcavatorHandler {
         }
     }
 
+    /** 当前客户端的连锁破坏个人偏好（随状态包上传，服务端会与服主配置取交集）。 */
+    public static ExcavatorOptions currentOptions() {
+        me.easan.onekey.common.config.OneKeyConfig.Excavator excavator =
+                OneKeyNeoForge.config().excavator;
+        return new ExcavatorOptions(
+                excavator.enabled,
+                excavator.includeLeaves,
+                excavator.preventToolBreak,
+                excavator.requireValidTool,
+                excavator.consolidateDrops,
+                excavator.maxBlocks);
+    }
+
+    private static ExcavatorStatePayload currentPayload(boolean isDown) {
+        ExcavatorOptions options = currentOptions();
+        return new ExcavatorStatePayload(
+                isDown, currentShape.id(), options.optionsMask(), options.maxBlocks());
+    }
+
+    /** 把当前按键状态、模式与偏好一起同步给服务端（登录、改配置、切模式时都应调用）。 */
+    public static void syncState() {
+        Minecraft client = Minecraft.getInstance();
+        boolean isDown = client.player != null && isExcavateKeyDown();
+        wasPressed = isDown;
+        sendState(isDown);
+    }
+
+    private static void sendState(boolean isDown) {
+        if (Minecraft.getInstance().player == null) {
+            return;
+        }
+        ExcavatorOptions options = currentOptions();
+        if (OneKeyNeoForgeClient.serverSupports(ExcavatorStatePayload.TYPE)) {
+            ClientPacketDistributor.sendToServer(new ExcavatorStatePayload(
+                    isDown, currentShape.id(), options.optionsMask(), options.maxBlocks()));
+        }
+    }
+
+    /** 断线/切服时清空按压状态，避免「登录时正按着 ~」导致首次 tick 不发包。 */
+    public static void onLogout() {
+        wasPressed = false;
+    }
+
     public static void onClientTick(Minecraft client) {
         if (client.player == null) {
             return;
@@ -67,7 +111,7 @@ public final class ClientExcavatorHandler {
         boolean isDown = isExcavateKeyDown();
         if (isDown != wasPressed) {
             wasPressed = isDown;
-            ClientPacketDistributor.sendToServer(new ExcavatorStatePayload(isDown, currentShape.id()));
+            ClientPacketDistributor.sendToServer(currentPayload(isDown));
         }
     }
 
@@ -84,7 +128,7 @@ public final class ClientExcavatorHandler {
         currentShape = currentShape.cycle(forward);
         lastModeSwitchTime = System.currentTimeMillis();
 
-        ClientPacketDistributor.sendToServer(new ExcavatorStatePayload(true, currentShape.id()));
+        ClientPacketDistributor.sendToServer(currentPayload(true));
 
         client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.2F));
         return true;
@@ -92,6 +136,10 @@ public final class ClientExcavatorHandler {
 
     public static boolean isToolValidForBlock(LocalPlayer player, BlockState state) {
         if (state == null || state.isAir()) {
+            return false;
+        }
+        // 与服务端 canVeinMine 对齐：基岩/屏障等不可破坏方块（destroySpeed < 0）不参与预览
+        if (player == null || player.level() == null || state.getDestroySpeed(player.level(), BlockPos.ZERO) < 0.0F) {
             return false;
         }
         ItemStack tool = player.getMainHandItem();
@@ -170,7 +218,7 @@ public final class ClientExcavatorHandler {
                 line2 = "§7目标: §e" + blockName + " §a[就绪]";
 
                 // 实时预估方块数
-                int maxBlocks = OneKeyNeoForge.config().excavator.maxBlocks;
+                int maxBlocks = ExcavatorOptions.clampMaxBlocks(OneKeyNeoForge.config().excavator.maxBlocks);
                 boolean includeLeaves = OneKeyNeoForge.config().excavator.includeLeaves;
 
                 Direction playerDir = client.player.getDirection();
