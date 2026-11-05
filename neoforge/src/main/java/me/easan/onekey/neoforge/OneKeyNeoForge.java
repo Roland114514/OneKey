@@ -10,6 +10,7 @@ import me.easan.onekey.neoforge.client.ClientLockedSlots;
 import me.easan.onekey.neoforge.client.ClientQuickStackHandler;
 import me.easan.onekey.neoforge.client.ClientSortingHandler;
 import me.easan.onekey.neoforge.client.OneKeyNeoForgeClient;
+import me.easan.onekey.neoforge.net.ExcavatorStatePayload;
 import me.easan.onekey.neoforge.net.QuickStackRequestPayload;
 import me.easan.onekey.neoforge.net.QuickStackResultPayload;
 import me.easan.onekey.neoforge.net.RequestSlotLocksPayload;
@@ -18,11 +19,13 @@ import me.easan.onekey.neoforge.net.SortRequestPayload;
 import me.easan.onekey.neoforge.net.SortResultPayload;
 import me.easan.onekey.neoforge.net.SyncSlotLocksPayload;
 import me.easan.onekey.neoforge.net.ToggleSlotLockPayload;
+import me.easan.onekey.neoforge.server.ServerExcavatorHandler;
 import me.easan.onekey.neoforge.server.ServerQuickStackHandler;
 import me.easan.onekey.neoforge.server.ServerScrollHandler;
 import me.easan.onekey.neoforge.server.ServerSortingHandler;
 import me.easan.onekey.neoforge.storage.LockedSlotsStorage;
 import me.easan.onekey.neoforge.util.ItemConversion;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -32,6 +35,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -82,6 +86,7 @@ public final class OneKeyNeoForge {
         NeoForge.EVENT_BUS.addListener(this::onLevelSave);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedOut);
+        NeoForge.EVENT_BUS.addListener(this::onBlockBreak);
         // 数据包重载（含 /reload）时刷新物品分类缓存，与 Fabric 端 START_DATA_PACK_RELOAD 行为对齐
         NeoForge.EVENT_BUS.addListener((AddServerReloadListenersEvent reloadEvent) -> ItemConversion.clearCache());
     }
@@ -121,6 +126,14 @@ public final class OneKeyNeoForge {
                 (payload, ctx) -> ctx.enqueueWork(() -> handleRequestSlotLocks(payload, ctx)));
         registrar.playToServer(ToggleSlotLockPayload.TYPE, ToggleSlotLockPayload.CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> handleToggleSlotLock(payload, ctx)));
+
+        // 连锁破坏状态与模式同步 (C2S)
+        registrar.playToServer(ExcavatorStatePayload.TYPE, ExcavatorStatePayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> {
+                    if (ctx.player() instanceof ServerPlayer player) {
+                        ServerExcavatorHandler.updateState(player.getUUID(), payload.isPressed(), payload.shapeId());
+                    }
+                }));
 
         // 客户端专用回包 (S2C)：仅在物理客户端注册客户端处理器，专用服务端仅注册数据包结构避免类加载冲突
         if (FMLEnvironment.getDist().isClient()) {
@@ -191,6 +204,16 @@ public final class OneKeyNeoForge {
             ServerSortingHandler.onPlayerDisconnect(player.getUUID());
             ServerQuickStackHandler.onPlayerDisconnect(player.getUUID());
             ServerScrollHandler.onPlayerDisconnect(player.getUUID());
+            ServerExcavatorHandler.onPlayerDisconnect(player.getUUID());
+        }
+    }
+
+    private void onBlockBreak(BreakBlockEvent event) {
+        if (event.isCanceled()) {
+            return;
+        }
+        if (event.getLevel() instanceof ServerLevel sl && event.getPlayer() instanceof ServerPlayer sp) {
+            ServerExcavatorHandler.onBlockBroken(sl, sp, event.getPos(), event.getState());
         }
     }
 }

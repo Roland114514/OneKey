@@ -11,6 +11,7 @@ public final class ActionId {
     public static final String SETTINGS = "onekey.settings";
     public static final String LOCK_SLOT_MODIFIER = "onekey.lock_slot_modifier";
     public static final String LOCK_SLOT = "onekey.lock_slot";
+    public static final String EXCAVATE = "onekey.excavate";
 
     private ActionId() {
     }

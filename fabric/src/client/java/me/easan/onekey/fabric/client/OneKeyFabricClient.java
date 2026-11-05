@@ -76,6 +76,7 @@ public final class OneKeyFabricClient implements ClientModInitializer {
     private static KeyMapping settingsKey;
     private static KeyMapping lockSlotModifierKey;
     private static KeyMapping lockSlotTriggerKey;
+    private static KeyMapping excavateKey;
 
     public static final class CustomKeyMapping extends KeyMapping {
         public CustomKeyMapping(String name, InputConstants.Type type, int keyCode, KeyMapping.Category category) {
@@ -93,6 +94,10 @@ public final class OneKeyFabricClient implements ClientModInitializer {
 
     public static KeyMapping getLockSlotTriggerKey() {
         return lockSlotTriggerKey;
+    }
+
+    public static KeyMapping getExcavateKey() {
+        return excavateKey;
     }
 
     public static InputConstants.Key getKey(KeyMapping mapping) {
@@ -215,6 +220,11 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         lockSlotTriggerKey = register(ActionRegistry.get(ActionId.LOCK_SLOT).orElseThrow().translationKey(),
                 InputConstants.Type.MOUSE,
                 configuredKey(hotkeys.lockSlot, InputConstants.MOUSE_BUTTON_LEFT));
+        excavateKey = register(ActionRegistry.get(ActionId.EXCAVATE).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD,
+                configuredKey(hotkeys.excavate, InputConstants.KEY_GRAVE));
+
+        ClientExcavatorHandler.init(excavateKey);
 
         // 1. 注册客户端整理结果与锁定槽位网络接收器
         ClientPlayNetworking.registerGlobalReceiver(SortResultPayload.TYPE, (payload, context) -> {
@@ -590,6 +600,8 @@ public final class OneKeyFabricClient implements ClientModInitializer {
             if (client.gui != null && client.gui.screen() == null) {
                 resetGestureState();
             }
+
+            ClientExcavatorHandler.onClientTick(client);
 
             if (client.gui != null && client.gui.screen() == null && client.player != null) {
                 while (sortKey.consumeClick()) {

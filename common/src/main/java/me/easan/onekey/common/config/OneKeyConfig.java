@@ -20,6 +20,7 @@ public final class OneKeyConfig {
     public Sort sort = new Sort();
     public QuickStack quickStack = new QuickStack();
     public Gestures gestures = new Gestures();
+    public Excavator excavator = new Excavator();
     public ClientCompat compat = new ClientCompat();
 
     /** 热键映射：值形如 {@code key.keyboard.r}。 */
@@ -30,6 +31,7 @@ public final class OneKeyConfig {
         public String settings = "key.keyboard.k";
         public String lockSlotModifier = "key.keyboard.left.alt";
         public String lockSlot = "key.mouse.left";
+        public String excavate = "key.keyboard.grave.accent";
     }
 
     /** 一键整理设置。 */
@@ -106,6 +108,18 @@ public final class OneKeyConfig {
         public int clickDelayMs = 60;
     }
 
+    /** 连锁破坏设置。 */
+    public static final class Excavator {
+        public boolean enabled = true;
+        public int maxBlocks = 64;
+        public boolean preventToolBreak = true;
+        public boolean consolidateDrops = true;
+        public boolean includeLeaves = false;
+        public boolean requireValidTool = true;
+        public float exhaustionPerBlock = 0.005F;
+        public boolean showPreviewOutline = true;
+    }
+
     /** 补全 null 字段，保证下游逻辑不需要判空。 */
     public OneKeyConfig normalized() {
         if (hotkeys == null) {
@@ -117,6 +131,9 @@ public final class OneKeyConfig {
         if (hotkeys.lockSlot == null) {
             hotkeys.lockSlot = "key.mouse.left";
         }
+        if (hotkeys.excavate == null) {
+            hotkeys.excavate = "key.keyboard.grave.accent";
+        }
         if (sort == null) {
             sort = new Sort();
         }
@@ -125,6 +142,9 @@ public final class OneKeyConfig {
         }
         if (gestures == null) {
             gestures = new Gestures();
+        }
+        if (excavator == null) {
+            excavator = new Excavator();
         }
         if (compat == null) {
             compat = new ClientCompat();
@@ -144,6 +164,7 @@ public final class OneKeyConfig {
         // 数值上下限约束，防止异常配置引发计算暴涨或失去冷却保护
         sort.cooldownMs = Math.clamp(sort.cooldownMs, 50, 5000);
         quickStack.radius = Math.clamp(quickStack.radius, 1, 32);
+        excavator.maxBlocks = Math.clamp(excavator.maxBlocks, 1, 256);
         return this;
     }
 }

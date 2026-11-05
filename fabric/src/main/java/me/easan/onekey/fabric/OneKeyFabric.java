@@ -8,6 +8,7 @@ import java.util.Set;
 import me.easan.onekey.common.config.ConfigCodec;
 import me.easan.onekey.common.config.OneKeyConfig;
 import me.easan.onekey.common.inventory.InventorySlots;
+import me.easan.onekey.fabric.net.ExcavatorStatePayload;
 import me.easan.onekey.fabric.net.QuickStackRequestPayload;
 import me.easan.onekey.fabric.net.QuickStackResultPayload;
 import me.easan.onekey.fabric.net.RequestSlotLocksPayload;
@@ -16,6 +17,7 @@ import me.easan.onekey.fabric.net.SortRequestPayload;
 import me.easan.onekey.fabric.net.SortResultPayload;
 import me.easan.onekey.fabric.net.SyncSlotLocksPayload;
 import me.easan.onekey.fabric.net.ToggleSlotLockPayload;
+import me.easan.onekey.fabric.server.ServerExcavatorHandler;
 import me.easan.onekey.fabric.server.ServerQuickStackHandler;
 import me.easan.onekey.fabric.server.ServerScrollHandler;
 import me.easan.onekey.fabric.server.ServerSortingHandler;
@@ -23,10 +25,12 @@ import me.easan.onekey.fabric.storage.LockedSlotsStorage;
 import me.easan.onekey.fabric.util.ItemConversion;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,6 +98,7 @@ public final class OneKeyFabric implements ModInitializer {
         PayloadTypeRegistry.serverboundPlay().register(QuickStackRequestPayload.TYPE, QuickStackRequestPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(QuickStackResultPayload.TYPE, QuickStackResultPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ScrollItemTransferPayload.TYPE, ScrollItemTransferPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ExcavatorStatePayload.TYPE, ExcavatorStatePayload.CODEC);
 
         // 2. 注册服务端整理、快速堆叠与滚轮微调请求处理器
         ServerPlayNetworking.registerGlobalReceiver(SortRequestPayload.TYPE, (payload, context) -> {
@@ -106,6 +111,13 @@ public final class OneKeyFabric implements ModInitializer {
 
         ServerPlayNetworking.registerGlobalReceiver(ScrollItemTransferPayload.TYPE, (payload, context) -> {
             ServerScrollHandler.handle(payload, context);
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(ExcavatorStatePayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            if (player != null) {
+                ServerExcavatorHandler.updateState(player.getUUID(), payload.isPressed(), payload.shapeId());
+            }
         });
 
         // 3. 注册服务端槽位锁定请求处理器（含合法性与内存防 DoS 校验）
@@ -158,6 +170,14 @@ public final class OneKeyFabric implements ModInitializer {
                 ServerSortingHandler.onPlayerDisconnect(handler.player.getUUID());
                 ServerQuickStackHandler.onPlayerDisconnect(handler.player.getUUID());
                 ServerScrollHandler.onPlayerDisconnect(handler.player.getUUID());
+                ServerExcavatorHandler.onPlayerDisconnect(handler.player.getUUID());
+            }
+        });
+
+        // 6. 注册方块破坏后置事件，触发连锁破坏逻辑
+        PlayerBlockBreakEvents.AFTER.register((level, player, pos, state, blockEntity) -> {
+            if (level instanceof ServerLevel serverLevel && player instanceof ServerPlayer serverPlayer) {
+                ServerExcavatorHandler.onBlockBroken(serverLevel, serverPlayer, pos, state);
             }
         });
 

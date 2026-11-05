@@ -20,6 +20,7 @@ public final class ActionRegistry {
         register(new ActionDefinition(ActionId.SETTINGS, "key.onekey.settings", "key.keyboard.k"));
         register(new ActionDefinition(ActionId.LOCK_SLOT_MODIFIER, "key.onekey.lock_slot_modifier", "key.keyboard.left.alt"));
         register(new ActionDefinition(ActionId.LOCK_SLOT, "key.onekey.lock_slot", "key.mouse.left"));
+        register(new ActionDefinition(ActionId.EXCAVATE, "key.onekey.excavate", "key.keyboard.grave.accent"));
     }
 
     private ActionRegistry() {

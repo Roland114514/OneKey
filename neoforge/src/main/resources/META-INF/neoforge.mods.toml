@@ -18,6 +18,9 @@ logoFile = "assets/onekey/icon.png"
 [[mixins]]
 config = "onekey.neoforge.mixins.json"
 
+[[mixins]]
+config = "onekey.neoforge.server.mixins.json"
+
 [[dependencies.onekey]]
 modId = "neoforge"
 type = "required"

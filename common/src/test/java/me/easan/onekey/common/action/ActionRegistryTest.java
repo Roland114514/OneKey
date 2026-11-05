@@ -16,6 +16,7 @@ class ActionRegistryTest {
         assertTrue(ActionRegistry.get(ActionId.SETTINGS).isPresent());
         assertTrue(ActionRegistry.get(ActionId.LOCK_SLOT_MODIFIER).isPresent());
         assertTrue(ActionRegistry.get(ActionId.LOCK_SLOT).isPresent());
+        assertTrue(ActionRegistry.get(ActionId.EXCAVATE).isPresent());
     }
 
     @Test
@@ -35,6 +36,10 @@ class ActionRegistryTest {
         ActionDefinition lockSlot = ActionRegistry.get(ActionId.LOCK_SLOT).orElseThrow();
         assertEquals("key.onekey.lock_slot", lockSlot.translationKey());
         assertEquals("key.mouse.left", lockSlot.defaultKeyName());
+
+        ActionDefinition excavate = ActionRegistry.get(ActionId.EXCAVATE).orElseThrow();
+        assertEquals("key.onekey.excavate", excavate.translationKey());
+        assertEquals("key.keyboard.grave.accent", excavate.defaultKeyName());
     }
 
     @Test

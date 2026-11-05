@@ -15,14 +15,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 
 /**
- * OneKey 图形设置界面：采用多标签分页布局（一键整理 / 快速堆叠 / 鼠标手势），
+ * OneKey 图形设置界面：采用多标签分页布局（一键整理 / 快速堆叠 / 鼠标手势 / 连锁破坏），
  * 彻底消除低分辨率/大 GUI 缩放比例下底部提示文本与设置按钮重叠的问题，
  * 全面支持按钮原生悬浮气泡说明（Tooltip）与一键恢复出厂设置（NeoForge）。
  */
 public final class OneKeySettingsScreen extends Screen {
 
     private final Screen parent;
-    private static int activeTab = 0; // 0: 整理设置, 1: 堆叠存入, 2: 鼠标手势
+    private static int activeTab = 0; // 0: 整理设置, 1: 堆叠存入, 2: 鼠标手势, 3: 连锁破坏
 
     public OneKeySettingsScreen(Screen parent) {
         super(Component.translatable("onekey.settings.title"));
@@ -38,10 +38,10 @@ public final class OneKeySettingsScreen extends Screen {
     protected void init() {
         OneKeyConfig config = OneKeyNeoForge.config();
 
-        // 1. 顶部 3 个分类标签切换按钮
-        int tabWidth = 98;
+        // 1. 顶部 4 个分类标签切换按钮
+        int tabWidth = 74;
         int tabHeight = 20;
-        int totalTabsWidth = 3 * tabWidth + 2 * 4;
+        int totalTabsWidth = 4 * tabWidth + 3 * 4;
         int tabStartX = this.width / 2 - totalTabsWidth / 2;
         int tabY = 28;
 
@@ -59,6 +59,11 @@ public final class OneKeySettingsScreen extends Screen {
                 .bounds(tabStartX + 2 * (tabWidth + 4), tabY, tabWidth, tabHeight).build(), "onekey.settings.tab.gestures.tooltip");
         tabGesturesBtn.active = (activeTab != 2);
         this.addRenderableWidget(tabGesturesBtn);
+
+        Button tabExcavatorBtn = withTooltip(Button.builder(Component.translatable("onekey.settings.tab.excavator"), btn -> switchTab(3))
+                .bounds(tabStartX + 3 * (tabWidth + 4), tabY, tabWidth, tabHeight).build(), "onekey.settings.tab.excavator.tooltip");
+        tabExcavatorBtn.active = (activeTab != 3);
+        this.addRenderableWidget(tabExcavatorBtn);
 
         // 2. 居中两列选项布局
         int leftX = this.width / 2 - 155;
@@ -127,7 +132,7 @@ public final class OneKeySettingsScreen extends Screen {
                     .create(rightX, rowStartY + rowGap, btnWidth, btnHeight, Component.translatable("onekey.settings.quickStack.stashMode"),
                             (button, value) -> config.quickStack.stashMode = value), "onekey.settings.quickStack.stashMode.tooltip"));
 
-        } else {
+        } else if (activeTab == 2) {
             // Tab 2: 鼠标手势
             // Row 1: Shift左键扫掠转移 / 右键划动重复放置
             this.addRenderableWidget(withTooltip(CycleButton.onOffBuilder(config.gestures.lmbDragSweep)
@@ -151,6 +156,36 @@ public final class OneKeySettingsScreen extends Screen {
             this.addRenderableWidget(withTooltip(CycleButton.onOffBuilder(config.gestures.includeHotbar)
                     .create(leftX, rowStartY + 2 * rowGap, btnWidth, btnHeight, Component.translatable("onekey.settings.gestures.includeHotbar"),
                             (button, value) -> config.gestures.includeHotbar = value), "onekey.settings.gestures.includeHotbar.tooltip"));
+
+        } else {
+            // Tab 3: 连锁破坏
+            // Row 1: 连锁总开关 / 最大破坏数量
+            this.addRenderableWidget(withTooltip(CycleButton.onOffBuilder(config.excavator.enabled)
+                    .create(leftX, rowStartY, btnWidth, btnHeight, Component.translatable("onekey.settings.excavator.enabled"),
+                            (button, value) -> config.excavator.enabled = value), "onekey.settings.excavator.enabled.tooltip"));
+
+            this.addRenderableWidget(withTooltip(CycleButton.<Integer>builder(val -> Component.literal(val + " 块"), () -> config.excavator.maxBlocks)
+                    .withValues(16, 32, 64, 128)
+                    .create(rightX, rowStartY, btnWidth, btnHeight, Component.translatable("onekey.settings.excavator.maxBlocks"),
+                            (button, value) -> config.excavator.maxBlocks = value), "onekey.settings.excavator.maxBlocks.tooltip"));
+
+            // Row 2: 包含相连树叶 / 工具防爆保护
+            this.addRenderableWidget(withTooltip(CycleButton.onOffBuilder(config.excavator.includeLeaves)
+                    .create(leftX, rowStartY + rowGap, btnWidth, btnHeight, Component.translatable("onekey.settings.excavator.includeLeaves"),
+                            (button, value) -> config.excavator.includeLeaves = value), "onekey.settings.excavator.includeLeaves.tooltip"));
+
+            this.addRenderableWidget(withTooltip(CycleButton.onOffBuilder(config.excavator.preventToolBreak)
+                    .create(rightX, rowStartY + rowGap, btnWidth, btnHeight, Component.translatable("onekey.settings.excavator.preventToolBreak"),
+                            (button, value) -> config.excavator.preventToolBreak = value), "onekey.settings.excavator.preventToolBreak.tooltip"));
+
+            // Row 3: 严格工具匹配 / 掉落物与经验聚合
+            this.addRenderableWidget(withTooltip(CycleButton.onOffBuilder(config.excavator.requireValidTool)
+                    .create(leftX, rowStartY + 2 * rowGap, btnWidth, btnHeight, Component.translatable("onekey.settings.excavator.requireValidTool"),
+                            (button, value) -> config.excavator.requireValidTool = value), "onekey.settings.excavator.requireValidTool.tooltip"));
+
+            this.addRenderableWidget(withTooltip(CycleButton.onOffBuilder(config.excavator.consolidateDrops)
+                    .create(rightX, rowStartY + 2 * rowGap, btnWidth, btnHeight, Component.translatable("onekey.settings.excavator.consolidateDrops"),
+                            (button, value) -> config.excavator.consolidateDrops = value), "onekey.settings.excavator.consolidateDrops.tooltip"));
         }
 
         // 3. 底部操作按钮：配置原版按键绑定 / 恢复默认 / 完成
@@ -179,6 +214,7 @@ public final class OneKeySettingsScreen extends Screen {
         current.sort = defaults.sort;
         current.quickStack = defaults.quickStack;
         current.gestures = defaults.gestures;
+        current.excavator = defaults.excavator;
         OneKeyNeoForge.saveConfig();
         if (this.minecraft != null) {
             this.minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.2F));
@@ -217,7 +253,7 @@ public final class OneKeySettingsScreen extends Screen {
                 extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.stack_1"), this.width / 2, tipY1, 0xFF55FFFF);
                 extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.stack_2"), this.width / 2, tipY2, 0xFFAAAAAA);
             }
-        } else {
+        } else if (activeTab == 2) {
             int tipY1 = Math.max(135, bottomButtonY - 44);
             int tipY2 = Math.max(149, bottomButtonY - 30);
             int tipY3 = Math.max(163, bottomButtonY - 16);
@@ -225,6 +261,15 @@ public final class OneKeySettingsScreen extends Screen {
                 extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.sweep"), this.width / 2, tipY1, 0xFFFFB300);
                 extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.repeat"), this.width / 2, tipY2, 0xFF55FFFF);
                 extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.wheel"), this.width / 2, tipY3, 0xFFAAAAAA);
+            }
+        } else {
+            int tipY1 = Math.max(135, bottomButtonY - 44);
+            int tipY2 = Math.max(149, bottomButtonY - 30);
+            int tipY3 = Math.max(163, bottomButtonY - 16);
+            if (tipY1 < bottomButtonY - 26) {
+                extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.excavator_1"), this.width / 2, tipY1, 0xFFFFB300);
+                extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.excavator_2"), this.width / 2, tipY2, 0xFF55FFFF);
+                extractor.centeredText(this.font, Component.translatable("onekey.settings.tip.excavator_3"), this.width / 2, tipY3, 0xFFAAAAAA);
             }
         }
     }

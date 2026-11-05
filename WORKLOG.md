@@ -12,19 +12,70 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `feat: 栏位锁定组合键支持玩家自定义与原版按键绑定系统深度打通` |
+| 最新提交 | `feat: 原生实现工业级连锁破坏 (Vein Mining)，支持三模式滚轮切换与 HUD 实时反馈` |
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.1.jar` 与 `onekey-neoforge-1.1.1.jar` 构建成功 |
-| 单测状态 | ✅ 双端各 55 例（Fabric 55 + NeoForge 55 = **110 例全绿**） |
+| 单测状态 | ✅ 双端各 60 例（Fabric 60 + NeoForge 60 = **120 例全绿**） |
 | 版本状态 | ✅ `mod_version=1.1.1`（保持 v1.1.1） |
 | 协议版本 | `ProtocolVersion.CURRENT=2`（保持向后兼容动态降级） |
-| 当前任务聚焦 | 🎯 栏位锁定按键与组合键由玩家自主自定义，深度接入原版「控制 → 按键绑定」系统 |
+| 当前任务聚焦 | 🎯 原生实现工业级连锁破坏 (Vein Mining / FTB-Ultimine 26.3 平替)，三大挖掘模式、滚轮轮换、HUD、严格防作弊、掉落物聚合 |
 | 发布状态 | 🔄 v1.1.1 产物已同步覆盖更新至 GitHub Release，代码与文档已推至远程 |
-| 运行实测 | ✅ 栏位锁定修饰键与触发键完全支持自定义、双端键盘与鼠标双重事件监听响应丝滑、Tooltip 动态渲染当前绑定键位 |
-| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / **栏位锁定自定义键位收官 ✅** |
+| 运行实测 | ✅ 连锁按键与滚轮模式切换丝滑、屏幕左上角半透明 HUD 实时预览、严格工具匹配防作弊、伐木默认排除树叶、掉落物/经验聚合零卡顿、工具耐久防爆保护 |
+| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / **原生连锁破坏 Vein Mining 收官 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互自由度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 25 次会话的「栏位锁定自定义键位」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 26 次会话的「原生连锁破坏 Vein Mining」细节。
+
+---
+
+## 2026-11-05（第 3 个工作日 · 第 26 次会话：原生工业级连锁破坏 Vein Mining 实现与 FTB-Ultimine 核心体验复刻）
+
+### 目标与背景
+用户提出明确需求：
+1. FTB-Ultimine (`https://github.com/FTBTeam/FTB-Ultimine`) 没有 26.3 版本（受制于第三方库未能跟进），要求研究其原理并在 OneKey 中原生加入连锁破坏功能；
+2. **严格工具匹配与防作弊**：工具不匹配时不触发连锁破坏，防止玩家被围困时空手或用不当工具力大砖飞瞬挖大量方块破坏平衡；
+3. **伐木默认不采伐树叶**：默认仅采集原木，可在 K 键设置中配置独立开关；
+4. **三大挖掘模式与滚轮切换**：按住 `~` 键（波浪号/重音符）同时滑动鼠标滚轮，可在「同类连通 (Vein)」、「1x2 矿道」、「3x3 隧道」之间快速切换；
+5. **FTB-Ultimine 风格屏幕左上角 HUD 提示**：仿原模组在屏幕左上角实时半透明浮窗展示模式名称、目标方块、预计方块数与状态提示；
+6. 借助 4-argon 模型进行深度架构推导，跨 Fabric 与 NeoForge 100% 对齐，保持零第三方依赖与全量单元测试通过。
+
+### 核心实现与技术细节
+1. **纯 Java 空间算法与形状生成内核 (`me.easan.onekey.common.excavator`)**：
+   - `BlockPos3i` 与 `Direction3i`：轻量级不可变纯 Java 3D 向量与方位模型，支持曼哈顿/欧几里得平方距离与六向正交步进；
+   - `MiningShape`：三态枚举（`VEIN`, `TUNNEL_1X2`, `TUNNEL_3X3`），支持 `cycle(forward)` 顺逆时针无缝循环轮换；
+   - `BlockInspector`：空间方块检测与可破坏性查询接口，彻底解耦算法与 Minecraft 运行时；
+   - `VeinFinder`：
+     - **VEIN**：26 邻域三维无向图广度优先搜索 (BFS)，最大搜索距离约束 (32 格)，按距离由近及远拓扑排序破坏；
+     - **TUNNEL_1X2**：按击中面上半/下半部与视线朝向投影 1x2 矩形断面掘进；
+     - **TUNNEL_3X3**：基于局部三维正交基 ($\vec{F}, \vec{U}, \vec{R}$) 投影 3x3 大断面隧道掘进。
+2. **严格工具防作弊与安全防护 (`canVeinMine`)**：
+   - 过滤不可破坏方块（硬度 < 0，如基岩）；
+   - 工具防爆保护：`preventToolBreak = true` 且工具剩余耐久 <= 2 时自动中止；
+   - 严格工具校验：若方块要求工具掉落（`requiresCorrectToolForDrops`），必须手持匹配等级工具且速度 > 1.0F；若方块有硬度但不需要工具（如原木、泥土），手持工具挖掘速度必须 > 1.0F（树叶与农作物豁免），彻底杜绝空手或错误工具连锁；工具不匹配时在 HUD 显式标红 `[工具不匹配, 不触发]`。
+3. **掉落物与经验球内存级聚合 (`ServerLevelMixin` + `ServerExcavatorHandler`)**：
+   - Mixin 注入 `ServerLevel.addFreshEntity`（HEAD 处 cancellable），在连锁破坏期间拦截所有 `ItemEntity` 与 `ExperienceOrb`；
+   - 在内存中通过 `ItemStack.isSameItemSameComponents` 合并为满堆叠；
+   - 连锁执行完毕后一次性在起始方块位置集中生成，经验球通过 `ExperienceOrb.award` 自动防卡顿分片生成；
+   - 单次挖掘 64 块矿石仅产生极少量实体，消除网络卡顿与服务端 TPS 骤降。
+4. **客户端按键、滚轮模式切换与 HUD 渲染 (`ClientExcavatorHandler`)**：
+   - 监听 `~` 热键按压（默认 `key.keyboard.grave.accent`，支持原版按键绑定重绑）；
+   - Fabric 通过 `MouseHandlerMixin.onScroll` 拦截滚轮，NeoForge 通过 `InputEvent.MouseScrollingEvent` 拦截滚轮：按住 `~` 滚动滚轮时切换挖掘模式、播放 UI 音效并拦截原版快捷栏滚轮事件；
+   - 双端统一通过现代 `GuiGraphicsExtractor` 渲染屏幕左上角半透明圆角 HUD 浮窗，实时显示模式、目标方块、预计数量与操作指引，松开平滑淡出。
+5. **K 键设置界面升级扩展至 4 大分类标签**：
+   - 新增第 4 分页标签「连锁破坏」（自适应排版 74px 按钮宽度，杜绝重叠）；
+   - 涵盖 6 大选项：连锁总开关、单次最大方块 (16/32/64/128)、包含相连树叶、工具防爆保护、严格工具匹配、掉落与经验聚合；
+   - 底部提供「恢复默认设置」一键重置，中英双语 Tooltip 全量覆盖。
+
+### 自动化验证与质量保证
+1. **单元测试全绿**：
+   - 新增 `VeinFinderTest` 覆盖 26 邻域连通扩散、1x2 矿道、3x3 隧道、树叶排除/包含、最大上限约束与模式轮换；
+   - 更新 `ActionRegistryTest` 与 `ConfigCodecTest` 验证 `EXCAVATE` 动作与配置项往返读写与反序列化容错；
+   - 执行 `bash scripts/with-jdk25.sh test`，Fabric 60 例 + NeoForge 60 例 = **120 例单测全绿**。
+2. **双端正式 Jar 构建**：
+   - 执行 `bash scripts/with-jdk25.sh clean build`：
+     - `onekey-fabric-1.1.1.jar` (164 KB) 构建通过；
+     - `onekey-neoforge-1.1.1.jar` (161 KB) 构建通过；
+   - 验证两端 Jar 包结构与 Mixin 配置完整合法。
 
 ---
 

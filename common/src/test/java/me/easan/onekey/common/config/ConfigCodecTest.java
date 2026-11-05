@@ -207,4 +207,40 @@ class ConfigCodecTest {
         assertTrue(roundTripped.gestures.invertWheel, "开启后应能往返保持");
         assertFalse(roundTripped.gestures.wheelCarriedHandling, "关闭后应能往返保持");
     }
+
+    @Test
+    void excavatorDefaultsAndRoundTrip() {
+        OneKeyConfig defaults = ConfigCodec.fromJson("{}");
+        assertNotNull(defaults.excavator);
+        assertTrue(defaults.excavator.enabled);
+        assertEquals(64, defaults.excavator.maxBlocks);
+        assertTrue(defaults.excavator.preventToolBreak);
+        assertTrue(defaults.excavator.consolidateDrops);
+        assertFalse(defaults.excavator.includeLeaves);
+        assertTrue(defaults.excavator.requireValidTool);
+        assertEquals(0.005F, defaults.excavator.exhaustionPerBlock, 0.0001F);
+        assertTrue(defaults.excavator.showPreviewOutline);
+        assertEquals("key.keyboard.grave.accent", defaults.hotkeys.excavate);
+
+        OneKeyConfig custom = new OneKeyConfig();
+        custom.excavator.enabled = false;
+        custom.excavator.maxBlocks = 128;
+        custom.excavator.preventToolBreak = false;
+        custom.excavator.consolidateDrops = false;
+        custom.excavator.includeLeaves = true;
+        custom.excavator.requireValidTool = false;
+        custom.excavator.exhaustionPerBlock = 0.01F;
+        custom.excavator.showPreviewOutline = false;
+        custom.hotkeys.excavate = "key.keyboard.grave.accent";
+
+        OneKeyConfig loaded = ConfigCodec.fromJson(ConfigCodec.toJson(custom));
+        assertFalse(loaded.excavator.enabled);
+        assertEquals(128, loaded.excavator.maxBlocks);
+        assertFalse(loaded.excavator.preventToolBreak);
+        assertFalse(loaded.excavator.consolidateDrops);
+        assertTrue(loaded.excavator.includeLeaves);
+        assertFalse(loaded.excavator.requireValidTool);
+        assertEquals(0.01F, loaded.excavator.exhaustionPerBlock, 0.0001F);
+        assertFalse(loaded.excavator.showPreviewOutline);
+    }
 }

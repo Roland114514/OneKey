@@ -73,6 +73,7 @@ public final class OneKeyNeoForgeClient {
     private static KeyMapping settingsKey;
     private static KeyMapping lockSlotModifierKey;
     private static KeyMapping lockSlotTriggerKey;
+    private static KeyMapping excavateKey;
 
     public static final class CustomKeyMapping extends KeyMapping {
         public CustomKeyMapping(String name, InputConstants.Type type, int keyCode, KeyMapping.Category category) {
@@ -90,6 +91,10 @@ public final class OneKeyNeoForgeClient {
 
     public static KeyMapping getLockSlotTriggerKey() {
         return lockSlotTriggerKey;
+    }
+
+    public static KeyMapping getExcavateKey() {
+        return excavateKey;
     }
 
     public static InputConstants.Key getKey(KeyMapping mapping) {
@@ -214,6 +219,8 @@ public final class OneKeyNeoForgeClient {
                 InputConstants.Type.KEYBOARD, configuredKey(hotkeys.lockSlotModifier, InputConstants.KEY_LALT), CATEGORY);
         lockSlotTriggerKey = new CustomKeyMapping(ActionRegistry.get(ActionId.LOCK_SLOT).orElseThrow().translationKey(),
                 InputConstants.Type.MOUSE, configuredKey(hotkeys.lockSlot, InputConstants.MOUSE_BUTTON_LEFT), CATEGORY);
+        excavateKey = new CustomKeyMapping(ActionRegistry.get(ActionId.EXCAVATE).orElseThrow().translationKey(),
+                InputConstants.Type.KEYBOARD, configuredKey(hotkeys.excavate, InputConstants.KEY_GRAVE), CATEGORY);
 
         event.register(sortKey);
         event.register(quickStackKey);
@@ -221,6 +228,9 @@ public final class OneKeyNeoForgeClient {
         event.register(settingsKey);
         event.register(lockSlotModifierKey);
         event.register(lockSlotTriggerKey);
+        event.register(excavateKey);
+
+        ClientExcavatorHandler.init(excavateKey);
     }
 
     /**
@@ -590,6 +600,8 @@ public final class OneKeyNeoForgeClient {
             resetGestureState();
         }
 
+        ClientExcavatorHandler.onClientTick(client);
+
         if (!conflictWarned && client.player != null) {
             conflictWarned = true;
             List<String> conflicts = ModConflictDetector.detectConflicts();
@@ -614,6 +626,19 @@ public final class OneKeyNeoForgeClient {
                 client.setScreenAndShow(new OneKeySettingsScreen(null));
             }
         }
+    }
+
+    @SubscribeEvent
+    public static void onMouseScroll(net.neoforged.neoforge.client.event.InputEvent.MouseScrollingEvent event) {
+        Minecraft client = Minecraft.getInstance();
+        if (ClientExcavatorHandler.onMouseScroll(client, event.getScrollDeltaY())) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onRenderGui(net.neoforged.neoforge.client.event.RenderGuiEvent.Post event) {
+        ClientExcavatorHandler.renderHud(event.getGuiGraphics(), event.getPartialTick());
     }
 
     @SubscribeEvent
