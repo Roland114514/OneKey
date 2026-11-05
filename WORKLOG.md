@@ -12,19 +12,51 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `fix: 加固鼠标手势状态机、防发包风暴与起手/释放时序` |
+| 最新提交 | `fix: 修复26.3鼠标按键码以激活Shift左键扫掠，重构K键GUI为三标签分页防重叠` |
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.0.jar` 与 `onekey-neoforge-1.1.0.jar` 构建成功 |
-| 单测状态 | ✅ 双端各 52 例（Fabric 52 + NeoForge 52 = **104 例全绿**，含 `ConfigCodecTest` 新字段往返验证） |
+| 单测状态 | ✅ 双端各 52 例（Fabric 52 + NeoForge 52 = **104 例全绿**） |
 | 版本状态 | ✅ `mod_version=1.1.0` |
 | 协议版本 | `ProtocolVersion.CURRENT=2` |
-| 当前任务聚焦 | 🎯 v1.1.0 鼠标手势状态机严苛自我审查与漏洞全面加固收官 |
-| 发布状态 | 🔄 v1.1.0 代码与产物就绪；Modrinth/CurseForge 由用户自行上传 |
-| 运行实测 | ✅ 防发包风暴、RMB 惰性接管、起手补偿、单点保护、Shift+LMB 光标限制及合成格扫掠全量通过 |
-| 里程碑 | M0-M8 全量收官 ✅ / 创造模式与事务原子化加固 ✅ / v1.1.0 鼠标手势系统收官 ✅ / **手势状态机防御加固收官 ✅** |
+| 当前任务聚焦 | 🎯 修复 26.3 鼠标按键码以激活 Shift 左键扫掠，重构 K 键 GUI 为三标签分页防重叠 |
+| 发布状态 | 🔄 v1.1.0 补丁发布（GitHub Release 产物已同步替换，B 站 ID「25时的奇迹」已展示） |
+| 运行实测 | ✅ Shift+LMB 扫掠装箱/取出、RMB 连点投掷、滚轮增减、三标签分页切换与文字无重叠实测完好 |
+| 里程碑 | M0-M8 全量收官 ✅ / 创造模式与事务原子化加固 ✅ / v1.1.0 鼠标手势系统收官 ✅ / **按键码修复与三标签GUI收官 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互丝滑度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 21 次会话的「手势状态机严苛审查与加固」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 22 次会话的「按键码修复与三标签GUI重构」细节。
+
+---
+
+## 2026-11-05（第 3 个工作日 · 第 22 次会话：修复 26.3 鼠标按键码以激活 Shift 左键扫掠，重构 K 键 GUI 为三标签分页防重叠）
+
+### 目标与背景
+用户在实机测试中反馈两个关键问题：
+1. **Shift + 左键拖拽快速装箱未生效**：玩家背包持有大量物品（如 10 组原木）时，按住 Shift + 左键拖拽鼠标滑过物品格，并未触发快速移入箱子。
+2. **K 键设置 GUI 按钮与底部提示重叠**：单页垂直堆叠 8 行按钮，在大部分窗口尺寸或 GUI 缩放比例下，最下方的规则提示和按钮严重叠合混杂。
+
+### 审查发现与修复实施
+1. **定位 Shift + LMB 扫掠失效核心根因（Smoking Gun）**：
+   - **痛点**：在 Minecraft 26.3 (Fabric/NeoForge) 中，Mojang 将鼠标底层事件码从 GLFW 规范迁移到了 SDL3 规范。在 `MouseButtonEvent` 中，`InputConstants.MOUSE_BUTTON_LEFT = 1`（GLFW 时代是 0），`InputConstants.MOUSE_BUTTON_MIDDLE = 2`，`InputConstants.MOUSE_BUTTON_RIGHT = 3`（GLFW 时代是 1）。
+   - **成因**：原有代码中使用 `event.button() == 0` 来判定左键按下，在 26.3 中永远为 `false`，导致左键扫掠拖拽逻辑完全无法启动！同时右键原本误用了 `1`（恰好撞上了 26.3 的左键码）。
+   - **修复**：
+     - 在 `OneKeyFabricClient` 与 `OneKeyNeoForgeClient` 中定义统一的按键识别助手：`isLeftButton(button)`（兼容 `1` 与 `0`）和 `isRightButton(button)`（兼容 `3` 与 `1`）。
+     - 全面替换 `onScreenMouseClicked`、`onScreenMouseDragged` 和 `onScreenMouseReleased` 中的按键判断。
+     - 放宽 `isSafeForQuickMove` 中非玩家背包槽位校验，允许玩家在箱子内部按 Shift+LMB 反向扫掠快速取出物品。
+2. **K 键设置界面三标签（3-Tab）全新分页重构**：
+   - **痛点**：原有界面在单屏塞入 8 行按钮，底部说明文字距离屏幕底边 56 像素，在 GUI 缩放较大或屏幕高度不足时，第 7、8 行按钮与文字直接重叠重合。
+   - **重构**：
+     - 顶部设计 `[ 📦 一键整理 ]`、`[ 🎯 快速堆叠 ]`、`[ 🖱️ 鼠标手势 ]` 三大核心功能标签页，支持即时点击切换（调用 `clearWidgets()` 重新加载当前页元素）。
+     - 各页面控制在 2~4 行按钮（最高行 Y=148），彻底杜绝按钮占满屏幕。
+     - 底部留出 Y=152 ~ Y=190 的宽裕空间放置上下文感应的操作指南和说明提示，动态调整位置，确保在任何 GUI 缩放与分辨率下绝对不发生重合！
+     - 国际化：双端 `zh_cn.json` 与 `en_us.json` 补齐 `onekey.gui.tab.*` 与 `onekey.gui.tip.*` 语义化键值。
+3. **严格遵守开发规约**：
+   - Fabric 与 NeoForge 保持 100% 结构对称与特性对齐。
+   - 保持 Common 纯 Java 零外部运行时依赖。
+
+### 验证与产物
+- **单元测试**：双端 104 例单元测试（Fabric 52 + NeoForge 52）全绿通过。
+- **构建测试**：Gradle `:fabric:build` 与 `:neoforge:build` 成功打出最新双端 jar。
 
 ---
 

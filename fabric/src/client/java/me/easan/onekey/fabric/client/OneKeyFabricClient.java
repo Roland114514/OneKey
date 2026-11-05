@@ -91,6 +91,14 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         rmbDragActive = false;
     }
 
+    private static boolean isLeftButton(int button) {
+        return button == InputConstants.MOUSE_BUTTON_LEFT || button == 0;
+    }
+
+    private static boolean isRightButton(int button) {
+        return button == InputConstants.MOUSE_BUTTON_RIGHT || button == 1;
+    }
+
     @Override
     public void onInitializeClient() {
         // 默认键位来自 config/onekey.json 的 hotkeys 段（非法键名自动回退到内置默认值），
@@ -275,7 +283,7 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                         }
 
                         // Alt + 左键：锁定/解锁槽位
-                        if (event.hasAltDown() && event.button() == 0) {
+                        if (event.hasAltDown() && isLeftButton(event.button())) {
                             if (hovered != null) {
                                 toggleSlotLock(client, containerScreen, hovered);
                                 return false; // 拦截事件，避免原版拾取/移动物品
@@ -283,7 +291,7 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                         }
 
                         // Shift + 左键：双击同类批量快速移动，同时记录拖拽起始槽位
-                        if (event.hasShiftDown() && event.button() == 0) {
+                        if (event.hasShiftDown() && isLeftButton(event.button())) {
                             lastDraggedSlotIndex = (hovered != null ? hovered.index : -1);
                             if (hovered != null && !hovered.isFake() && hovered.isActive() && !(hovered instanceof ResultSlot)
                                     && !(hovered.container instanceof CraftingContainer)) {
@@ -333,7 +341,7 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                         }
 
                         // 右键点击时记录起手槽位与初始状态，保持原版完整状态由拖拽状态机按需接管
-                        if (event.button() == 1) {
+                        if (isRightButton(event.button())) {
                             lastRmbSlotIndex = (hovered != null ? hovered.index : -1);
                             rmbDragActive = false;
                         }
@@ -356,9 +364,12 @@ public final class OneKeyFabricClient implements ClientModInitializer {
 
                     // 1. Shift + 左键拖拽滑动扫掠连续转移（LMB Drag Sweep）
                     // 仅在光标无持物时允许扫掠，避免与持物放置冲突
-                    if (OneKeyFabric.config().gestures.lmbDragSweep && event.button() == 0 && event.hasShiftDown()
+                    if (OneKeyFabric.config().gestures.lmbDragSweep && isLeftButton(event.button()) && event.hasShiftDown()
                             && containerScreen.getMenu().getCarried().isEmpty()) {
                         Slot hovered = accessor.onekey$findSlotAt(event.x(), event.y());
+                        if (hovered == null) {
+                            hovered = accessor.onekey$getHoveredSlot();
+                        }
                         // 关键防抖：hovered == null 严禁重置 lastDraggedSlotIndex，防止槽位边缘 2px 间隙触发重复点击发包风暴
                         if (hovered != null && hovered.index != lastDraggedSlotIndex) {
                             lastDraggedSlotIndex = hovered.index;
@@ -370,13 +381,16 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                     }
 
                     // 2. 右键划动重复投放（RMB Drag Repeated Placement）
-                    if (OneKeyFabric.config().gestures.rmbDragRepeat && event.button() == 1 && !event.hasShiftDown()) {
+                    if (OneKeyFabric.config().gestures.rmbDragRepeat && isRightButton(event.button()) && !event.hasShiftDown()) {
                         ItemStack carried = containerScreen.getMenu().getCarried();
                         if (carried.isEmpty()) {
                             return true;
                         }
 
                         Slot hovered = accessor.onekey$findSlotAt(event.x(), event.y());
+                        if (hovered == null) {
+                            hovered = accessor.onekey$getHoveredSlot();
+                        }
 
                         // 惰性激活：鼠标未移出起手槽位或未进入新槽位前，放行给原版处理（保障单点容错）
                         if (!rmbDragActive) {
@@ -422,10 +436,10 @@ public final class OneKeyFabricClient implements ClientModInitializer {
 
                 // 鼠标释放事件：清理拖拽与重复放置状态机
                 ScreenMouseEvents.allowMouseRelease(screen).register((scr, event) -> {
-                    if (event.button() == 0) {
+                    if (isLeftButton(event.button())) {
                         lastDraggedSlotIndex = -1;
                     }
-                    if (event.button() == 1) {
+                    if (isRightButton(event.button())) {
                         lastRmbSlotIndex = -1;
                         if (rmbDragActive) {
                             rmbDragActive = false;
@@ -602,10 +616,7 @@ public final class OneKeyFabricClient implements ClientModInitializer {
             return !ClientLockedSlots.isLocked("player_inventory", slotIdx);
         } else {
             String menuKey = ClientLockedSlots.getMenuTypeKey(screen.getMenu());
-            if (ClientLockedSlots.isLocked(menuKey, slot.index)) {
-                return false;
-            }
-            return ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(screen.getMenu()));
+            return !ClientLockedSlots.isLocked(menuKey, slot.index);
         }
     }
 

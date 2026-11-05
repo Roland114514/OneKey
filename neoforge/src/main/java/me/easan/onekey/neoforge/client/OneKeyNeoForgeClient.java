@@ -88,6 +88,14 @@ public final class OneKeyNeoForgeClient {
         rmbDragActive = false;
     }
 
+    private static boolean isLeftButton(int button) {
+        return button == InputConstants.MOUSE_BUTTON_LEFT || button == 0;
+    }
+
+    private static boolean isRightButton(int button) {
+        return button == InputConstants.MOUSE_BUTTON_RIGHT || button == 1;
+    }
+
     private OneKeyNeoForgeClient() {
     }
 
@@ -293,7 +301,7 @@ public final class OneKeyNeoForgeClient {
         }
 
         // Alt + 左键：锁定/解锁槽位
-        if (event.getMouseButtonEvent().hasAltDown() && event.getButton() == 0) {
+        if (event.getMouseButtonEvent().hasAltDown() && isLeftButton(event.getButton())) {
             if (hovered != null) {
                 toggleSlotLock(client, containerScreen, hovered);
                 event.setCanceled(true);
@@ -302,7 +310,7 @@ public final class OneKeyNeoForgeClient {
         }
 
         // Shift + 左键：双击同类批量快速移动，同时记录拖拽起始槽位
-        if (event.getMouseButtonEvent().hasShiftDown() && event.getButton() == 0) {
+        if (event.getMouseButtonEvent().hasShiftDown() && isLeftButton(event.getButton())) {
             lastDraggedSlotIndex = (hovered != null ? hovered.index : -1);
             if (hovered != null && !hovered.isFake() && hovered.isActive() && !(hovered instanceof ResultSlot)
                     && !(hovered.container instanceof CraftingContainer)) {
@@ -352,7 +360,7 @@ public final class OneKeyNeoForgeClient {
         }
 
         // 右键点击时记录起手槽位与初始状态，保持原版完整状态由拖拽状态机按需接管
-        if (event.getButton() == 1) {
+        if (isRightButton(event.getButton())) {
             lastRmbSlotIndex = (hovered != null ? hovered.index : -1);
             rmbDragActive = false;
         }
@@ -374,9 +382,12 @@ public final class OneKeyNeoForgeClient {
         var mouseEvent = event.getMouseButtonEvent();
         // 1. Shift + 左键拖拽滑动扫掠连续转移（LMB Drag Sweep）
         // 仅在光标无持物时允许扫掠，避免与持物放置冲突
-        if (OneKeyNeoForge.config().gestures.lmbDragSweep && event.getMouseButton() == 0 && mouseEvent.hasShiftDown()
+        if (OneKeyNeoForge.config().gestures.lmbDragSweep && isLeftButton(event.getMouseButton()) && mouseEvent.hasShiftDown()
                 && containerScreen.getMenu().getCarried().isEmpty()) {
             Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
+            if (hovered == null) {
+                hovered = accessor.onekey$getHoveredSlot();
+            }
             // 关键防抖：hovered == null 严禁重置 lastDraggedSlotIndex，防止槽位边缘 2px 间隙触发重复点击发包风暴
             if (hovered != null && hovered.index != lastDraggedSlotIndex) {
                 lastDraggedSlotIndex = hovered.index;
@@ -388,13 +399,16 @@ public final class OneKeyNeoForgeClient {
         }
 
         // 2. 右键划动重复投放（RMB Drag Repeated Placement）
-        if (OneKeyNeoForge.config().gestures.rmbDragRepeat && event.getMouseButton() == 1 && !mouseEvent.hasShiftDown()) {
+        if (OneKeyNeoForge.config().gestures.rmbDragRepeat && isRightButton(event.getMouseButton()) && !mouseEvent.hasShiftDown()) {
             ItemStack carried = containerScreen.getMenu().getCarried();
             if (carried.isEmpty()) {
                 return;
             }
 
             Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
+            if (hovered == null) {
+                hovered = accessor.onekey$getHoveredSlot();
+            }
 
             // 惰性激活：鼠标未移出起手槽位或未进入新槽位前，放行给原版处理（保障单点容错）
             if (!rmbDragActive) {
@@ -438,10 +452,10 @@ public final class OneKeyNeoForgeClient {
 
     @SubscribeEvent
     public static void onMouseButtonReleased(ScreenEvent.MouseButtonReleased.Pre event) {
-        if (event.getButton() == 0) {
+        if (isLeftButton(event.getButton())) {
             lastDraggedSlotIndex = -1;
         }
-        if (event.getButton() == 1) {
+        if (isRightButton(event.getButton())) {
             lastRmbSlotIndex = -1;
             if (rmbDragActive) {
                 rmbDragActive = false;
@@ -611,10 +625,7 @@ public final class OneKeyNeoForgeClient {
             return !ClientLockedSlots.isLocked("player_inventory", slotIdx);
         } else {
             String menuKey = ClientLockedSlots.getMenuTypeKey(screen.getMenu());
-            if (ClientLockedSlots.isLocked(menuKey, slot.index)) {
-                return false;
-            }
-            return ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(screen.getMenu()));
+            return !ClientLockedSlots.isLocked(menuKey, slot.index);
         }
     }
 
