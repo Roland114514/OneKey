@@ -12,13 +12,13 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `perf: 全局代码审查与核心高频路径轻量化重构 (Zero-Allocation & Single-Pass)` |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.5.jar` 与 `onekey-neoforge-1.1.5.jar` 构建成功 |
+| 最新提交 | `release: v1.1.6 极致轻量化与核心高频路径优化版` |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.6.jar` 与 `onekey-neoforge-1.1.6.jar` 构建成功 |
 | 单测状态 | ✅ 双端各 73 例（Fabric 73 + NeoForge 73 = **146 例全绿**） |
-| 版本状态 | ✅ `mod_version=1.1.5` |
+| 版本状态 | ✅ `mod_version=1.1.6` |
 | 协议版本 | **`ProtocolVersion.CURRENT=3`**（1.1.2 起双端同版本） |
-| 当前任务聚焦 | 🎯 全局代码审查与核心高频路径轻量化重构（Zero-Allocation BFS、分类缓存与单遍扫描） |
-| 发布状态 | 🚀 v1.1.5 已发布到 GitHub Release（已更新产物） |
+| 当前任务聚焦 | 🎯 v1.1.6 极致轻量化与核心高频路径优化版发布到 GitHub |
+| 发布状态 | 🚀 v1.1.6 已发布到 GitHub Release（已上传产物） |
 | 运行实测 | ✅ 146 项双端单元测试全部通过；VeinFinder 零冗余对象分配；CategoryGuesser 毫秒级缓存查询；快速堆叠单遍扫描 |
 | 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / v1.1.4 视觉实感与空手采伐收官 ✅ / v1.1.5 创造模式整理与全手势收官 ✅ / **v1.1.6 极致轻量化与高频路径优化收官 ✅** |
 | 阻塞项 | 无 |
