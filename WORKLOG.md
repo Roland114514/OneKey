@@ -12,19 +12,56 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `style: 优化连锁高亮为柔和白光且仅表面层显示` |
-| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.4.jar` 与 `onekey-neoforge-1.1.4.jar` 构建成功 |
+| 最新提交 | `release: v1.1.5 创造模式背包整理与GUI原版快捷按键发布` |
+| 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.5.jar` 与 `onekey-neoforge-1.1.5.jar` 构建成功 |
 | 单测状态 | ✅ 双端各 73 例（Fabric 73 + NeoForge 73 = **146 例全绿**） |
-| 版本状态 | ✅ `mod_version=1.1.4` |
+| 版本状态 | ✅ `mod_version=1.1.5` |
 | 协议版本 | **`ProtocolVersion.CURRENT=3`**（1.1.2 起双端同版本） |
-| 当前任务聚焦 | 🎯 v1.1.4 视觉与手感优化：高亮线框改柔和白色、表面层防透视剔除、空手除草采木 |
-| 发布状态 | 🚀 v1.1.4 已更新发布到 GitHub Release |
-| 运行实测 | ✅ 表面层线框柔和白光半透明呈现、地下/内层方块自动遮挡剔除无透视、高刷感知缓存防抖、空手砍树除草采叶正常连通 |
-| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / **v1.1.4 视觉实感与空手采伐收官 ✅** |
+| 当前任务聚焦 | 🎯 v1.1.5 发布：创造模式背包 R 键一键整理放行、容器与背包界面右上角原版风格整理按键 |
+| 发布状态 | 🚀 v1.1.5 已发布到 GitHub Release |
+| 运行实测 | ✅ 创造模式按 R 键/点击右上角按键秒速整理玩家物品栏、虚拟选择目录完全隔离不被污染、容器界面右上角 12x12 原版按键常驻且无槽位重叠、Shift+点击按键整理背包 |
+| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / v1.1.4 视觉实感与空手采伐收官 ✅ / **v1.1.5 创造模式整理与GUI按键收官 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互自由度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 30 次会话的「v1.1.4 连锁高亮视觉表现优化」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 31 次会话的「v1.1.5 创造模式整理与GUI按键」细节。
+
+---
+
+## 2026-11-06（第 4 个工作日 · 第 31 次会话：v1.1.5 创造模式背包整理与GUI原版快捷按键发布）
+
+> 用户指令："接下里准备制作v1.1.5版本，这个版本主要是增加一些小功能。首先是创造模式背包里的R键整理生效问题，当前的版本在创造模式背包里的R键不生效，这个版本需要增加创造模式也生效的功能，其次我需要你在背包里或者任何的可以被R键整理的容器里，添加上一个整理键，在容器界面的GUI右上角，加一个原版风格的按键，按下去可以让整理键触发生效。在开始之前，我希望你先总结下展示给我看，确保你理解了我的需求" -> "开始动手吧"
+
+### 一、 核心功能修改与优化内容
+
+1. **创造模式背包 R 键整理生效 (`CreativeModeInventoryScreen`)**：
+   - 彻底解除客户端对 `CreativeModeInventoryScreen` 的硬编码阻断。
+   - 模式精准路由：检测到处于创造模式背包时，将同步 ID 固定为 `0` 并路由为 `SortRequest.MODE_PLAYER`。
+   - 虚拟目录防护（Virtual Catalog Protection）：在客户端乐观排序中，若玩家正处于非生存物品栏页签（如搜索栏、分类页签），自动从 `player.inventoryMenu` 获取真实背包槽位，完全跳过 `CustomCreativeSlot` 虚拟槽位，杜绝物品目录被覆盖污染。
+   - 装备与垃圾桶槽位隔离：依托 `PlayerSlotFilter.isPlainPlayerInventorySlot`，创造模式下的装备栏（盔甲、副手）和垃圾箱槽位被严密物理隔离，永不参与排序。
+
+2. **背包与容器界面右上角原版风格整理按键 (`SortButton`)**：
+   - 在 `InventoryScreen`、`CreativeModeInventoryScreen` 以及所有满足 `ServerSortingHandler.isMenuSortable` 的容器（箱子、木桶、潜影盒、发射器、漏斗等）GUI 右上角内侧空白安全区（`leftPos + imageWidth - 18, topPos + 5`）自动挂载 12x12 原版材质按钮。
+   - 智能双模触发：
+     - 常规点击：直接整理当前容器（背包整理背包，容器整理容器本体）；
+     - Shift + 点击：在任何容器界面下均可一键整理玩家背包；
+     - 悬停浮窗 Tooltip：展示原版风格的 `一键整理 (R)` 及 `Shift + 点击：整理玩家背包`。
+   - 键盘输入冲突防御：当处于文本框输入（如创造模式搜索框、配方书）时，原版按键和 R 键均不拦截正常字符输入。
+   - 设置界面开关解耦：在 `OneKeyConfig.sort.showSortButton` 新增布尔开关（默认开启），在设置菜单 Tab 0 第 4 行右侧加入可视化切换按钮。
+
+3. **双端完全对齐与多语言文档同步**：
+   - Fabric (`Screens.getWidgets`) 与 NeoForge (`ScreenEvent.Init.Post`) 统一注册挂载。
+   - `AbstractContainerScreenAccessor` 补充暴露 `leftPos`、`topPos`、`imageWidth`、`imageHeight`。
+   - 中英文语言文件同步补充 `showSortButton` 及 `sort_button.tooltip` 本地化文案。
+   - 更新 `CHANGELOG.md` 与 `GITHUB_RELEASE.md`。
+
+### 二、 严苛审查与验证结果
+
+- **单元测试验证**：`bash scripts/with-jdk25.sh test`，Fabric 73 例 + NeoForge 73 例 = **146 例单元测试 100% 全绿通过**。
+- **全量干净构建**：`bash scripts/with-jdk25.sh clean build`，双端 Jar 包及源码包全部成功生成。
+- **产物 Hash 校验**：
+  - Fabric: `845aa61cbea42b4f14bce82e9987ccd502b6404f0f9d78a9005d241baf2b90fe  onekey-fabric-1.1.5.jar`
+  - NeoForge: `2f870b1e66716b28dc6c5efa644bbfb9badef5faa1c86f59d9e9373a0ffc25be  onekey-neoforge-1.1.5.jar`
 
 ---
 

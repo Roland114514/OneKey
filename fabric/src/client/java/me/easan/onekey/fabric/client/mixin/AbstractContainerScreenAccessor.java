@@ -34,4 +34,16 @@ public interface AbstractContainerScreenAccessor {
 
     @Accessor("skipNextRelease")
     void onekey$setSkipNextRelease(boolean value);
+
+    @Accessor("leftPos")
+    int onekey$getLeftPos();
+
+    @Accessor("topPos")
+    int onekey$getTopPos();
+
+    @Accessor("imageWidth")
+    int onekey$getImageWidth();
+
+    @Accessor("imageHeight")
+    int onekey$getImageHeight();
 }

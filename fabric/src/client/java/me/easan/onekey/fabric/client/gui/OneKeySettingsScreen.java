@@ -104,10 +104,14 @@ public final class OneKeySettingsScreen extends Screen {
                     .create(rightX, rowStartY + 2 * rowGap, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.sortByName"),
                             (button, value) -> config.sort.sortByName = value), "onekey.settings.sort.sortByName.tooltip"));
 
-            // Row 4: 数量降序
+            // Row 4: 数量降序 / 显示整理按键
             this.addRenderableWidget(withTooltip(CycleButton.onOffBuilder(config.sort.sortByCountDesc)
                     .create(leftX, rowStartY + 3 * rowGap, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.sortByCountDesc"),
                             (button, value) -> config.sort.sortByCountDesc = value), "onekey.settings.sort.sortByCountDesc.tooltip"));
+
+            this.addRenderableWidget(withTooltip(CycleButton.onOffBuilder(config.sort.showSortButton)
+                    .create(rightX, rowStartY + 3 * rowGap, btnWidth, btnHeight, Component.translatable("onekey.settings.sort.showSortButton"),
+                            (button, value) -> config.sort.showSortButton = value), "onekey.settings.sort.showSortButton.tooltip"));
 
         } else if (activeTab == 1) {
             // Tab 1: 快速堆叠与一键存入

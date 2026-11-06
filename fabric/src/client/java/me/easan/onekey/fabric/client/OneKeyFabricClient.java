@@ -18,6 +18,7 @@ import me.easan.onekey.common.sort.StackView;
 import me.easan.onekey.fabric.OneKeyFabric;
 import me.easan.onekey.fabric.client.compat.ModConflictDetector;
 import me.easan.onekey.fabric.client.gui.OneKeySettingsScreen;
+import me.easan.onekey.fabric.client.gui.SortButton;
 import me.easan.onekey.fabric.client.mixin.AbstractContainerScreenAccessor;
 import me.easan.onekey.fabric.net.QuickStackRequestPayload;
 import me.easan.onekey.fabric.net.QuickStackResultPayload;
@@ -37,6 +38,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
+import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.EditBox;
@@ -269,6 +271,17 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             resetGestureState();
             if (screen instanceof AbstractContainerScreen<?> containerScreen) {
+                // 打开容器界面且开启整理按钮时，在右上角挂载原版风格整理按键
+                if (OneKeyFabric.config().sort.enabled && OneKeyFabric.config().sort.showSortButton
+                        && isScreenEligibleForSortButton(containerScreen)) {
+                    if (containerScreen instanceof AbstractContainerScreenAccessor accessor) {
+                        int x = accessor.onekey$getLeftPos() + accessor.onekey$getImageWidth() - 18;
+                        int y = accessor.onekey$getTopPos() + 5;
+                        net.minecraft.client.gui.components.Button sortButton = SortButton.create(x, y, containerScreen);
+                        Screens.getWidgets(screen).add(sortButton);
+                    }
+                }
+
                 // 打开容器界面时向服务端请求锁定槽位
                 if (ClientPlayNetworking.canSend(RequestSlotLocksPayload.TYPE)) {
                     ClientPlayNetworking.send(new RequestSlotLocksPayload("player_inventory"));
@@ -806,15 +819,52 @@ public final class OneKeyFabricClient implements ClientModInitializer {
         return ItemStack.isSameItemSameComponents(slotItem, carried) && slotItem.getCount() < max;
     }
 
-    private static void triggerScreenSort(Minecraft client, AbstractContainerScreen<?> screen) {
-        if (client.player == null || screen instanceof CreativeModeInventoryScreen) {
+    public static boolean isScreenEligibleForSortButton(AbstractContainerScreen<?> screen) {
+        if (screen == null || screen.getMenu() == null) {
+            return false;
+        }
+        if (screen instanceof InventoryScreen || screen.getMenu() instanceof InventoryMenu) {
+            return true;
+        }
+        if (screen instanceof CreativeModeInventoryScreen) {
+            return true;
+        }
+        return ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(screen.getMenu()));
+    }
+
+    public static void triggerButtonSort(Minecraft client, AbstractContainerScreen<?> screen, boolean shiftPressed) {
+        if (client.player == null || screen == null || screen.getMenu() == null) {
             return;
         }
 
         int syncId = screen.getMenu().containerId;
         int mode = SortRequest.MODE_CONTAINER;
 
-        if (screen instanceof InventoryScreen || screen.getMenu() instanceof InventoryMenu) {
+        if (screen instanceof CreativeModeInventoryScreen) {
+            mode = SortRequest.MODE_PLAYER;
+            syncId = 0;
+        } else if (screen instanceof InventoryScreen || screen.getMenu() instanceof InventoryMenu) {
+            mode = SortRequest.MODE_PLAYER;
+        } else if (shiftPressed) {
+            // Shift + 点击整理按键：强制整理玩家背包
+            mode = SortRequest.MODE_PLAYER;
+        }
+
+        triggerSort(client, syncId, mode);
+    }
+
+    public static void triggerScreenSort(Minecraft client, AbstractContainerScreen<?> screen) {
+        if (client.player == null || screen == null || screen.getMenu() == null) {
+            return;
+        }
+
+        int syncId = screen.getMenu().containerId;
+        int mode = SortRequest.MODE_CONTAINER;
+
+        if (screen instanceof CreativeModeInventoryScreen) {
+            mode = SortRequest.MODE_PLAYER;
+            syncId = 0;
+        } else if (screen instanceof InventoryScreen || screen.getMenu() instanceof InventoryMenu) {
             mode = SortRequest.MODE_PLAYER;
         } else if (screen instanceof AbstractContainerScreenAccessor accessor) {
             Slot hovered = accessor.onekey$getHoveredSlot();
@@ -984,6 +1034,13 @@ public final class OneKeyFabricClient implements ClientModInitializer {
 
     private static List<Slot> clientPlayerMainInventorySlots(AbstractContainerMenu menu, LocalPlayer player) {
         List<Slot> result = new ArrayList<>();
+        // 创造模式下如果当前不在生存模式背包页签，则从 player.inventoryMenu 提取全部背包槽位
+        Minecraft client = Minecraft.getInstance();
+        if (client != null && client.gui != null
+                && client.gui.screen() instanceof CreativeModeInventoryScreen creative
+                && !creative.isInventoryOpen()) {
+            menu = player.inventoryMenu;
+        }
         for (Slot slot : menu.slots) {
             if (PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot,
                     OneKeyFabric.config().sort.includeHotbar)) {

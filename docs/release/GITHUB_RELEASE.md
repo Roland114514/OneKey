@@ -1,9 +1,9 @@
-# OneKey v1.1.4 Release Notes (Minecraft 26.3 · Java 25)
+# OneKey v1.1.5 Release Notes (Minecraft 26.3 · Java 25)
 
-✨ **OneKey v1.1.4「连锁高亮实感增强与空手除草采木」版本发布！**
+✨ **OneKey v1.1.5「创造模式背包整理与GUI原版快捷按键」版本发布！**
 
 面向 Minecraft 26.3 的现代化、极轻量、零第三方运行时依赖操作优化模组，原生支持 Fabric 与 NeoForge 双加载器。
-本次 v1.1.4 重点提升了【连锁破坏 (Vein Mining)】的操作实感反馈与原版兼容性，引入方块边框高亮线框渲染，并放行空手状态下对无需工具方块（原木、地皮杂草、花朵、落叶等）的连锁破坏。
+本次 v1.1.5 重点增强了一键整理（Sorting）的交互便利性与创造模式原生体验：全面放行创造模式背包 R 键一键整理，并在所有可整理的容器与背包界面右上角挂载原版风格的快捷整理物理按键。
 
 ---
 
@@ -11,30 +11,27 @@
 
 | 加载器 (Loader) | Minecraft 版本 | 文件名 | 体积 |
 |---|---|---|---|
-| **Fabric** | 26.3 (Java 25) | `onekey-fabric-1.1.4.jar` | ~170 KB |
-| **NeoForge** | 26.3 (Java 25) | `onekey-neoforge-1.1.4.jar` | ~168 KB |
+| **Fabric** | 26.3 (Java 25) | `onekey-fabric-1.1.5.jar` | ~175 KB |
+| **NeoForge** | 26.3 (Java 25) | `onekey-neoforge-1.1.5.jar` | ~175 KB |
 
-> ⚠️ **网络协议说明**：网络协议版本保持为 `3`，1.1.x 系列均保持良好兼容，强烈推荐双端统一更新至 1.1.4 享受最佳体验。
+> ⚠️ **网络协议说明**：网络协议版本保持为 `3`，1.1.x 系列均保持良好兼容，强烈推荐双端统一更新至 1.1.5 享受最佳体验。
 
 ---
 
-## ✨ v1.1.4 核心功能与体验优化
+## ✨ v1.1.5 核心功能与体验优化
 
-### 1. 连锁方块高亮边框渲染 (`highlightOutlines`)
-- **柔和白光线框**：玩家按住连锁按键（默认 `~` 键）瞄准方块时，在表面一层将被连锁破坏的目标方块外渲染精准的 `VoxelShape` 柔和白色线框（`0xB0FFFFFF`），线宽 `2.0F`，高对比度模式下自适应增强为 `0xE0FFFFFF` / `2.5F`，彻底消除刺眼感。
-- **表面层遮挡剔除（防 X-Ray 透视）**：引入表面层感知过滤（Surface Culling），仅当方块至少有一个面暴露于空气或非遮蔽介质时才绘制线框，埋在岩石/墙壁深处的第二层及后续实体方块不产生线框穿透，视觉纯净清爽。
-- **高帧率防抖感知缓存**：客户端预览计算引入目标坐标、挖掘模式、击中面、玩家朝向与手持物品的变动感知与 200ms 防抖缓存，避免 144Hz/240Hz 刷新率下每帧重复执行 BFS 搜索算法，兼具极致流畅与超低开销。
-- **配置与设置菜单支持**：在 `OneKeyConfig.excavator.highlightOutlines` 新增布尔开关（默认开启），并在设置界面第 4 行加入可视切换按钮及中英文详细 Tooltip。
+### 1. 创造模式背包 R 键一键整理生效
+- **创造模式原生适配**：全面解除创造模式下对 R 键整理的硬编码拦截，在创造模式「生存模式物品栏」页签（`isInventoryOpen()`）或任意标签页下按 R 键均可秒速整理玩家物品栏。
+- **虚拟目录保护机制**：非生存标签页下自动定向仅整理玩家实际背包与快捷栏数据（`player.inventoryMenu`），完全隔离虚拟物品选择目录（`CustomCreativeSlot`），杜绝物品目录被覆盖污染。
+- **安全过滤保障**：依托既有的 `PlayerSlotFilter` 严密防护，创造模式装备槽（盔甲/副手）与垃圾桶槽位严格物理隔离，绝不发生误穿装备或误删物品。
 
-### 2. 空手状态与 0 级无需工具方块连锁破坏放行
-- **空手与 0 级方块放行**：原版无需特定工具掉落的方块（`!state.requiresCorrectToolForDrops()`，如各类原木 `LOGS`、树叶 `LEAVES`、泥土、沙子、杂草与花朵等），允许空手或持有任意物品正常触发连锁破坏；而需要特定工具的方块（如石头、深板岩、矿石、黑曜石等）依然严格保持工具与挖掘等级匹配校验，防作弊与防被困逃脱设计严密。
-- **地皮除草与落叶连锁**：
-  - 相连植被统一继承 `VegetationBlock`（包含短草、高草、双层花草、各类花朵等）互通匹配，玩家空手即可一键除草整理整片地皮。
-  - 树叶相连互通连带，玩家空手或手持剪刀直接破坏树叶时，连锁相连树叶。
-
-### 3. 严苛代码审查与稳定性加固
-- **渲染变换矩阵栈异常安全性**：在 Fabric 与 NeoForge 两端的 `renderBlockOutlines` 遍历循环中，为 `poseStack.pushPose()` 与 `popPose()` 增加无条件 `try-finally` 保证，彻底杜绝渲染异常引发的 `Pose stack not empty` 崩溃。
-- **双端单元测试套件全绿**：全量单元测试扩充至 146 项（Fabric 73 + NeoForge 73），全部一次性测试通过。
+### 2. 背包与容器界面右上角原版风格整理按键 (`showSortButton`)
+- **原版风格 UI 挂载**：在生存背包（`InventoryScreen`）、创造背包（`CreativeModeInventoryScreen`）以及所有支持 R 键整理的容器（箱子、大箱子、木桶、潜影盒、末影箱、发射器/投掷器、漏斗等）GUI 右上角内侧安全区（`leftPos + imageWidth - 18, topPos + 5`）自动挂载原版材质 `12x12` 紧凑型快捷整理按键。
+- **智能交互设计**：
+  - 常规点击：点击整理当前容器（背包界面整理背包，容器界面整理容器本体）；
+  - Shift + 点击：在任何容器界面下快速强制整理玩家背包；
+  - 悬停 Tooltip 提示：原生展示 `一键整理 (R)` 与 `Shift + 点击：整理玩家背包` 引导。
+- **配置与设置解耦**：在 `OneKeyConfig.sort.showSortButton` 新增布尔开关（默认开启），并在设置界面 Tab 0（一键整理）第 4 行右侧加入可视化切换按钮与中英文 Tooltip，支持自由隐藏。
 
 ---
 
@@ -42,7 +39,7 @@
 
 | 功能 | 默认热键 | 触发位置 |
 |---|---|---|
-| **一键整理** | `R` | 背包、箱子、木桶、潜影盒等所有存储容器内 |
+| **一键整理** | `R` 或 `GUI右上角按钮` | 背包、创造背包、箱子、木桶、潜影盒等所有存储容器内 |
 | **快速堆叠** | `V` | 准星对准容器（看哪存哪），或直接按键范围存入 |
 | **一键存入** | `B` | 将非锁定物品全部存入周围容器（带智能分类防杂物保护） |
 | **打开设置菜单** | `K` | 随时随地调出全功能设置界面 |
@@ -54,10 +51,10 @@
 ## 🔐 SHA-256
 
 ```
-a6f78c52e35c943aab42763b5d441021d0f60697d3c329cee7de0d6e54709c77  onekey-fabric-1.1.4.jar
-34f8224d28ba3f83d00032ec41c81d536650272bebe92e5047f5c6a9102bd03e  onekey-fabric-1.1.4-sources.jar
-bb7d1c5e24f75a22989ceffa10030abea7da311b9cb5ea603074383afe8481b2  onekey-neoforge-1.1.4.jar
-5b79ca2e9b177ab19acb7f0d3411f50bb6f8403eb51f235f7531cb250bcf2839  onekey-neoforge-1.1.4-sources.jar
+845aa61cbea42b4f14bce82e9987ccd502b6404f0f9d78a9005d241baf2b90fe  onekey-fabric-1.1.5.jar
+ffd60e1ba14c15b4ff0237dbbd1e2abfedde27d4051730177d6a691e2c4ba307  onekey-fabric-1.1.5-sources.jar
+2f870b1e66716b28dc6c5efa644bbfb9badef5faa1c86f59d9e9373a0ffc25be  onekey-neoforge-1.1.5.jar
+fb5466f1031033c9d7f61e94e72fa1248b43752ed775843537df7f850ca7fa1d  onekey-neoforge-1.1.5-sources.jar
 ```
 
 **许可证**：MIT · **源码**：[github.com/Roland114514/OneKey](https://github.com/Roland114514/OneKey)

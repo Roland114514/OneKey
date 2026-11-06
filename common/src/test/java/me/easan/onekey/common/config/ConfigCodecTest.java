@@ -46,6 +46,7 @@ class ConfigCodecTest {
         assertEquals("key.mouse.left", config.hotkeys.lockSlot);
         assertEquals(6, config.quickStack.radius);
         assertTrue(config.sort.enabled);
+        assertTrue(config.sort.showSortButton);
         assertEquals(1, config.schema);
     }
 
@@ -147,14 +148,17 @@ class ConfigCodecTest {
         OneKeyConfig defaults = ConfigCodec.fromJson("{}");
         assertTrue(defaults.quickStack.crosshairPriority);
         assertTrue(defaults.quickStack.smartMatching);
+        assertTrue(defaults.sort.showSortButton);
 
         OneKeyConfig config = new OneKeyConfig();
         config.quickStack.crosshairPriority = false;
         config.quickStack.smartMatching = false;
+        config.sort.showSortButton = false;
         OneKeyConfig loaded = ConfigCodec.fromJson(ConfigCodec.toJson(config));
 
         assertTrue(!loaded.quickStack.crosshairPriority);
         assertTrue(!loaded.quickStack.smartMatching);
+        assertFalse(loaded.sort.showSortButton);
     }
 
     @Test

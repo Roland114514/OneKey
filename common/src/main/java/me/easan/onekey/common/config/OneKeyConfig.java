@@ -47,6 +47,8 @@ public final class OneKeyConfig {
          * 默认包含；关闭后回到 1.0.3 之前的「快捷栏严格不参与」。锁定槽位始终不参与。
          */
         public boolean includeHotbar = true;
+        /** 是否在背包与容器界面右上角显示原版风格的快捷整理按键。 */
+        public boolean showSortButton = true;
         /** 连续触发的冷却时间，避免连点导致与服务端不同步。 */
         public int cooldownMs = 250;
 
