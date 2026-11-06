@@ -4,6 +4,26 @@
 
 ---
 
+## [1.1.7] - 2026-11-06
+
+### 🐛 缺陷修复 (Bug Fixes)
+
+#### 1. 修复创造模式背包 Shift + 左键快速扫掠（LMB Drag Sweep）失效问题
+- **底层解包机制注入**：在 `PlayerSlotFilter` 中提供反射缓存的静态 `unwrap(Slot slot)` 方法，对原版创造模式内部包装类 `CreativeModeInventoryScreen$SlotWrapper` 进行安全递归解包，直达底层真实的 `Slot` 实例，在无客户端环境（服务端）下优雅降级。
+- **物理槽位索引纠正**：修复了创造模式生存页签快捷栏槽位被包装后容器槽位返回 `36..44` 导致被 `InventorySlots.isIncluded` 误判越界（`>= 36`）直接拒绝扫掠的问题，精准恢复快捷栏 `0..8` 与主背包 `9..35` 的手势扫掠。
+- **发包同步与强转安全保障**：在判定层（类型检查、加锁判定、有效性过滤）使用解包后的真实底层槽位；在执行层（向 `slotClicked` 传递）严格保留原始未解包的 `SlotWrapper`，满足原版 `CreativeModeInventoryScreen.slotClicked` 内部强转与发包监听器要求，彻底杜绝 `ClassCastException` 与断流幽灵物品隐患。
+- **双页签与特殊槽位防御**：非生存页签（分类与搜索列表）及销毁物品槽（`destroyItemSlot`）严格拦截扫掠，彻底消除划过垃圾桶槽导致全背包误清空的严重风险。
+- **原版拖拽状态机冲突彻底拦截**：扫掠触发时主动清空 `quickCraftSlots` 并重置 `isQuickCrafting = false`；Fabric 端返回 `false`、NeoForge 端调用 `event.setCanceled(true)`，杜绝原版拖拽分摊状态机抢占或与快速移动冲突。
+
+#### 2. 创造模式背包辅助手势与视觉高亮全面校准
+- **滚轮微调与批量转移支持**：修复了创造模式生存页签下鼠标滚轮单件转移及 Shift+双击同类批量转移对快捷栏槽位失效的问题。
+- **槽位加锁与边框高亮精准对应**：在创造模式生存页签下，Alt+左键加锁及琥珀色锁定边框、浮窗提示全面支持 0..35 格精确查询与渲染。
+
+#### 3. 测试覆盖
+- 在 `fabric` 测试集中新增 `PlayerSlotFilterTest`，包含针对 `unwrap` 与 `SlotWrapper` 反射还原的单元测试用例。
+
+---
+
 ## [1.1.6] - 2026-11-06
 
 ### ⚡ 极致轻量化与性能优化 (Performance & Optimization)

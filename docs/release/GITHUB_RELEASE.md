@@ -1,9 +1,9 @@
-# OneKey v1.1.6 Release Notes (Minecraft 26.3 · Java 25)
+# OneKey v1.1.7 Release Notes (Minecraft 26.3 · Java 25)
 
-✨ **OneKey v1.1.6「极致轻量化与核心高频路径优化」版本发布！**
+✨ **OneKey v1.1.7「创造模式背包手势扫掠修复版」发布！**
 
 面向 Minecraft 26.3 的现代化、极轻量、零第三方运行时依赖操作优化模组，原生支持 Fabric 与 NeoForge 双加载器。
-本次 v1.1.6 基于 `gemini-4-argon` 的全方位架构审计与对抗性推导，在严格保证全部既有功能（整理、堆叠、存入、手势、锁槽、连锁）与安全性（物品守恒、领地防爆、创造双页签隔离）100% 不受影响的前提下，对核心高频执行路径进行了彻底的极致轻量化重构与算法升级。
+本次 v1.1.7 重点修复了玩家在处于创造模式背包时，鼠标手势中的 `Shift + 左键` 快速扫掠（LMB Drag Sweep）失效的问题，经由 `gemini-4-argon` 对 26.3 `CreativeModeInventoryScreen` 与底层字节码机制的深度推导，实现解包判定与执行层同步的分离架构，在 100% 保持生存模式手势、创造模式双页签边界防护及服务端数据包同步的前提下彻底解决该问题。
 
 ---
 
@@ -11,33 +11,32 @@
 
 | 加载器 (Loader) | Minecraft 版本 | 文件名 | 体积 |
 |---|---|---|---|
-| **Fabric** | 26.3 (Java 25) | `onekey-fabric-1.1.6.jar` | ~176 KB |
-| **NeoForge** | 26.3 (Java 25) | `onekey-neoforge-1.1.6.jar` | ~176 KB |
+| **Fabric** | 26.3 (Java 25) | `onekey-fabric-1.1.7.jar` | ~180 KB |
+| **NeoForge** | 26.3 (Java 25) | `onekey-neoforge-1.1.7.jar` | ~180 KB |
 
-> ⚠️ **网络协议说明**：网络协议版本保持为 `3`，1.1.x 系列均保持良好兼容，强烈推荐双端统一更新至 1.1.6 享受最佳体验。
+> ⚠️ **网络协议说明**：网络协议版本保持为 `3`，1.1.x 系列均保持良好兼容，强烈推荐双端统一更新至 1.1.7 享受最佳体验。
 
 ---
 
-## ⚡ v1.1.6 核心性能优化与轻量化升级
+## 🐛 v1.1.7 核心缺陷修复与增强
 
-### 1. `VeinFinder` 连锁挖掘零冗余对象分配与距离预计算
-- **纳秒级坐标位打包压缩**：在 `BlockPos3i` 中引入原版规范的位打包与解包算法（`pack(x,y,z)`、`unpackX/Y/Z`、`asLong()`），使用纯 64 位整数表示空间三维坐标。
-- **BFS 遍历探索期零短命对象**：在 26 邻域三维扩散中，将已访问集合 `visited` 与待搜索队列 `queue` 全面改用 `Long` 存储。遍历过程中非连通或不匹配的周围方块（如包围矿脉的数十上百块石头与泥土）在探索期**实现 0 `BlockPos3i` 堆对象分配**，彻底消除大型矿脉连锁破坏时的年轻代 GC 停顿与卡顿抖动。
-- **距离预计算排序加速**：引入 `ScoredPos` 在目标方块判定合格加入列表时同步预计算距离平方 `distSqr`，最终排序直接使用标量数值比较，消除了排序阶段在 $N \log N$ 次比较器调用中重复计算数千次浮点减法和乘法的高昂 CPU 开销。
+### 1. `SlotWrapper` 底层解包机制与物理槽位索引纠正
+- **安全递归解包**：在 `PlayerSlotFilter` 中提供反射缓存的静态 `unwrap(Slot slot)` 方法，对原版创造模式内部包装类 `CreativeModeInventoryScreen$SlotWrapper` 进行安全递归提取，直达底层真实的 `Slot` 实例，在无客户端环境（服务端）下优雅降级。
+- **物理槽位索引纠正**：修复了创造模式生存页签快捷栏槽位被包装后容器槽位返回 `36..44` 导致被 `InventorySlots.isIncluded` 误判越界（`>= 36`）直接拒绝扫掠的问题，精准恢复快捷栏 `0..8` 与主背包 `9..35` 的手势扫掠支持。
 
-### 2. `CategoryGuesser` 静态双级并发只读缓存
-- **并发只读缓存注入**：引入容量受控的高性能线程安全缓存 `ID_CACHE`（256）与 `TAG_CACHE`（128）。
-- **$O(1)$ 指针级秒速查询**：物品首次计算分类后直接存入缓存，后续在频繁整理、拖拽和比较时直接 $O(1)$ 命中返回，彻底消除了常规整理时重复调用的数十次字符串截取（`substring`）、小写转换（`toLowerCase`）与线性后缀分支比对，单次背包整理吞吐量大幅提升。
-- **缓存安全与隔离**：提供 `clearCache()` 重载安全钩子，并设置最大容量上限，杜绝内存泄漏隐患。
+### 2. 执行层与发包同步保护（杜绝幽灵物品）
+- **判定与执行解耦**：在判定层（类型检查、加锁判定、有效性过滤）使用解包后的真实底层槽位；在执行层（向 `slotClicked` 传递）严格保留原始未解包的 `SlotWrapper`，满足原版 `CreativeModeInventoryScreen.slotClicked` 内部强转与发包监听器要求，彻底杜绝 `ClassCastException` 与断流幽灵物品隐患。
+- **全背包误清空防护**：非生存页签（分类与搜索列表）及销毁物品槽（`destroyItemSlot`）严格拦截扫掠，彻底消除划过垃圾桶槽导致全背包被原版逻辑误清空的严重风险。
 
-### 3. `ServerQuickStackHandler` 单次扫描（Single-Pass）合并算法重构
-- **扫描循环合并重构**：将 Fabric 与 NeoForge 服务端快速堆叠的同类归位流水线重构为 `stackIntoMatchingContainer` 单遍历算法。
-- **单次遍历多功能集成**：在单次 $O(N)$ 遍历容器所有槽位过程中，同时完成同类物品判定、未满堆叠补齐与可用空槽索引轻量收集。
-- **扫描次数骤降**：对每个目标容器的遍历次数从原先的 2~3 次全量循环（先 `containsSameItem` 扫一遍，再 `fillExistingStacks` 扫第二遍，溢出再 `fillEmptySlots` 扫第三遍）压缩为仅需 1 次遍历，对 54 格大箱子等大型容器的扫描 CPU 开销降低 60% 以上，显著降低服务端主线程负载。
-- **防污染规则 100% 保持**：仅在容器确认已有同类物品且有剩余溢出时，才允许向收集的空槽写入；未含同类物品的容器直接短路退出，周边分类箱绝不被杂物污染。
+### 3. 原版 `QuickCraft` 拖拽状态机抢占彻底拦截
+- **状态机冲突阻断**：扫掠触发时主动清空 `quickCraftSlots` 并重置 `isQuickCrafting = false`；Fabric 端返回 `false`、NeoForge 端调用 `event.setCanceled(true)`，杜绝原版拖拽分摊状态机抢占或与快速移动产生冲突。
 
-### 4. 代码库瘦身与冗余清理
-- 清理了构建与代码库中遗留的 `.DS_Store` 等非工程隐形临时文件。
+### 4. 创造模式背包辅助手势与视觉高亮全面校准
+- **滚轮微调与批量转移支持**：修复了创造模式生存页签下鼠标滚轮单件转移及 Shift+双击同类批量转移对快捷栏槽位失效的问题。
+- **槽位加锁与边框高亮精准对应**：在创造模式生存页签下，Alt+左键加锁及琥珀色锁定边框、浮窗提示全面支持 0..35 格精确查询与渲染。
+
+### 5. 单元测试强化
+- 在 `fabric` 测试集中新增 `PlayerSlotFilterTest`，包含针对 `unwrap` 与 `SlotWrapper` 反射还原的单元测试用例，全套 149 项测试全绿通过。
 
 ---
 
@@ -57,10 +56,10 @@
 ## 🔐 SHA-256
 
 ```text
-c38da890d4fd55d28f4a37dba833804cc9db7a3ef939ce0b0aba8411feacfea3  onekey-fabric-1.1.6.jar
-e8c1f14d71bc9bbf99ba42b7f948e14b46dc38dabfe9dbacb382544256152620  onekey-fabric-1.1.6-sources.jar
-bbb5366292cec1035a3f82c21de2c58649b2144fcda611c5ed978af7f7510d81  onekey-neoforge-1.1.6.jar
-679dc2426252c6f62532e36a65b397df1a1420e829d8fea551eb2aa62528eb83  onekey-neoforge-1.1.6-sources.jar
+da68d0bcb9c0951d61ee7e90995997a1904a88f0776e9f2f7b2813823390687d  onekey-fabric-1.1.7.jar
+7f293b81dc4afd4baf3d2815ba8b2562355f31cc61d2f6a515616b8c7df3f140  onekey-fabric-1.1.7-sources.jar
+6956f22f48432c0d16e816e4e068156edd0be137231bcd27b9894a0cf7512757  onekey-neoforge-1.1.7.jar
+09867c1c3248a19bdbccfcc59e5faf1860a568e3d6cb0166b9aeda41a8668960  onekey-neoforge-1.1.7-sources.jar
 ```
 
 许可证：MIT · 源码：github.com/Roland114514/OneKey
