@@ -21,7 +21,8 @@
 ## ✨ v1.1.4 核心功能与体验优化
 
 ### 1. 连锁方块高亮边框渲染 (`highlightOutlines`)
-- **线框边框渲染**：玩家按住连锁按键（默认 `~` 键）瞄准方块时，在所有将被连锁破坏的目标方块外渲染精准的 `VoxelShape` 高亮青色线框（`0xEE00F5FF`），线宽 `2.5F`，并深度适配原版无障碍高对比度（DepthBias）渲染管线，提供极强、极具实感的操作反馈。
+- **柔和白光线框**：玩家按住连锁按键（默认 `~` 键）瞄准方块时，在表面一层将被连锁破坏的目标方块外渲染精准的 `VoxelShape` 柔和白色线框（`0xB0FFFFFF`），线宽 `2.0F`，高对比度模式下自适应增强为 `0xE0FFFFFF` / `2.5F`，彻底消除刺眼感。
+- **表面层遮挡剔除（防 X-Ray 透视）**：引入表面层感知过滤（Surface Culling），仅当方块至少有一个面暴露于空气或非遮蔽介质时才绘制线框，埋在岩石/墙壁深处的第二层及后续实体方块不产生线框穿透，视觉纯净清爽。
 - **高帧率防抖感知缓存**：客户端预览计算引入目标坐标、挖掘模式、击中面、玩家朝向与手持物品的变动感知与 200ms 防抖缓存，避免 144Hz/240Hz 刷新率下每帧重复执行 BFS 搜索算法，兼具极致流畅与超低开销。
 - **配置与设置菜单支持**：在 `OneKeyConfig.excavator.highlightOutlines` 新增布尔开关（默认开启），并在设置界面第 4 行加入可视切换按钮及中英文详细 Tooltip。
 
@@ -53,10 +54,10 @@
 ## 🔐 SHA-256
 
 ```
-d1d5da81b7c07eedf8447d8f03f0bca49a88bb158cb298987f93a8c9a68cae89  onekey-fabric-1.1.4.jar
-1d285544e2d973ffc2a0a3268ecf01d421f7844047dbb2b465176d027f3828c8  onekey-fabric-1.1.4-sources.jar
-69801842ff331aa8a9cf1611d84d4fceeee5516f5798b13acf6b7a70ce15e02e  onekey-neoforge-1.1.4.jar
-7cb9b7e883762068082a872a05e147c9d74f78e59cde182aab13eeb6d38a2084  onekey-neoforge-1.1.4-sources.jar
+a6f78c52e35c943aab42763b5d441021d0f60697d3c329cee7de0d6e54709c77  onekey-fabric-1.1.4.jar
+34f8224d28ba3f83d00032ec41c81d536650272bebe92e5047f5c6a9102bd03e  onekey-fabric-1.1.4-sources.jar
+bb7d1c5e24f75a22989ceffa10030abea7da311b9cb5ea603074383afe8481b2  onekey-neoforge-1.1.4.jar
+5b79ca2e9b177ab19acb7f0d3411f50bb6f8403eb51f235f7531cb250bcf2839  onekey-neoforge-1.1.4-sources.jar
 ```
 
 **许可证**：MIT · **源码**：[github.com/Roland114514/OneKey](https://github.com/Roland114514/OneKey)

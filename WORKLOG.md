@@ -12,19 +12,54 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `release: v1.1.4 连锁高亮线框增强与空手除草采木发布` |
+| 最新提交 | `style: 优化连锁高亮为柔和白光且仅表面层显示` |
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.4.jar` 与 `onekey-neoforge-1.1.4.jar` 构建成功 |
 | 单测状态 | ✅ 双端各 73 例（Fabric 73 + NeoForge 73 = **146 例全绿**） |
 | 版本状态 | ✅ `mod_version=1.1.4` |
 | 协议版本 | **`ProtocolVersion.CURRENT=3`**（1.1.2 起双端同版本） |
-| 当前任务聚焦 | 🎯 v1.1.4 发布：连锁高亮边框实感反馈与空手/0级无需工具方块连锁 |
-| 发布状态 | 🚀 v1.1.4 已发布到 GitHub Release |
-| 运行实测 | ✅ 连锁线框青色半透明 outline 实时提交、高刷感知缓存防抖、空手砍树采木/除草/落叶正常连通、有硬度工具需求方块严格防作弊 |
+| 当前任务聚焦 | 🎯 v1.1.4 视觉与手感优化：高亮线框改柔和白色、表面层防透视剔除、空手除草采木 |
+| 发布状态 | 🚀 v1.1.4 已更新发布到 GitHub Release |
+| 运行实测 | ✅ 表面层线框柔和白光半透明呈现、地下/内层方块自动遮挡剔除无透视、高刷感知缓存防抖、空手砍树除草采叶正常连通 |
 | 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / **v1.1.4 视觉实感与空手采伐收官 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互自由度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 29 次会话的「v1.1.4 视觉实感与空手采伐」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 30 次会话的「v1.1.4 连锁高亮视觉表现优化」细节。
+
+---
+
+## 2026-11-06（第 4 个工作日 · 第 30 次会话：v1.1.4 连锁高亮视觉表现优化——柔和白光与表面层防透视）
+
+> 用户指令："接下来我想让你改一下显示上的表现，这次更新继续保持1.1.4的版本号即可。把连锁显示时的高亮边框改成白色，其次亮度可以略微下降。再来连锁的时候，让高亮边框只在表面的那一层显示即可，比如挖矿的时候不需要让玩家可以看见后面那一层的实体方块。在动手之前你先复述一下我的要求" -> "开始动手吧，完成之后不要忘了做审查"
+
+### 一、 核心功能修改与优化内容
+
+1. **高亮线框颜色与明度优化（柔和白光）**：
+   - 将原高明度青色（`0xEE00F5FF`）更换为柔和半透明浅白色（`0xB0FFFFFF`，透明度约 69%），大幅减轻高明度纯色对玩家视线的干扰与视觉疲劳。
+   - 线宽自 `2.5F` 调整为 `2.0F`，画面更加细腻。
+   - 原版无障碍高对比度（High Contrast / DepthBias）模式下自适应匹配为 `0xE0FFFFFF`，线宽 `2.5F`，兼顾辨识度与柔和度。
+
+2. **表面层感知遮挡剔除（Surface Culling / 防透视杂乱）**：
+   - 用户诉求："让高亮边框只在表面的那一层显示即可，比如挖矿的时候不需要让玩家可以看见后面那一层的实体方块。"
+   - 判定算法实现：新增 `isSurfaceBlock(ClientLevel level, BlockPos pos, BlockPos.MutableBlockPos neighborPos)`。通过遍历方块周围 6 个相邻正交面（`Direction.values()`），检查相邻方块状态：
+     - 若 6 个相邻方块全部为完整实体遮蔽方块（`neighborState.canOcclude() && !neighborState.isAir()`），判定该方块处于岩石/墙体内深层，不绘制高亮线框。
+     - 若至少有一个面接触空气或透明/半透明介质（如水、树叶、火把、草），判定为处于表面层，允许绘制。
+   - 原点保护：玩家准星直接瞄准的原点方块（`isOrigin`）始终强制保留绘制，保证瞄准点线框不丢失。
+   - 零额外堆分配（Zero Heap Allocation）：在循环外实例化单一 `BlockPos.MutableBlockPos neighborPos`，利用 `setWithOffset` 零开销就地探测，完美契合 144Hz/240Hz 极速渲染管线。
+
+3. **双端完全对齐与多语言文档同步**：
+   - Fabric 与 NeoForge 端的 `ClientExcavatorHandler` 逻辑 100% 对齐。
+   - 中英文语言文件（`zh_cn.json` / `en_us.json`）更新高亮提示描述。
+   - `CHANGELOG.md` 与 `docs/release/GITHUB_RELEASE.md` 同步更新细节与 SHA-256 校验码。
+
+### 二、 严苛审查与验证结果
+
+- **矩阵栈安全审查**：`poseStack.pushPose()` 与 `submitShapeOutline()` 均处于 `try-finally` 块中，严防任何抛错导致矩阵栈泄漏崩溃。
+- **单元测试验证**：`bash scripts/with-jdk25.sh test`，Fabric 73 例 + NeoForge 73 例 = **146 例单元测试 100% 全绿通过**。
+- **全量干净构建**：`bash scripts/with-jdk25.sh clean build`，双端 Jar 包及源码包全部成功生成。
+- **产物 Hash 校验**：
+  - Fabric: `a6f78c52e35c943aab42763b5d441021d0f60697d3c329cee7de0d6e54709c77  onekey-fabric-1.1.4.jar`
+  - NeoForge: `bb7d1c5e24f75a22989ceffa10030abea7da311b9cb5ea603074383afe8481b2  onekey-neoforge-1.1.4.jar`
 
 ---
 

@@ -344,7 +344,25 @@ public final class ClientExcavatorHandler {
     }
 
     /**
-     * 在世界渲染层提交被连锁方块的青色高亮线框（仅边框 outline，增强连锁操作实感）。
+     * 判断方块是否处于暴露于外部视线的「表面层」。
+     * 若方块的 6 个相邻面全部被不透明实体方块完全遮蔽（canOcclude），则视为深层隐藏方块，不绘制高亮线框。
+     */
+    private static boolean isSurfaceBlock(net.minecraft.client.multiplayer.ClientLevel level, BlockPos pos, BlockPos.MutableBlockPos neighborPos) {
+        if (level == null) {
+            return false;
+        }
+        for (Direction dir : Direction.values()) {
+            neighborPos.setWithOffset(pos, dir);
+            BlockState neighborState = level.getBlockState(neighborPos);
+            if (neighborState.isAir() || !neighborState.canOcclude()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 在世界渲染层提交被连锁方块的高亮线框（仅表面一层，柔和白色，增强实感并防止透视后方方块）。
      */
     public static void renderBlockOutlines(
             BlockOutlineRenderState outlineState,
@@ -378,17 +396,25 @@ public final class ClientExcavatorHandler {
 
         boolean highContrast = outlineState != null && outlineState.highContrast();
         RenderType renderType = highContrast ? RenderTypes.linesDepthBias() : RenderTypes.linesTranslucent();
-        // 连锁高亮线框颜色：高明度青色半透明线框 (0xEE00F5FF)
-        int color = 0xEE00F5FF;
-        float lineWidth = 2.5F;
+        // 连锁高亮线框颜色：柔和半透明浅白色 (0xB0FFFFFF)，高对比度模式下稍亮 (0xE0FFFFFF)
+        int color = highContrast ? 0xE0FFFFFF : 0xB0FFFFFF;
+        float lineWidth = highContrast ? 2.5F : 2.0F;
 
         BlockPos.MutableBlockPos mpos = new BlockPos.MutableBlockPos();
+        BlockPos.MutableBlockPos neighborPos = new BlockPos.MutableBlockPos();
         for (BlockPos3i bp : blocks) {
             mpos.set(bp.x(), bp.y(), bp.z());
             BlockState bs = client.level.getBlockState(mpos);
             if (bs.isAir()) {
                 continue;
             }
+
+            // 仅在表面那一层显示：非直接瞄准的原点方块，若 6 个面均被不透明实体方块完全遮蔽，则跳过线框渲染
+            boolean isOrigin = cachedTargetPos != null && mpos.equals(cachedTargetPos);
+            if (!isOrigin && !isSurfaceBlock(client.level, mpos, neighborPos)) {
+                continue;
+            }
+
             VoxelShape shape = bs.getShape(client.level, mpos);
             if (shape.isEmpty()) {
                 shape = Shapes.block();

@@ -91,7 +91,7 @@
   "onekey.settings.excavator.preventToolBreak.tooltip": "Automatically stops mining when tool durability drops to 2 or below",
   "onekey.settings.excavator.requireValidTool.tooltip": "Requires an effective, matching tool to prevent bare-hand or exploit mining",
   "onekey.settings.excavator.consolidateDrops.tooltip": "Merges drops into full stacks and groups XP orbs at the origin block to eliminate lag",
-  "onekey.settings.excavator.highlightOutlines.tooltip": "Renders a cyan wireframe outline around all candidate blocks while holding the vein mining key, providing clear visual tactile feedback",
+  "onekey.settings.excavator.highlightOutlines.tooltip": "Renders a soft white wireframe outline around surface candidate blocks while holding the vein mining key, providing clear visual tactile feedback",
   "onekey.gui.slot_locked_tooltip": "§6🔒 [Locked] §7(%s to unlock)",
   "onekey.gui.slot_locked_empty_tooltip": "§6🔒 [Empty Slot Locked] §7(%s to unlock)"
 }

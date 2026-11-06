@@ -91,7 +91,7 @@
   "onekey.settings.excavator.preventToolBreak.tooltip": "当工具剩余耐久 <= 2 时自动中止连锁破坏，绝不爆镐爆斧",
   "onekey.settings.excavator.requireValidTool.tooltip": "必须持有匹配且有效等级的工具才允许触发连锁（防空手作弊力大砖飞）",
   "onekey.settings.excavator.consolidateDrops.tooltip": "将连锁破坏产生的所有掉落物合并为满组并在破坏点生成，彻底防止卡顿",
-  "onekey.settings.excavator.highlightOutlines.tooltip": "按住连锁破坏键瞄准方块时，在所有将被连锁破坏的方块外渲染青色高亮线框，提供精准的操作实感与视觉反馈",
+  "onekey.settings.excavator.highlightOutlines.tooltip": "按住连锁破坏键瞄准方块时，在表面一层将被连锁破坏的方块外渲染柔和白色高亮线框，提供精准的操作实感与视觉反馈",
   "onekey.gui.slot_locked_tooltip": "§6🔒 [已锁定] §7(%s解锁)",
   "onekey.gui.slot_locked_empty_tooltip": "§6🔒 [空槽位已锁定] §7(%s解锁)"
 }
