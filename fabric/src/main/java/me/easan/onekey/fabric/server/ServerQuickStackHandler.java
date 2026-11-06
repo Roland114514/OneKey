@@ -228,24 +228,13 @@ public final class ServerQuickStackHandler {
 
             // =========================================================================
             // Pass 1: 同类归位（优先准星容器，其次按距离遍历所有已有该同类物品的容器）
-            // 防止近处的空箱子截胡远处分类箱已有的同类物品
+            // 采用单遍历（Single-Pass）技术：同时完成同类检测、堆叠补齐与溢出空槽填充，消除多重线性扫描
             // =========================================================================
             for (ScannedContainer sc : containers) {
                 if (playerStack.isEmpty()) {
                     break;
                 }
-                Container target = sc.container();
-                if (!containsSameItem(target, playerStack)) {
-                    continue; // 容器中没有同类物品，Pass 1 严禁触碰，防污染
-                }
-
-                // 1.1 补齐未满的同类物品堆叠
-                totalMoved += fillExistingStacks(target, playerStack, modifiedContainers);
-
-                // 1.2 同类溢出占用本分类容器自身的空槽
-                if (!playerStack.isEmpty()) {
-                    totalMoved += fillEmptySlots(target, playerStack, modifiedContainers);
-                }
+                totalMoved += stackIntoMatchingContainer(sc.container(), playerStack, modifiedContainers);
             }
 
             // =========================================================================
@@ -305,37 +294,60 @@ public final class ServerQuickStackHandler {
         return candidates;
     }
 
-    private static boolean containsSameItem(Container target, ItemStack playerStack) {
-        for (int c = 0; c < target.getContainerSize(); c++) {
-            ItemStack cStack = target.getItem(c);
-            if (!cStack.isEmpty() && ItemStack.isSameItemSameComponents(cStack, playerStack)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static int fillExistingStacks(Container target, ItemStack playerStack, Set<Container> modifiedContainers) {
+    /**
+     * 单次扫描：若容器中已包含同类物品，优先填满未满堆叠，溢出时允许占用该分类容器自身的空槽。
+     * 若容器原本不含该物品，直接返回 0 且绝不触碰空槽（防污染）。
+     */
+    private static int stackIntoMatchingContainer(Container target, ItemStack playerStack, Set<Container> modifiedContainers) {
+        int containerSize = target.getContainerSize();
+        boolean hasMatchingItem = false;
         int moved = 0;
-        for (int c = 0; c < target.getContainerSize(); c++) {
-            if (playerStack.isEmpty()) {
-                break;
-            }
+        List<Integer> emptySlotIndices = null;
+
+        for (int c = 0; c < containerSize; c++) {
             ItemStack cStack = target.getItem(c);
-            if (!cStack.isEmpty() && ItemStack.isSameItemSameComponents(cStack, playerStack) && target.canPlaceItem(c, playerStack)) {
-                int maxStack = Math.min(target.getMaxStackSize(cStack), cStack.getMaxStackSize());
-                int available = maxStack - cStack.getCount();
-                if (available > 0) {
-                    int toMove = Math.min(playerStack.getCount(), available);
-                    if (toMove > 0) {
-                        cStack.grow(toMove);
-                        playerStack.shrink(toMove);
-                        moved += toMove;
-                        modifiedContainers.add(target);
+            if (cStack.isEmpty()) {
+                if (target.canPlaceItem(c, playerStack)) {
+                    if (emptySlotIndices == null) {
+                        emptySlotIndices = new ArrayList<>(4);
+                    }
+                    emptySlotIndices.add(c);
+                }
+            } else if (ItemStack.isSameItemSameComponents(cStack, playerStack)) {
+                hasMatchingItem = true;
+                if (!playerStack.isEmpty() && target.canPlaceItem(c, playerStack)) {
+                    int maxStack = Math.min(target.getMaxStackSize(cStack), cStack.getMaxStackSize());
+                    int available = maxStack - cStack.getCount();
+                    if (available > 0) {
+                        int toMove = Math.min(playerStack.getCount(), available);
+                        if (toMove > 0) {
+                            cStack.grow(toMove);
+                            playerStack.shrink(toMove);
+                            moved += toMove;
+                            modifiedContainers.add(target);
+                        }
                     }
                 }
             }
         }
+
+        // 仅当容器原本已包含同类物品，且物品仍有溢出剩余时，才允许向收集到的空槽填充
+        if (hasMatchingItem && !playerStack.isEmpty() && emptySlotIndices != null) {
+            for (int emptySlot : emptySlotIndices) {
+                if (playerStack.isEmpty()) {
+                    break;
+                }
+                int maxStack = Math.min(target.getMaxStackSize(playerStack), playerStack.getMaxStackSize());
+                int toMove = Math.min(playerStack.getCount(), maxStack);
+                if (toMove > 0) {
+                    target.setItem(emptySlot, playerStack.copyWithCount(toMove));
+                    playerStack.shrink(toMove);
+                    moved += toMove;
+                    modifiedContainers.add(target);
+                }
+            }
+        }
+
         return moved;
     }
 

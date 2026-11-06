@@ -56,17 +56,22 @@ public final class VeinFinder {
         };
     }
 
+    private record ScoredPos(BlockPos3i pos, double distSqr) {
+    }
+
     /**
      * 1. 经典无向图 26 邻域 BFS 空间连通扩散 (VEIN)。
+     *
+     * <p>采用坐标位打包压缩与距离预计算，消除扩散过程中的冗余对象分配与排序重复计算。</p>
      */
     public static List<BlockPos3i> findVein(
             BlockPos3i origin,
             BlockInspector inspector,
             int maxBlocks,
             boolean includeLeaves) {
-        List<BlockPos3i> matches = new ArrayList<>(Math.min(maxBlocks, 128));
-        Queue<BlockPos3i> queue = new ArrayDeque<>();
-        Set<BlockPos3i> visited = new HashSet<>();
+        List<ScoredPos> matches = new ArrayList<>(Math.min(maxBlocks, 128));
+        Queue<Long> queue = new ArrayDeque<>();
+        Set<Long> visited = new HashSet<>();
 
         // 最大搜索距离半径约束（32格），防止连通超大矿脉或巨型世界生成引发内存与运算爆炸
         double maxDistSqr = 32.0 * 32.0;
@@ -74,35 +79,61 @@ public final class VeinFinder {
         // 关键：原点方块在这里可能已经被原版破坏成空气（Fabric 的 AFTER 回调 / NeoForge 的下一 tick 复核），
         // 因此不能再按「当前是否可破坏」来筛原点，否则默认 VEIN 模式会永远返回空列表。
         // 原点本身由原版负责掉落，这里只把它当作「已匹配」的种子，从它的邻居开始扩散。
-        matches.add(origin);
-        visited.add(origin);
+        matches.add(new ScoredPos(origin, 0.0));
+        visited.add(origin.asLong());
+
+        int ox = origin.x();
+        int oy = origin.y();
+        int oz = origin.z();
+
         for (BlockPos3i offset : NEIGHBOR_OFFSETS) {
-            BlockPos3i neighbor = origin.offset(offset.x(), offset.y(), offset.z());
-            if (origin.distSqr(neighbor) <= maxDistSqr && visited.add(neighbor)) {
-                queue.add(neighbor);
+            int nx = ox + offset.x();
+            int ny = oy + offset.y();
+            int nz = oz + offset.z();
+            double distSqr = origin.distSqr(nx, ny, nz);
+            if (distSqr <= maxDistSqr) {
+                long neighborPacked = BlockPos3i.pack(nx, ny, nz);
+                if (visited.add(neighborPacked)) {
+                    queue.add(neighborPacked);
+                }
             }
         }
 
         while (!queue.isEmpty() && matches.size() < maxBlocks) {
-            BlockPos3i current = queue.poll();
+            long currentPacked = queue.poll();
+            int cx = BlockPos3i.unpackX(currentPacked);
+            int cy = BlockPos3i.unpackY(currentPacked);
+            int cz = BlockPos3i.unpackZ(currentPacked);
+            BlockPos3i current = new BlockPos3i(cx, cy, cz);
+
             if (inspector.matches(origin, current, includeLeaves) && inspector.isDestructible(current)) {
-                matches.add(current);
+                matches.add(new ScoredPos(current, origin.distSqr(cx, cy, cz)));
                 if (matches.size() >= maxBlocks) {
                     break;
                 }
 
                 for (BlockPos3i offset : NEIGHBOR_OFFSETS) {
-                    BlockPos3i neighbor = current.offset(offset.x(), offset.y(), offset.z());
-                    if (origin.distSqr(neighbor) <= maxDistSqr && visited.add(neighbor)) {
-                        queue.add(neighbor);
+                    int nx = cx + offset.x();
+                    int ny = cy + offset.y();
+                    int nz = cz + offset.z();
+                    double distSqr = origin.distSqr(nx, ny, nz);
+                    if (distSqr <= maxDistSqr) {
+                        long neighborPacked = BlockPos3i.pack(nx, ny, nz);
+                        if (visited.add(neighborPacked)) {
+                            queue.add(neighborPacked);
+                        }
                     }
                 }
             }
         }
 
-        // 按距离原点由近及远排序，保证从下往上、从近到远破坏
-        matches.sort(Comparator.comparingDouble(origin::distSqr));
-        return matches;
+        // 按距离原点由近及远排序，直接比较预计算的距离平方，避免在排序比较器内重复计算浮点距离
+        matches.sort(Comparator.comparingDouble(ScoredPos::distSqr));
+        List<BlockPos3i> result = new ArrayList<>(matches.size());
+        for (ScoredPos entry : matches) {
+            result.add(entry.pos());
+        }
+        return result;
     }
 
     /**

@@ -2,13 +2,20 @@ package me.easan.onekey.common.sort;
 
 import java.util.Collection;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 纯逻辑分类器：优先使用物品标签（tags），标签缺失时按物品 id 关键字兜底。
  *
  * <p>平台层把 {@code ItemStack} 的 id 与所属标签传进来即可，不依赖任何 Minecraft 类型。
+ * 内部维护高效只读并发缓存，避免在背包整理时高频进行字符串截取与多次后缀比对。</p>
  */
 public final class CategoryGuesser {
+
+    private static final int MAX_CACHE_ENTRIES = 1024;
+    private static final Map<String, SortCategory> TAG_CACHE = new ConcurrentHashMap<>(128);
+    private static final Map<String, SortCategory> ID_CACHE = new ConcurrentHashMap<>(256);
 
     private CategoryGuesser() {
     }
@@ -33,6 +40,21 @@ public final class CategoryGuesser {
         if (rawTag == null || rawTag.isEmpty()) {
             return null;
         }
+        SortCategory cached = TAG_CACHE.get(rawTag);
+        if (cached != null) {
+            return cached;
+        }
+
+        SortCategory computed = computeFromTag(rawTag);
+        if (computed != null) {
+            if (TAG_CACHE.size() < MAX_CACHE_ENTRIES) {
+                TAG_CACHE.put(rawTag, computed);
+            }
+        }
+        return computed;
+    }
+
+    private static SortCategory computeFromTag(String rawTag) {
         String tag = rawTag.toLowerCase(Locale.ROOT);
         if (tag.endsWith(":tools") || tag.endsWith(":swords") || tag.endsWith(":axes")
                 || tag.endsWith(":pickaxes") || tag.endsWith(":shovels") || tag.endsWith(":hoes")
@@ -57,6 +79,19 @@ public final class CategoryGuesser {
         if (rawId == null || rawId.isEmpty()) {
             return SortCategory.MISC;
         }
+        SortCategory cached = ID_CACHE.get(rawId);
+        if (cached != null) {
+            return cached;
+        }
+
+        SortCategory computed = computeFromId(rawId);
+        if (ID_CACHE.size() < MAX_CACHE_ENTRIES) {
+            ID_CACHE.put(rawId, computed);
+        }
+        return computed;
+    }
+
+    private static SortCategory computeFromId(String rawId) {
         String id = rawId.toLowerCase(Locale.ROOT);
         String path = id.contains(":") ? id.substring(id.indexOf(':') + 1) : id;
 
@@ -85,5 +120,11 @@ public final class CategoryGuesser {
             return SortCategory.FOOD;
         }
         return SortCategory.MISC;
+    }
+
+    /** 数据包或世界重载时清理缓存。 */
+    public static void clearCache() {
+        TAG_CACHE.clear();
+        ID_CACHE.clear();
     }
 }
