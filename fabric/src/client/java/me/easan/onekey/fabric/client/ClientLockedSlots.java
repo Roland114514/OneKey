@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import me.easan.onekey.fabric.util.PlayerSlotFilter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -67,8 +68,9 @@ public final class ClientLockedSlots {
             return false;
         }
 
-        if (slot.container == client.player.getInventory()) {
-            return isLocked("player_inventory", slot.getContainerSlot());
+        Slot realSlot = PlayerSlotFilter.unwrap(slot);
+        if (realSlot.container == client.player.getInventory()) {
+            return isLocked("player_inventory", realSlot.getContainerSlot());
         } else {
             return isLocked(getMenuTypeKey(menu), slot.index);
         }

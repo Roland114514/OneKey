@@ -1,5 +1,6 @@
 package me.easan.onekey.fabric.util;
 
+import java.lang.reflect.Field;
 import me.easan.onekey.common.inventory.InventorySlots;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ArmorSlot;
@@ -10,19 +11,57 @@ import net.minecraft.world.item.Items;
 /**
  * 玩家背包槽位筛选。
  *
- * <p>为什么不能只信 {@link Slot#getContainerSlot()}：26.3 的创造模式「生存模式物品栏」页签
- * （{@code CreativeModeInventoryScreen$ItemPickerMenu}）会用 {@code SlotWrapper} 包装背包槽位，
- * 装备槽在其中报告的容器槽位是 5..8（InventoryMenu 下标）而不是 36..39（Inventory 下标）。
- * 只按 0..35 判断就会把头盔/胸甲/护腿/靴子当成主背包槽位参与排序，整理结果直接穿到身上。
- * 这里再用装备槽的两个稳定特征兜底：堆叠上限为 1、且只接受可装备物品。</p>
+ * <p>兼容创造模式：26.3 的创造模式「生存模式物品栏」页签
+ * （{@code CreativeModeInventoryScreen$ItemPickerMenu}）会用 {@code SlotWrapper} 包装背包槽位。
+ * 通过反射缓存的 {@code target} 字段自动解包至真实底层 {@link Slot}，获得精确的物理槽位号（0..8 快捷栏、9..35 主背包），
+ * 并正确识别底层 {@link ArmorSlot} 与副手槽，杜绝错位和幽灵物品。</p>
  */
 public final class PlayerSlotFilter {
+
+    private static final Field SLOT_WRAPPER_TARGET;
+
+    static {
+        Field field = null;
+        try {
+            Class<?> clazz = Class.forName("net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen$SlotWrapper");
+            for (Field f : clazz.getDeclaredFields()) {
+                if (Slot.class.isAssignableFrom(f.getType())) {
+                    f.setAccessible(true);
+                    field = f;
+                    break;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        SLOT_WRAPPER_TARGET = field;
+    }
 
     private PlayerSlotFilter() {
     }
 
+    /**
+     * 若槽位属于创造模式生存页签的 {@code SlotWrapper}，递归解包获取底层的真实 {@link Slot}；
+     * 否则原样返回。
+     */
+    public static Slot unwrap(Slot slot) {
+        if (slot == null) {
+            return null;
+        }
+        if (SLOT_WRAPPER_TARGET != null && SLOT_WRAPPER_TARGET.getDeclaringClass().isInstance(slot)) {
+            try {
+                Object target = SLOT_WRAPPER_TARGET.get(slot);
+                if (target instanceof Slot targetSlot) {
+                    return unwrap(targetSlot);
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return slot;
+    }
+
     /** 是否是「可安全参与整理/手势」的玩家背包槽位。 */
-    public static boolean isPlainPlayerInventorySlot(Player player, Slot slot, boolean includeHotbar) {
+    public static boolean isPlainPlayerInventorySlot(Player player, Slot rawSlot, boolean includeHotbar) {
+        Slot slot = unwrap(rawSlot);
         if (player == null || slot == null || slot.container != player.getInventory()) {
             return false;
         }

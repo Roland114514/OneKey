@@ -12,19 +12,64 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `release: v1.1.6 极致轻量化与核心高频路径优化版` |
+| 最新提交 | `fix(gesture): 修复创造模式背包 Shift+左键 快速扫掠失效问题` |
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.6.jar` 与 `onekey-neoforge-1.1.6.jar` 构建成功 |
-| 单测状态 | ✅ 双端各 73 例（Fabric 73 + NeoForge 73 = **146 例全绿**） |
+| 单测状态 | ✅ 双端共 149 项单元测试（Fabric 76 + NeoForge 73 = **149 例全绿**） |
 | 版本状态 | ✅ `mod_version=1.1.6` |
 | 协议版本 | **`ProtocolVersion.CURRENT=3`**（1.1.2 起双端同版本） |
-| 当前任务聚焦 | 🎯 v1.1.6 极致轻量化与核心高频路径优化版发布到 GitHub |
-| 发布状态 | 🚀 v1.1.6 已发布到 GitHub Release（已上传产物） |
-| 运行实测 | ✅ 146 项双端单元测试全部通过；VeinFinder 零冗余对象分配；CategoryGuesser 毫秒级缓存查询；快速堆叠单遍扫描 |
-| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / v1.1.4 视觉实感与空手采伐收官 ✅ / v1.1.5 创造模式整理与全手势收官 ✅ / **v1.1.6 极致轻量化与高频路径优化收官 ✅** |
+| 当前任务聚焦 | 🎯 修复创造模式背包下鼠标手势 Shift+左键 快速扫掠失效问题 |
+| 发布状态 | 🚀 v1.1.6 已发布到 GitHub Release |
+| 运行实测 | ✅ 149 项单元测试全绿；SlotWrapper 递归精准解包至真实物理槽；原版 QuickCraft 冲突彻底规避；双端对齐无幽灵物品 |
+| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / v1.1.4 视觉实感与空手采伐收官 ✅ / v1.1.5 创造模式整理与全手势收官 ✅ / v1.1.6 极致轻量化与高频路径优化收官 ✅ / **创造模式扫掠修复完成 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互自由度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 35 次会话的「全局代码审查与核心高频路径轻量化重构」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 36 次会话的「创造模式背包 Shift+左键 快速扫掠修复」细节。
+
+---
+
+## 2026-11-06（第 4 个工作日 · 第 36 次会话：修复创造模式背包 Shift+左键 快速扫掠失效问题）
+
+> 用户指令："当前版本存在，当玩家处于创造模式背包时，鼠标手势功能中的shift+左键快速扫掠功能失效的问题，生存模式生效但是创造模式不生效，请在不影响其他功能与代码的情况下修复这个问题。"
+
+### 一、 根本原因排查与字节码逆向（javap + gemini-4-argon 深度分析）
+
+1. **`SlotWrapper` 容器槽位索引空间错乱（核心根因）**：
+   - 创造模式界面的「生存模式物品栏」页签（`CreativeModeInventoryScreen`，`creative.isInventoryOpen() == true`）下，菜单槽位均由原版包级私有内部类 `CreativeModeInventoryScreen$SlotWrapper` 包装。
+   - `SlotWrapper` 继承自 `Slot`，其构造函数传入的 `index` 为 `player.inventoryMenu.slots` 的下标（快捷栏为 `36..44`，盔甲为 `5..8`，主背包为 `9..35`）。
+   - `SlotWrapper` 未覆写 `getContainerSlot()`，直接调用 `slot.getContainerSlot()` 返回的是该 `index`，导致快捷栏槽位返回 **`36..44`**。
+   - `PlayerSlotFilter.isPlainPlayerInventorySlot` 内部调用 `InventorySlots.isIncluded(slot.getContainerSlot(), includeHotbar)`，由于 `36 >= InventorySlots.MAIN_END (36)`，直接判定越界返回 `false`，从而拒绝了快捷栏的快速扫掠。
+   - 同理，`ClientLockedSlots.isLocked("player_inventory", slotIdx)` 传入 `36..44` 导致槽位锁定判定与真实槽位错位。
+2. **`SlotWrapper` 对象的解包与执行层保留需求**：
+   - `SlotWrapper` 内部持有 `private final Slot target`，该底层 `target.getContainerSlot()` 才是真实的物理槽位号（快捷栏 `0..8`，主背包 `9..35`，盔甲 `36..39`）。
+   - **判定层**（槽位类型过滤、快捷栏判定、加锁判定）：必须使用**解包后的真实底层槽位**。
+   - **执行层**（向 `accessor.onekey$slotClicked` 传递）：**必须保留原始未解包的 `SlotWrapper`**！因为 `CreativeModeInventoryScreen.slotClicked` 内部执行了 `(SlotWrapper) slot` 强转并获取 `target.index`，依靠 `CreativeInventoryListener.slotChanged` 向服务端同步 `ServerboundSetCreativeModeSlotPacket`。若传入解包后的 Slot 会抛出 `ClassCastException` 或导致同步断流（幽灵物品）。
+3. **原版 `mouseDragged` 事件抢占冲突**：
+   - 原版 `AbstractContainerScreen.mouseDragged` 拥有 `QuickCraft`（拖拽分摊）状态机。在扫掠激活时若放行（return true），可能触发原版 QuickCraft 累积或产生冲突。
+   - 扫掠激活并处理后，应消费事件（Fabric 返回 `false`、NeoForge 调用 `event.setCanceled(true)`），同时重置 `isQuickCrafting` 并清空 `quickCraftSlots`，确保原版拖拽状态机不抢占。
+
+### 二、 修复方案与架构落地
+
+1. **`PlayerSlotFilter` 引入安全递归解包机制**：
+   - 在 Fabric 和 NeoForge 两端的 `PlayerSlotFilter` 中通过反射静态缓存 `CreativeModeInventoryScreen$SlotWrapper` 的 `target` 字段（通过类型查找，不硬编码混淆名，且在服务端无客户端环境时优雅降级为 null）。
+   - 提供 `PlayerSlotFilter.unwrap(Slot slot)` 公共静态方法，若属于 `SlotWrapper` 则递归提取真实底层的 `Slot`。
+   - 重构 `PlayerSlotFilter.isPlainPlayerInventorySlot(player, rawSlot, includeHotbar)`：内部先执行 `unwrap(rawSlot)`，保证传入原始包装槽位或真实槽位均可精确取得 0..8（快捷栏）与 9..35（主背包），并正确剔除底层 `ArmorSlot`。
+2. **重构手势判定与执行层（Fabric 与 NeoForge 100% 对称）**：
+   - **`isSafeForQuickMove` 与 `canPlaceRmb`**：通过 `unwrap(slot)` 获取 `realSlot`，严格校验 `realSlot.container == player.getInventory()`，校验真实槽位索引与锁定状态；非生存页签（`!creative.isInventoryOpen()`）或垃圾桶槽（`destroyItemSlot`）一律拦截，杜绝全背包误清空隐患。
+   - **`allowMouseDrag` (Fabric) & `onMouseDragged` (NeoForge)**：
+     - 去重标记采用底层真实的 `Slot lastDraggedSlot` 引用比对；
+     - 触发快速移动时传入原始未解包的 `hovered`（即 `SlotWrapper`）：`accessor.onekey$slotClicked(hovered, hovered.index, 0, ContainerInput.QUICK_MOVE)`；
+     - 主动清理 `quickCraftSlots.clear()` 并 `setIsQuickCrafting(false)`；
+     - Fabric 端返回 `false`，NeoForge 端调用 `event.setCanceled(true)`，彻底拦截原版拖拽。
+   - **`allowMouseScroll` / `onMouseScrolled`、`transferAllMatching`、`isSlotLockable`、`toggleSlotLock`**：全部改为基于 `unwrap(slot)` 的真实槽位号判定，同时修复了创造模式生存页签下的滚轮微调与 Alt+左键槽位锁定。
+   - **`ClientLockedSlots.isSlotLocked`**：结合 `PlayerSlotFilter.unwrap(slot)`，确保锁定高亮金黄边框在创造模式背包 0..35 格精确渲染。
+3. **单元测试补充**：
+   - 在 `fabric/src/test/java/.../PlayerSlotFilterTest.java` 中新增 3 项针对 `unwrap(null)`、`unwrap(plainSlot)` 以及反射构造 `SlotWrapper` 的解包测试，验证 `containerSlot` 从 36 精确还原为 5。
+
+### 三、 验证与构建结果
+
+- **单元测试验证**：`bash scripts/with-jdk25.sh test` 全部通过，双端共 **149 项测试全绿**（Fabric 76 + NeoForge 73）。
+- **全量干净构建**：`bash scripts/with-jdk25.sh clean build` 零警告零错误通过，生成生产产物。
 
 ---
 

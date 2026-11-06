@@ -177,13 +177,13 @@ public final class OneKeyNeoForgeClient {
     private static ItemStack lastShiftClickItem = ItemStack.EMPTY;
     private static long lastScrollTime = 0L;
     private static long lastClientSortTime = 0L;
-    private static int lastDraggedSlotIndex = -1;
+    private static Slot lastDraggedSlot = null;
     private static int lastRmbSlotIndex = -1;
     private static boolean rmbDragActive = false;
     private static boolean conflictWarned = false;
 
     private static void resetGestureState() {
-        lastDraggedSlotIndex = -1;
+        lastDraggedSlot = null;
         lastRmbSlotIndex = -1;
         rmbDragActive = false;
     }
@@ -400,10 +400,11 @@ public final class OneKeyNeoForgeClient {
             return;
         }
 
-        boolean isPlayer = hovered.container == client.player.getInventory();
+        Slot realSlot = PlayerSlotFilter.unwrap(hovered);
+        boolean isPlayer = realSlot.container == client.player.getInventory();
         if (isPlayer) {
-            int slotIdx = hovered.getContainerSlot();
-            if (!PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, hovered,
+            int slotIdx = realSlot.getContainerSlot();
+            if (!PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, realSlot,
                     OneKeyNeoForge.config().gestures.includeHotbar)
                     || ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
                 return;
@@ -471,19 +472,20 @@ public final class OneKeyNeoForgeClient {
         // Shift + 左键：双击同类批量快速移动，同时记录拖拽起始槽位
         boolean isCreativeNonSurvival = containerScreen instanceof CreativeModeInventoryScreen creative && !creative.isInventoryOpen();
         if (event.getMouseButtonEvent().hasShiftDown() && isLeftButton(event.getButton()) && !isCreativeNonSurvival) {
-            lastDraggedSlotIndex = (hovered != null ? hovered.index : -1);
+            lastDraggedSlot = (hovered != null ? PlayerSlotFilter.unwrap(hovered) : null);
             if (hovered != null && !hovered.isFake() && hovered.isActive() && !(hovered instanceof ResultSlot)
                     && !(hovered.container instanceof CraftingContainer)) {
-                if (containerScreen instanceof CreativeModeInventoryScreen && hovered.container != client.player.getInventory()) {
+                Slot realHovered = PlayerSlotFilter.unwrap(hovered);
+                if (containerScreen instanceof CreativeModeInventoryScreen && realHovered.container != client.player.getInventory()) {
                     lastShiftClickTime = 0L;
                     lastShiftClickSlot = -1;
                     lastShiftClickItem = ItemStack.EMPTY;
                 } else {
-                    boolean isPlayer = hovered.container == client.player.getInventory();
+                    boolean isPlayer = realHovered.container == client.player.getInventory();
                     boolean lockedOrHotbar = false;
                     if (isPlayer) {
-                        int slotIdx = hovered.getContainerSlot();
-                        lockedOrHotbar = !PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, hovered,
+                        int slotIdx = realHovered.getContainerSlot();
+                        lockedOrHotbar = !PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, realHovered,
                                 OneKeyNeoForge.config().gestures.includeHotbar)
                                 || ClientLockedSlots.isLocked("player_inventory", slotIdx);
                     } else {
@@ -562,13 +564,19 @@ public final class OneKeyNeoForgeClient {
             if (hovered == null) {
                 hovered = accessor.onekey$getHoveredSlot();
             }
-            // 关键防抖：hovered == null 严禁重置 lastDraggedSlotIndex，防止槽位边缘 2px 间隙触发重复点击发包风暴
-            if (hovered != null && hovered.index != lastDraggedSlotIndex) {
-                lastDraggedSlotIndex = hovered.index;
-                if (isSafeForQuickMove(client.player, containerScreen, hovered)) {
-                    accessor.onekey$slotClicked(hovered, hovered.index, 0, ContainerInput.QUICK_MOVE);
+            // 关键防抖：hovered == null 严禁重置 lastDraggedSlot，防止槽位边缘 2px 间隙触发重复点击发包风暴
+            if (hovered != null) {
+                Slot realHovered = PlayerSlotFilter.unwrap(hovered);
+                if (realHovered != lastDraggedSlot) {
+                    lastDraggedSlot = realHovered;
+                    if (isSafeForQuickMove(client.player, containerScreen, hovered)) {
+                        accessor.onekey$slotClicked(hovered, hovered.index, 0, ContainerInput.QUICK_MOVE);
+                        accessor.onekey$getQuickCraftSlots().clear();
+                        accessor.onekey$setIsQuickCrafting(false);
+                    }
                 }
             }
+            event.setCanceled(true);
             return;
         }
 
@@ -634,7 +642,7 @@ public final class OneKeyNeoForgeClient {
     @SubscribeEvent
     public static void onMouseButtonReleased(ScreenEvent.MouseButtonReleased.Pre event) {
         if (isLeftButton(event.getButton())) {
-            lastDraggedSlotIndex = -1;
+            lastDraggedSlot = null;
         }
         if (isRightButton(event.getButton())) {
             lastRmbSlotIndex = -1;
@@ -721,14 +729,18 @@ public final class OneKeyNeoForgeClient {
         if (slot.isFake() || !slot.isActive() || slot instanceof ResultSlot) {
             return false;
         }
-        if (slot.container instanceof CraftingContainer) {
+        Slot realSlot = PlayerSlotFilter.unwrap(slot);
+        if (realSlot.isFake() || !realSlot.isActive() || realSlot instanceof ResultSlot) {
             return false;
         }
-        if (slot.container == client.player.getInventory()) {
-            int slotIndex = slot.getContainerSlot();
+        if (realSlot.container instanceof CraftingContainer) {
+            return false;
+        }
+        if (realSlot.container == client.player.getInventory()) {
+            int slotIndex = realSlot.getContainerSlot();
             // 0..35 全部可加锁（含快捷栏）；盔甲与副手不参与任何功能，禁止加锁
             return InventorySlots.isPlayerInventorySlot(slotIndex)
-                    && PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, slot, true);
+                    && PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, realSlot, true);
         } else {
             if (screen instanceof CreativeModeInventoryScreen) {
                 return false;
@@ -742,11 +754,12 @@ public final class OneKeyNeoForgeClient {
             return;
         }
 
+        Slot realSlot = PlayerSlotFilter.unwrap(slot);
         String containerKey;
         int slotIndex;
-        if (slot.container == client.player.getInventory()) {
+        if (realSlot.container == client.player.getInventory()) {
             containerKey = "player_inventory";
-            slotIndex = slot.getContainerSlot();
+            slotIndex = realSlot.getContainerSlot();
         } else {
             containerKey = ClientLockedSlots.getMenuTypeKey(screen.getMenu());
             slotIndex = slot.index;
@@ -775,29 +788,31 @@ public final class OneKeyNeoForgeClient {
             return;
         }
 
-        boolean isPlayerSide = clickedSlot.container == client.player.getInventory();
+        Slot realClicked = PlayerSlotFilter.unwrap(clickedSlot);
+        boolean isPlayerSide = realClicked.container == client.player.getInventory();
         String menuKey = ClientLockedSlots.getMenuTypeKey(screen.getMenu());
 
         for (Slot slot : screen.getMenu().slots) {
             if (slot.isFake() || !slot.isActive() || slot instanceof ResultSlot || slot.container instanceof CraftingContainer) {
                 continue;
             }
-            if (screen instanceof CreativeModeInventoryScreen && slot.container != client.player.getInventory()) {
+            Slot realSlot = PlayerSlotFilter.unwrap(slot);
+            if (screen instanceof CreativeModeInventoryScreen && realSlot.container != client.player.getInventory()) {
                 continue;
             }
 
             if (isPlayerSide) {
-                if (slot.container != client.player.getInventory()) {
+                if (realSlot.container != client.player.getInventory()) {
                     continue;
                 }
-                int slotIdx = slot.getContainerSlot();
-                if (!PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, slot,
+                int slotIdx = realSlot.getContainerSlot();
+                if (!PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, realSlot,
                         OneKeyNeoForge.config().gestures.includeHotbar)
                         || ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
                     continue;
                 }
             } else {
-                if (slot.container == client.player.getInventory() || ClientLockedSlots.isLocked(menuKey, slot.index)) {
+                if (realSlot.container == client.player.getInventory() || ClientLockedSlots.isLocked(menuKey, slot.index)) {
                     continue;
                 }
             }
@@ -823,16 +838,24 @@ public final class OneKeyNeoForgeClient {
         if (!slot.hasItem() || slot.getItem().isEmpty()) {
             return false;
         }
-        if (screen instanceof CreativeModeInventoryScreen && slot.container != player.getInventory()) {
+        // 创造模式非生存页签严禁快速扫掠
+        if (screen instanceof CreativeModeInventoryScreen creative && !creative.isInventoryOpen()) {
+            return false;
+        }
+        Slot realSlot = PlayerSlotFilter.unwrap(slot);
+        if (realSlot.isFake() || !realSlot.isActive() || realSlot instanceof ResultSlot || realSlot instanceof MerchantResultSlot) {
+            return false;
+        }
+        if (screen instanceof CreativeModeInventoryScreen && realSlot.container != player.getInventory()) {
             return false;
         }
         // 放行合成输入格（工作台 3x3 或背包 2x2），支持扫掠快速收回材料回背包
-        if (slot.container instanceof CraftingContainer) {
+        if (realSlot.container instanceof CraftingContainer) {
             return true;
         }
-        if (slot.container == player.getInventory()) {
-            int slotIdx = slot.getContainerSlot();
-            if (!PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot, OneKeyNeoForge.config().gestures.includeHotbar)) {
+        if (realSlot.container == player.getInventory()) {
+            int slotIdx = realSlot.getContainerSlot();
+            if (!PlayerSlotFilter.isPlainPlayerInventorySlot(player, realSlot, OneKeyNeoForge.config().gestures.includeHotbar)) {
                 return false;
             }
             return !ClientLockedSlots.isLocked("player_inventory", slotIdx);
@@ -852,10 +875,17 @@ public final class OneKeyNeoForgeClient {
         if (carried == null || carried.isEmpty() || !slot.mayPlace(carried)) {
             return false;
         }
-        if (screen instanceof CreativeModeInventoryScreen && slot.container != player.getInventory()) {
+        if (screen instanceof CreativeModeInventoryScreen creative && !creative.isInventoryOpen()) {
             return false;
         }
-        if (slot.container instanceof CraftingContainer) {
+        Slot realSlot = PlayerSlotFilter.unwrap(slot);
+        if (realSlot.isFake() || !realSlot.isActive() || realSlot instanceof ResultSlot || realSlot instanceof MerchantResultSlot) {
+            return false;
+        }
+        if (screen instanceof CreativeModeInventoryScreen && realSlot.container != player.getInventory()) {
+            return false;
+        }
+        if (realSlot.container instanceof CraftingContainer) {
             ItemStack slotItem = slot.getItem();
             if (slotItem.isEmpty()) {
                 return true;
@@ -863,9 +893,9 @@ public final class OneKeyNeoForgeClient {
             int max = Math.min(slot.getMaxStackSize(carried), carried.getMaxStackSize());
             return ItemStack.isSameItemSameComponents(slotItem, carried) && slotItem.getCount() < max;
         }
-        if (slot.container == player.getInventory()) {
-            int slotIdx = slot.getContainerSlot();
-            if (!PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot, OneKeyNeoForge.config().gestures.includeHotbar)) {
+        if (realSlot.container == player.getInventory()) {
+            int slotIdx = realSlot.getContainerSlot();
+            if (!PlayerSlotFilter.isPlainPlayerInventorySlot(player, realSlot, OneKeyNeoForge.config().gestures.includeHotbar)) {
                 return false;
             }
             if (ClientLockedSlots.isLocked("player_inventory", slotIdx)) {
