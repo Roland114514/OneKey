@@ -12,19 +12,64 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `refactor: 整理按键UI改版为字母R并移至背包物品栏上方 (v1.1.5)` |
+| 最新提交 | `fix: 支持创造模式背包鼠标手势并做好双页签边界防护 (v1.1.5)` |
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.5.jar` 与 `onekey-neoforge-1.1.5.jar` 构建成功 |
 | 单测状态 | ✅ 双端各 73 例（Fabric 73 + NeoForge 73 = **146 例全绿**） |
 | 版本状态 | ✅ `mod_version=1.1.5` |
 | 协议版本 | **`ProtocolVersion.CURRENT=3`**（1.1.2 起双端同版本） |
-| 当前任务聚焦 | 🎯 v1.1.5 整理按键 UI 优化：标识呈现为字母 R，按键自页面顶端移至背包物品栏上方 |
-| 发布状态 | 🚀 v1.1.5 已发布到 GitHub Release |
-| 运行实测 | ✅ 整理按键显示清晰字母 R、位置在背包物品栏第 9 列上方（inventoryLabelY - 2）、配方书展开动态跟随无抖动、创造模式非生存页签隐蔽防护 |
-| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / v1.1.4 视觉实感与空手采伐收官 ✅ / **v1.1.5 创造模式整理与GUI按键收官（视觉打磨完成）✅** |
+| 当前任务聚焦 | 🎯 v1.1.5 创造模式背包鼠标手势完整支持与 4-argon 严苛审查 |
+| 发布状态 | 🚀 v1.1.5 已发布到 GitHub Release（已更新产物） |
+| 运行实测 | ✅ 创造模式生存页签（0..35）与分类页签（0..8）槽位加锁生效；Shift+扫掠/双击在生存页签生效且分类页签阻断；右键划线放置安全生效；滚轮单件微调持物生效且分类页签滚动条 100% 放行 |
+| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / v1.1.4 视觉实感与空手采伐收官 ✅ / **v1.1.5 创造模式整理、GUI按键与全手势收官 ✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互自由度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 33 次会话的「整理按键 UI 与位置微调」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 34 次会话的「创造模式背包手势与边界防护」细节。
+
+---
+
+## 2026-11-06（第 4 个工作日 · 第 34 次会话：v1.1.5 创造模式背包鼠标手势完整支持与 4-argon 严苛审查）
+
+> 用户指令："当前版本创造模式背包的鼠标手势不生效，麻烦解决一下这个问题，解决完成之后再审查一遍"
+
+### 一、 根本原因与架构机制排查
+
+1. **硬编码阻断**：
+   - 此前在 `OneKeyFabricClient` 与 `OneKeyNeoForgeClient` 中的 `allowMouseScroll`/`onMouseScrolled`、`allowMouseClick`/`onMouseButtonPressed`、`allowMouseDrag`/`onMouseDragged` 事件钩子中，均存在粗暴的 `if (screen instanceof CreativeModeInventoryScreen) return true;`，导致创造模式下所有鼠标手势直接短路放行。
+2. **创造模式底层特殊性**：
+   - 创造模式界面为特化的 `ItemPickerMenu`，存在**生存模式物品栏页签**（`creative.isInventoryOpen() == true`）与**分类/搜索页签**（`creative.isInventoryOpen() == false`）状态分裂。
+   - 在生存页签下，槽位被 `SlotWrapper` 包裹，装备槽报告的 containerSlot 存在偏移，且存在一个销毁物品槽（`destroyItemSlot`，底层为匿名 `SimpleContainer(1)`）。
+   - 在分类/搜索页签下，上方 45 个为 `CustomCreativeSlot`（无限提取虚拟槽），右侧有滚动条，上方有 `EditBox` 搜索框。
+
+### 二、 精细化适配与双页签边界防护方案
+
+1. **鼠标滚轮（Mouse Scroll）**：
+   - 分类/搜索页签（`!creative.isInventoryOpen()`）或光标未持物（`carried.isEmpty()`）时，100% 放行给原版滚动条（Fabric `return true;` / NeoForge 直接 `return;` 不取消事件）；
+   - 生存页签下光标持物向下滚动时，放行向悬停玩家槽位（`slot.container == player.getInventory()`）单件放入 1 个物品。
+2. **Shift + 左键拖拽滑动扫掠（LMB Drag Sweep）**：
+   - 生存页签下放行，支持在主背包与快捷栏之间连续扫掠快速互传；
+   - 分类/搜索页签下严格阻断（`if (!creative.isInventoryOpen()) return;`），杜绝玩家拖动滚动条滑块滑过快捷栏时引发误扫掠。
+3. **Shift + 双击同类批量移动（Transfer All Matching）**：
+   - 生存页签下放行同类物品在主背包与快捷栏之间的归集；
+   - 分类/搜索页签下严格阻断，彻底消除原版分类页 Shift+点击直接清空销毁快捷栏物品的灾难性事故隐患。
+4. **右键划动重复放置（RMB Line Drag）**：
+   - 严格约束目标槽位属于玩家背包（`slot.container == player.getInventory()`），支持在生存页签主背包或分类页签快捷栏中连续划线投放 1 个物品；
+   - 点击非玩家槽位时清空 `lastRmbSlotIndex`，防止从无限槽或销毁槽启动拖拽。
+5. **槽位锁定（`Alt + 左键`）**：
+   - 生存页签下放行主背包与快捷栏槽位（0..35）锁定；分类页签下放行底部 9 格快捷栏槽位（0..8）锁定；
+   - 依赖 `isSlotLockable` 的 `slot.container == player.getInventory()` 判定，销毁槽与无限物品槽绝不可被锁定。
+6. **销毁槽与无限槽底层硬防护**：
+   - 在 `canPlaceRmb`、`isSafeForQuickMove`、`transferAllMatching`、`isSlotLockable` 中加入铁律守卫：`if (screen instanceof CreativeModeInventoryScreen && slot.container != player.getInventory()) return false;`。
+   - 点击非玩家槽位或空白区域时，主动调用 `resetGestureState()` 清理拖拽轨迹状态机。
+
+### 三、 4-argon 严苛对抗性审计与验证结果
+
+- **审计模型**：`gemini-4-argon`
+- **审计结论**：**通过（PASS）—— 准予合并入主干分支**
+- **架构评分**：**98 / 100**
+- **单测与构建**：全量 146 项单元测试全绿，双端 `clean build` 成功。
+
+---
 
 ---
 

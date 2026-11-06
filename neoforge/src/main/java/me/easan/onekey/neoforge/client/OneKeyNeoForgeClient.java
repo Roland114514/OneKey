@@ -349,8 +349,14 @@ public final class OneKeyNeoForgeClient {
         if (!(event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) || client.player == null) {
             return;
         }
-        if (containerScreen instanceof CreativeModeInventoryScreen || containerScreen.getMenu() == null) {
+        if (containerScreen.getMenu() == null) {
             return;
+        }
+        if (containerScreen instanceof CreativeModeInventoryScreen creative) {
+            // 创造模式非生存页签，或者光标未持物时，100% 放行给原版滚动条
+            if (!creative.isInventoryOpen() || containerScreen.getMenu().getCarried().isEmpty()) {
+                return;
+            }
         }
         if (!(containerScreen instanceof AbstractContainerScreenAccessor accessor)) {
             return;
@@ -435,7 +441,7 @@ public final class OneKeyNeoForgeClient {
         if (!(event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) || client.player == null) {
             return;
         }
-        if (containerScreen instanceof CreativeModeInventoryScreen) {
+        if (containerScreen.getMenu() == null) {
             return;
         }
         if (!(containerScreen instanceof AbstractContainerScreenAccessor accessor)) {
@@ -445,6 +451,12 @@ public final class OneKeyNeoForgeClient {
         Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
         if (hovered == null) {
             hovered = accessor.onekey$getHoveredSlot();
+        }
+
+        // 创造模式边界守卫：点击非玩家背包槽位（如搜索框、页签切换、滚动条、无限物品槽、销毁槽）时，
+        // 立即重置拖拽轨迹状态机，确保跨页签或点击控件时不残留历史状态
+        if (containerScreen instanceof CreativeModeInventoryScreen && (hovered == null || hovered.container != client.player.getInventory())) {
+            resetGestureState();
         }
 
         // 自定义按键绑定：锁定/解锁槽位（默认 Left Alt + 鼠标左键，支持任意组合或单键）
@@ -457,47 +469,54 @@ public final class OneKeyNeoForgeClient {
         }
 
         // Shift + 左键：双击同类批量快速移动，同时记录拖拽起始槽位
-        if (event.getMouseButtonEvent().hasShiftDown() && isLeftButton(event.getButton())) {
+        boolean isCreativeNonSurvival = containerScreen instanceof CreativeModeInventoryScreen creative && !creative.isInventoryOpen();
+        if (event.getMouseButtonEvent().hasShiftDown() && isLeftButton(event.getButton()) && !isCreativeNonSurvival) {
             lastDraggedSlotIndex = (hovered != null ? hovered.index : -1);
             if (hovered != null && !hovered.isFake() && hovered.isActive() && !(hovered instanceof ResultSlot)
                     && !(hovered.container instanceof CraftingContainer)) {
-                boolean isPlayer = hovered.container == client.player.getInventory();
-                boolean lockedOrHotbar = false;
-                if (isPlayer) {
-                    int slotIdx = hovered.getContainerSlot();
-                    lockedOrHotbar = !PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, hovered,
-                            OneKeyNeoForge.config().gestures.includeHotbar)
-                            || ClientLockedSlots.isLocked("player_inventory", slotIdx);
-                } else {
-                    String menuKey = ClientLockedSlots.getMenuTypeKey(containerScreen.getMenu());
-                    lockedOrHotbar = ClientLockedSlots.isLocked(menuKey, hovered.index);
-                }
-
-                if (!lockedOrHotbar) {
-                    long now = System.currentTimeMillis();
-                    if (now - lastShiftClickTime < 300L && lastShiftClickSlot == hovered.index && !lastShiftClickItem.isEmpty()) {
-                        ItemStack targetItem = lastShiftClickItem.copy();
-                        lastShiftClickTime = 0L;
-                        lastShiftClickSlot = -1;
-                        lastShiftClickItem = ItemStack.EMPTY;
-                        transferAllMatching(client, containerScreen, accessor, hovered, targetItem);
-                        event.setCanceled(true);
-                    } else {
-                        ItemStack current = hovered.getItem();
-                        if (!current.isEmpty()) {
-                            lastShiftClickTime = now;
-                            lastShiftClickSlot = hovered.index;
-                            lastShiftClickItem = current.copy();
-                        } else {
-                            lastShiftClickTime = 0L;
-                            lastShiftClickSlot = -1;
-                            lastShiftClickItem = ItemStack.EMPTY;
-                        }
-                    }
-                } else {
+                if (containerScreen instanceof CreativeModeInventoryScreen && hovered.container != client.player.getInventory()) {
                     lastShiftClickTime = 0L;
                     lastShiftClickSlot = -1;
                     lastShiftClickItem = ItemStack.EMPTY;
+                } else {
+                    boolean isPlayer = hovered.container == client.player.getInventory();
+                    boolean lockedOrHotbar = false;
+                    if (isPlayer) {
+                        int slotIdx = hovered.getContainerSlot();
+                        lockedOrHotbar = !PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, hovered,
+                                OneKeyNeoForge.config().gestures.includeHotbar)
+                                || ClientLockedSlots.isLocked("player_inventory", slotIdx);
+                    } else {
+                        String menuKey = ClientLockedSlots.getMenuTypeKey(containerScreen.getMenu());
+                        lockedOrHotbar = ClientLockedSlots.isLocked(menuKey, hovered.index);
+                    }
+
+                    if (!lockedOrHotbar) {
+                        long now = System.currentTimeMillis();
+                        if (now - lastShiftClickTime < 300L && lastShiftClickSlot == hovered.index && !lastShiftClickItem.isEmpty()) {
+                            ItemStack targetItem = lastShiftClickItem.copy();
+                            lastShiftClickTime = 0L;
+                            lastShiftClickSlot = -1;
+                            lastShiftClickItem = ItemStack.EMPTY;
+                            transferAllMatching(client, containerScreen, accessor, hovered, targetItem);
+                            event.setCanceled(true);
+                        } else {
+                            ItemStack current = hovered.getItem();
+                            if (!current.isEmpty()) {
+                                lastShiftClickTime = now;
+                                lastShiftClickSlot = hovered.index;
+                                lastShiftClickItem = current.copy();
+                            } else {
+                                lastShiftClickTime = 0L;
+                                lastShiftClickSlot = -1;
+                                lastShiftClickItem = ItemStack.EMPTY;
+                            }
+                        }
+                    } else {
+                        lastShiftClickTime = 0L;
+                        lastShiftClickSlot = -1;
+                        lastShiftClickItem = ItemStack.EMPTY;
+                    }
                 }
             }
         } else {
@@ -508,7 +527,11 @@ public final class OneKeyNeoForgeClient {
 
         // 右键点击时记录起手槽位与初始状态，保持原版完整状态由拖拽状态机按需接管
         if (isRightButton(event.getButton())) {
-            lastRmbSlotIndex = (hovered != null ? hovered.index : -1);
+            if (containerScreen instanceof CreativeModeInventoryScreen && (hovered == null || hovered.container != client.player.getInventory())) {
+                lastRmbSlotIndex = -1;
+            } else {
+                lastRmbSlotIndex = (hovered != null ? hovered.index : -1);
+            }
             rmbDragActive = false;
         }
     }
@@ -519,7 +542,7 @@ public final class OneKeyNeoForgeClient {
         if (!(event.getScreen() instanceof AbstractContainerScreen<?> containerScreen) || client.player == null) {
             return;
         }
-        if (containerScreen instanceof CreativeModeInventoryScreen || containerScreen.getMenu() == null) {
+        if (containerScreen.getMenu() == null) {
             return;
         }
         if (!(containerScreen instanceof AbstractContainerScreenAccessor accessor)) {
@@ -531,6 +554,10 @@ public final class OneKeyNeoForgeClient {
         // 仅在光标无持物时允许扫掠，避免与持物放置冲突
         if (OneKeyNeoForge.config().gestures.lmbDragSweep && isLeftButton(event.getMouseButton()) && mouseEvent.hasShiftDown()
                 && containerScreen.getMenu().getCarried().isEmpty()) {
+            // 创造模式非生存页签下严禁扫掠，防止拖拽滚动条滑块滑过快捷栏时误触
+            if (containerScreen instanceof CreativeModeInventoryScreen creative && !creative.isInventoryOpen()) {
+                return;
+            }
             Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
             if (hovered == null) {
                 hovered = accessor.onekey$getHoveredSlot();
@@ -555,6 +582,13 @@ public final class OneKeyNeoForgeClient {
             Slot hovered = accessor.onekey$findSlotAt(event.getMouseX(), event.getMouseY());
             if (hovered == null) {
                 hovered = accessor.onekey$getHoveredSlot();
+            }
+
+            // 创造模式守卫：若未激活重复投放状态且悬停槽位不是玩家背包槽位，放行给原版（保护分类列表拖拽等操作）
+            if (containerScreen instanceof CreativeModeInventoryScreen && (hovered == null || hovered.container != client.player.getInventory())) {
+                if (!rmbDragActive) {
+                    return;
+                }
             }
 
             // 惰性激活：鼠标未移出起手槽位或未进入新槽位前，放行给原版处理（保障单点容错）
@@ -696,6 +730,9 @@ public final class OneKeyNeoForgeClient {
             return InventorySlots.isPlayerInventorySlot(slotIndex)
                     && PlayerSlotFilter.isPlainPlayerInventorySlot(client.player, slot, true);
         } else {
+            if (screen instanceof CreativeModeInventoryScreen) {
+                return false;
+            }
             return ServerSortingHandler.isMenuSortable(ServerSortingHandler.menuTypeOrNull(screen.getMenu()));
         }
     }
@@ -733,11 +770,19 @@ public final class OneKeyNeoForgeClient {
             return;
         }
 
+        // 创造模式非生存页签禁止批量同类转移
+        if (screen instanceof CreativeModeInventoryScreen creative && !creative.isInventoryOpen()) {
+            return;
+        }
+
         boolean isPlayerSide = clickedSlot.container == client.player.getInventory();
         String menuKey = ClientLockedSlots.getMenuTypeKey(screen.getMenu());
 
         for (Slot slot : screen.getMenu().slots) {
             if (slot.isFake() || !slot.isActive() || slot instanceof ResultSlot || slot.container instanceof CraftingContainer) {
+                continue;
+            }
+            if (screen instanceof CreativeModeInventoryScreen && slot.container != client.player.getInventory()) {
                 continue;
             }
 
@@ -778,6 +823,9 @@ public final class OneKeyNeoForgeClient {
         if (!slot.hasItem() || slot.getItem().isEmpty()) {
             return false;
         }
+        if (screen instanceof CreativeModeInventoryScreen && slot.container != player.getInventory()) {
+            return false;
+        }
         // 放行合成输入格（工作台 3x3 或背包 2x2），支持扫掠快速收回材料回背包
         if (slot.container instanceof CraftingContainer) {
             return true;
@@ -802,6 +850,9 @@ public final class OneKeyNeoForgeClient {
             return false;
         }
         if (carried == null || carried.isEmpty() || !slot.mayPlace(carried)) {
+            return false;
+        }
+        if (screen instanceof CreativeModeInventoryScreen && slot.container != player.getInventory()) {
             return false;
         }
         if (slot.container instanceof CraftingContainer) {
