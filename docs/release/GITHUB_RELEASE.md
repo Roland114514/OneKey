@@ -25,10 +25,11 @@
 - **虚拟目录安全防护**：非生存标签页下自动屏蔽按键并拦截 R 键整理，完全隔离虚拟物品选择目录（`CustomCreativeSlot`），杜绝物品目录被覆盖污染与虚拟快捷栏槽位脱节。
 - **安全过滤保障**：依托既有的 `PlayerSlotFilter` 严密防护，创造模式装备槽（盔甲/副手）与垃圾桶槽位严格物理隔离，绝不发生误穿装备或误删物品。
 
-### 2. 背包与容器界面右上角原版风格整理按键 (`showSortButton`)
-- **原版风格 UI 挂载**：在生存背包（`InventoryScreen`）、创造背包（`CreativeModeInventoryScreen`）以及所有支持 R 键整理的容器（箱子、大箱子、木桶、潜影盒、末影箱、发射器/投掷器、漏斗等）GUI 右上角内侧安全区（`leftPos + imageWidth - 18, topPos + 5`）自动挂载原版材质 `12x12` 紧凑型快捷整理按键。
+### 2. 背包物品栏上方原版风格整理按键 (`showSortButton`)
+- **UI 呈现与位置优化**：按键文本采用清晰的原版风格字母 **"R"**（呼应 R 键热键），位置从页面最顶部下移至**背包物品栏正上方**（`inventoryLabelY - 2`，对齐第 9 列物品槽），避免顶着整个页面的右上方，与原版 GUI 排版完美贴合。
+- **原版风格 UI 挂载**：在生存背包（`InventoryScreen`）、创造背包（`CreativeModeInventoryScreen`）以及所有支持 R 键整理的容器（箱子、大箱子、木桶、潜影盒、末影箱、发射器/投掷器、漏斗等）GUI 物品栏上方区域自动挂载原版材质 `12x12` 紧凑型快捷整理按键。
 - **动态坐标与可见性帧前同步**：
-  - 自适应配方书：在玩家打开/关闭配方书导致 `leftPos` 产生 77px 动态偏移时，每帧渲染与鼠标命中前自动同步绝对坐标，避免按钮脱离容器窗口漂移；
+  - 自适应配方书：在玩家打开/关闭配方书导致 `leftPos` 产生 77px 动态偏移时，每帧渲染与鼠标命中前自动同步绝对坐标，按键始终精准吸附在背包物品栏上方；
   - 创造模式标签页安全感知：创造模式非生存物品栏标签页下自动隐藏并禁用按键，生存模式页签下恢复可见与交互。
 - **智能交互设计**：
   - 常规点击：点击整理当前容器（背包界面整理背包，容器界面整理容器本体）；
@@ -41,7 +42,7 @@
 ## 🛡️ 4-argon 审查与缺陷修复
 
 本次发布经由 `gemini-4-argon` 对 26.3 GUI 生命周期及创造模式容器状态机进行了对抗性审查，闭环修复了 3 项边界缺陷：
-1. **配方书动态位移同步**：在 Fabric（`ScreenEvents.beforeExtract`）与 NeoForge（`ScreenEvent.Render.Pre`）双端注入帧前坐标更新，同时在 `SortButton.isMouseOver` 及 `extractContents` 中双重同步，使按钮时刻吸附于 GUI 右上角；
+1. **配方书动态位移同步**：在 Fabric（`ScreenEvents.beforeExtract`）与 NeoForge（`ScreenEvent.Render.Pre`）双端注入帧前坐标更新，同时在 `SortButton.isMouseOver` 及 `extractContents` 中双重同步，使按钮时刻吸附于物品栏上方；
 2. **创造模式目录页按键重叠规避**：在分类及搜索页签下强制隐藏按键，防止遮挡搜索条与滚动条；
 3. **创造模式非生存页签按键阻断**：在 `triggerScreenSort` 与 `triggerButtonSort` 中严格限定只在 `creative.isInventoryOpen()` 时触发，杜绝虚拟槽位与真实背包的数据冲突。
 
@@ -51,7 +52,7 @@
 
 | 功能 | 默认热键 | 触发位置 |
 |---|---|---|
-| **一键整理** | `R` 或 `GUI右上角按钮` | 背包、创造背包、箱子、木桶、潜影盒等所有存储容器内 |
+| **一键整理** | `R` 或 `物品栏上方R按键` | 背包、创造背包、箱子、木桶、潜影盒等所有存储容器内 |
 | **快速堆叠** | `V` | 准星对准容器（看哪存哪），或直接按键范围存入 |
 | **一键存入** | `B` | 将非锁定物品全部存入周围容器（带智能分类防杂物保护） |
 | **打开设置菜单** | `K` | 随时随地调出全功能设置界面 |
@@ -63,10 +64,10 @@
 ## 🔐 SHA-256
 
 ```
-2b7176542db190a6948943b2b543c0cea670c87b266448c183da92f90509dc15  onekey-fabric-1.1.5.jar
-4b65b8dadae7f93cdff49df55ac075983a7f9480911ae31b6a4e82e84f8d99a5  onekey-fabric-1.1.5-sources.jar
-8eeb81946824060a96e5b0770e3ddd64f0ee62cec23c85e69330b12ff1240c6a  onekey-neoforge-1.1.5.jar
-20aea711a5e261f16e29db38f63433760ce954297de58cc9a866d23c529ea5d8  onekey-neoforge-1.1.5-sources.jar
+0d88c672b437e0ddffbb76994cb977d5d883ad2ce083a0a4d56db805b785f3f1  onekey-fabric-1.1.5.jar
+5e523ac537d62642812f5e92c8ee7d7976e99a7c2669a2e1cd3e625f1cc917f3  onekey-fabric-1.1.5-sources.jar
+468e95432263f92841d46d7c560ab4ebe0cff2d61446fb64122f1c6931fe40ce  onekey-neoforge-1.1.5.jar
+3b25e20e061d025040421ac9766f9ffcf00ac8d730e716f8022fee503cf28efc  onekey-neoforge-1.1.5-sources.jar
 ```
 
 **许可证**：MIT · **源码**：[github.com/Roland114514/OneKey](https://github.com/Roland114514/OneKey)

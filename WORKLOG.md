@@ -12,19 +12,52 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `fix: 完善配方书坐标动态同步与创造模式页签安全防护 (v1.1.5 审查加固)` |
+| 最新提交 | `refactor: 整理按键UI改版为字母R并移至背包物品栏上方 (v1.1.5)` |
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.5.jar` 与 `onekey-neoforge-1.1.5.jar` 构建成功 |
 | 单测状态 | ✅ 双端各 73 例（Fabric 73 + NeoForge 73 = **146 例全绿**） |
 | 版本状态 | ✅ `mod_version=1.1.5` |
 | 协议版本 | **`ProtocolVersion.CURRENT=3`**（1.1.2 起双端同版本） |
-| 当前任务聚焦 | 🎯 v1.1.5 审查加固：配方书展开动态位移自适应同步、创造模式非生存页签按键与R键严格阻断 |
+| 当前任务聚焦 | 🎯 v1.1.5 整理按键 UI 优化：标识呈现为字母 R，按键自页面顶端移至背包物品栏上方 |
 | 发布状态 | 🚀 v1.1.5 已发布到 GitHub Release |
-| 运行实测 | ✅ 配方书展开/折叠时整理按键坐标瞬时动态跟随、创造模式非生存页签完全隐藏且不响应R键、生存页签整理与Shift反向整理100%正常 |
-| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / v1.1.4 视觉实感与空手采伐收官 ✅ / **v1.1.5 创造模式整理与GUI按键收官（4-argon 审查加固完成）✅** |
+| 运行实测 | ✅ 整理按键显示清晰字母 R、位置在背包物品栏第 9 列上方（inventoryLabelY - 2）、配方书展开动态跟随无抖动、创造模式非生存页签隐蔽防护 |
+| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / v1.1.4 视觉实感与空手采伐收官 ✅ / **v1.1.5 创造模式整理与GUI按键收官（视觉打磨完成）✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互自由度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 32 次会话的「4-argon 深度代码审查与缺陷加固」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 33 次会话的「整理按键 UI 与位置微调」细节。
+
+---
+
+## 2026-11-06（第 4 个工作日 · 第 33 次会话：v1.1.5 整理按键 UI 改版为字母 R 并精确定位至背包物品栏上方）
+
+> 用户指令："做一些小更改，首先是这个整理的按键，上面的UI可以显示成一个字母R，然后这个按键的位置可以放在背包物品栏的上面，而不是顶着整个页面的右上方"
+
+### 一、 核心功能修改与优化内容
+
+1. **按键视觉标识优化（字母 "R"）**：
+   - 将原 `"↕"` 字符更换为大写字母 `"R"`（`Component.literal("R")`）。
+   - 在 12x12 原版按键尺寸下，字母 R 宽度为 5px、高度为 8px，居中后上下各留 2px、左右各留 3.5px 内边距，视觉清晰醒目且与默认快捷键 R 形成强烈的认知联结。
+
+2. **按键绝对坐标重定位（背包物品栏正上方）**：
+   - 告别硬编码的 `topPos + 5`（原位置顶着整个 GUI 顶边缘，在合成区/配方书边缘显得突兀）。
+   - 暴露 `AbstractContainerScreen.inventoryLabelY` 访问器（`inventoryLabelY = imageHeight - 94`，对应原版 "物品栏" 文本行）。
+   - 按键 Y 坐标精准设定为 `topPos + inventoryLabelY - 2`：
+     - 在 `InventoryScreen` 中位于 `y = topPos + 70`，与 "物品栏" 标题垂直居中对称，距下方第 0 行背包槽位（`y = 84`）留有精准 2px 呼吸感间隙；
+     - 在 `CreativeModeInventoryScreen` 生存页签位于 `y = topPos + 40`，位于创造背包主槽位正上方；
+     - 在容器界面（如箱子）中统一位于玩家物品栏标题行右侧，对齐第 9 列背包槽位（`x = leftPos + 158`）。
+   - 依然保持 `beforeExtract` / `ScreenEvent.Render.Pre` 动态每帧跟随配方书位移。
+
+### 二、 验证与构建结果
+
+- **单元测试验证**：`bash scripts/with-jdk25.sh test`，Fabric 73 例 + NeoForge 73 例 = **146 例全绿通过**。
+- **全量无缓存构建**：`bash scripts/with-jdk25.sh clean build` 通过，双端 Jar 包重新生成成功。
+- **产物 Hash 校验**：
+  - Fabric: `0d88c672b437e0ddffbb76994cb977d5d883ad2ce083a0a4d56db805b785f3f1  onekey-fabric-1.1.5.jar`
+  - Fabric Sources: `5e523ac537d62642812f5e92c8ee7d7976e99a7c2669a2e1cd3e625f1cc917f3  onekey-fabric-1.1.5-sources.jar`
+  - NeoForge: `468e95432263f92841d46d7c560ab4ebe0cff2d61446fb64122f1c6931fe40ce  onekey-neoforge-1.1.5.jar`
+  - NeoForge Sources: `3b25e20e061d025040421ac9766f9ffcf00ac8d730e716f8022fee503cf28efc  onekey-neoforge-1.1.5-sources.jar`
+
+---
 
 ---
 

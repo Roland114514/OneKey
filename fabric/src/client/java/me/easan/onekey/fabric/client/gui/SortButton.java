@@ -12,11 +12,12 @@ import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.network.chat.Component;
 
 /**
- * 位于容器界面右上角的原版风格一键整理快捷按钮。
+ * 位于背包与容器界面物品栏右上方的原版风格一键整理快捷按钮（UI 标识为 "R"）。
  * 具备动态坐标同步与创造模式安全防护：
- * 1. 动态自适应配方书展开/折叠导致的 leftPos 偏移；
- * 2. 创造模式下仅在「生存模式物品栏」页签显示并生效；
- * 3. 支持普通点击与 Shift 点击（整理玩家背包）。
+ * 1. 位于背包物品栏正上方（inventoryLabelY - 2），对齐第 9 列槽位；
+ * 2. 动态自适应配方书展开/折叠导致的 leftPos 偏移；
+ * 3. 创造模式下仅在「生存模式物品栏」页签显示并生效；
+ * 4. 支持普通点击与 Shift 点击（整理玩家背包）。
  */
 public class SortButton extends Button {
 
@@ -25,7 +26,7 @@ public class SortButton extends Button {
     private final AbstractContainerScreen<?> parentScreen;
 
     public SortButton(int x, int y, AbstractContainerScreen<?> parentScreen, OnPress onPress) {
-        super(x, y, BUTTON_SIZE, BUTTON_SIZE, Component.literal("↕"), onPress, DEFAULT_NARRATION);
+        super(x, y, BUTTON_SIZE, BUTTON_SIZE, Component.literal("R"), onPress, DEFAULT_NARRATION);
         this.parentScreen = parentScreen;
         setTooltip(Tooltip.create(Component.translatable("onekey.gui.sort_button.tooltip")));
         syncPositionAndVisibility();
@@ -35,8 +36,12 @@ public class SortButton extends Button {
         if (!(parentScreen instanceof AbstractContainerScreenAccessor accessor)) {
             return null;
         }
-        int x = accessor.onekey$getLeftPos() + accessor.onekey$getImageWidth() - 18;
-        int y = accessor.onekey$getTopPos() + 5;
+        int labelY = accessor.onekey$getInventoryLabelY();
+        if (labelY <= 0) {
+            labelY = accessor.onekey$getImageHeight() - 94;
+        }
+        int x = accessor.onekey$getLeftPos() + (parentScreen instanceof CreativeModeInventoryScreen ? 158 : accessor.onekey$getImageWidth() - 18);
+        int y = accessor.onekey$getTopPos() + labelY - 2;
         return new SortButton(x, y, parentScreen, button -> {
             Minecraft client = Minecraft.getInstance();
             if (client.player == null) {
@@ -50,8 +55,12 @@ public class SortButton extends Button {
 
     public void syncPositionAndVisibility() {
         if (this.parentScreen instanceof AbstractContainerScreenAccessor accessor) {
-            int targetX = accessor.onekey$getLeftPos() + accessor.onekey$getImageWidth() - 18;
-            int targetY = accessor.onekey$getTopPos() + 5;
+            int labelY = accessor.onekey$getInventoryLabelY();
+            if (labelY <= 0) {
+                labelY = accessor.onekey$getImageHeight() - 94;
+            }
+            int targetX = accessor.onekey$getLeftPos() + (this.parentScreen instanceof CreativeModeInventoryScreen ? 158 : accessor.onekey$getImageWidth() - 18);
+            int targetY = accessor.onekey$getTopPos() + labelY - 2;
             this.setX(targetX);
             this.setY(targetY);
         }

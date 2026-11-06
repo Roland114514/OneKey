@@ -46,4 +46,10 @@ public interface AbstractContainerScreenAccessor {
 
     @Accessor("imageHeight")
     int onekey$getImageHeight();
+
+    @Accessor("inventoryLabelY")
+    int onekey$getInventoryLabelY();
+
+    @Accessor("inventoryLabelX")
+    int onekey$getInventoryLabelX();
 }
