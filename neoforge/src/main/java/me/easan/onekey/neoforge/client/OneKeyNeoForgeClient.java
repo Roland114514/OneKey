@@ -267,10 +267,8 @@ public final class OneKeyNeoForgeClient {
             // 打开容器界面且开启整理按钮时，在右上角挂载原版风格整理按键
             if (OneKeyNeoForge.config().sort.enabled && OneKeyNeoForge.config().sort.showSortButton
                     && isScreenEligibleForSortButton(containerScreen)) {
-                if (containerScreen instanceof AbstractContainerScreenAccessor accessor) {
-                    int x = accessor.onekey$getLeftPos() + accessor.onekey$getImageWidth() - 18;
-                    int y = accessor.onekey$getTopPos() + 5;
-                    net.minecraft.client.gui.components.Button sortButton = SortButton.create(x, y, containerScreen);
+                SortButton sortButton = SortButton.create(containerScreen);
+                if (sortButton != null) {
                     event.addListener(sortButton);
                 }
             }
@@ -283,6 +281,17 @@ public final class OneKeyNeoForgeClient {
                 String menuKey = ClientLockedSlots.getMenuTypeKey(containerScreen.getMenu());
                 if (!"player_inventory".equals(menuKey)) {
                     ClientPacketDistributor.sendToServer(new RequestSlotLocksPayload(menuKey));
+                }
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onScreenRender(ScreenEvent.Render.Pre event) {
+        if (event.getScreen() instanceof AbstractContainerScreen<?>) {
+            for (var listener : event.getScreen().children()) {
+                if (listener instanceof SortButton sortButton) {
+                    sortButton.syncPositionAndVisibility();
                 }
             }
         }
@@ -843,6 +852,10 @@ public final class OneKeyNeoForgeClient {
             return;
         }
 
+        if (screen instanceof CreativeModeInventoryScreen creative && !creative.isInventoryOpen()) {
+            return;
+        }
+
         int syncId = screen.getMenu().containerId;
         int mode = SortRequest.MODE_CONTAINER;
 
@@ -861,6 +874,10 @@ public final class OneKeyNeoForgeClient {
 
     public static void triggerScreenSort(Minecraft client, AbstractContainerScreen<?> screen) {
         if (client.player == null || screen == null || screen.getMenu() == null) {
+            return;
+        }
+
+        if (screen instanceof CreativeModeInventoryScreen creative && !creative.isInventoryOpen()) {
             return;
         }
 
@@ -1030,13 +1047,6 @@ public final class OneKeyNeoForgeClient {
 
     private static List<Slot> clientPlayerMainInventorySlots(AbstractContainerMenu menu, LocalPlayer player) {
         List<Slot> result = new ArrayList<>();
-        // 创造模式下如果当前不在生存模式背包页签，则从 player.inventoryMenu 提取全部背包槽位
-        Minecraft client = Minecraft.getInstance();
-        if (client != null && client.gui != null
-                && client.gui.screen() instanceof CreativeModeInventoryScreen creative
-                && !creative.isInventoryOpen()) {
-            menu = player.inventoryMenu;
-        }
         for (Slot slot : menu.slots) {
             if (PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot,
                     OneKeyNeoForge.config().sort.includeHotbar)) {

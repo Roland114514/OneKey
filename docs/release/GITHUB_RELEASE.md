@@ -21,17 +21,29 @@
 ## ✨ v1.1.5 核心功能与体验优化
 
 ### 1. 创造模式背包 R 键一键整理生效
-- **创造模式原生适配**：全面解除创造模式下对 R 键整理的硬编码拦截，在创造模式「生存模式物品栏」页签（`isInventoryOpen()`）或任意标签页下按 R 键均可秒速整理玩家物品栏。
-- **虚拟目录保护机制**：非生存标签页下自动定向仅整理玩家实际背包与快捷栏数据（`player.inventoryMenu`），完全隔离虚拟物品选择目录（`CustomCreativeSlot`），杜绝物品目录被覆盖污染。
+- **创造模式原生适配**：全面解除创造模式下对 R 键整理的硬编码拦截，在创造模式「生存模式物品栏」页签（`isInventoryOpen()`）下按 R 键即可秒速整理玩家物品栏。
+- **虚拟目录安全防护**：非生存标签页下自动屏蔽按键并拦截 R 键整理，完全隔离虚拟物品选择目录（`CustomCreativeSlot`），杜绝物品目录被覆盖污染与虚拟快捷栏槽位脱节。
 - **安全过滤保障**：依托既有的 `PlayerSlotFilter` 严密防护，创造模式装备槽（盔甲/副手）与垃圾桶槽位严格物理隔离，绝不发生误穿装备或误删物品。
 
 ### 2. 背包与容器界面右上角原版风格整理按键 (`showSortButton`)
 - **原版风格 UI 挂载**：在生存背包（`InventoryScreen`）、创造背包（`CreativeModeInventoryScreen`）以及所有支持 R 键整理的容器（箱子、大箱子、木桶、潜影盒、末影箱、发射器/投掷器、漏斗等）GUI 右上角内侧安全区（`leftPos + imageWidth - 18, topPos + 5`）自动挂载原版材质 `12x12` 紧凑型快捷整理按键。
+- **动态坐标与可见性帧前同步**：
+  - 自适应配方书：在玩家打开/关闭配方书导致 `leftPos` 产生 77px 动态偏移时，每帧渲染与鼠标命中前自动同步绝对坐标，避免按钮脱离容器窗口漂移；
+  - 创造模式标签页安全感知：创造模式非生存物品栏标签页下自动隐藏并禁用按键，生存模式页签下恢复可见与交互。
 - **智能交互设计**：
   - 常规点击：点击整理当前容器（背包界面整理背包，容器界面整理容器本体）；
   - Shift + 点击：在任何容器界面下快速强制整理玩家背包；
   - 悬停 Tooltip 提示：原生展示 `一键整理 (R)` 与 `Shift + 点击：整理玩家背包` 引导。
 - **配置与设置解耦**：在 `OneKeyConfig.sort.showSortButton` 新增布尔开关（默认开启），并在设置界面 Tab 0（一键整理）第 4 行右侧加入可视化切换按钮与中英文 Tooltip，支持自由隐藏。
+
+---
+
+## 🛡️ 4-argon 审查与缺陷修复
+
+本次发布经由 `gemini-4-argon` 对 26.3 GUI 生命周期及创造模式容器状态机进行了对抗性审查，闭环修复了 3 项边界缺陷：
+1. **配方书动态位移同步**：在 Fabric（`ScreenEvents.beforeExtract`）与 NeoForge（`ScreenEvent.Render.Pre`）双端注入帧前坐标更新，同时在 `SortButton.isMouseOver` 及 `extractContents` 中双重同步，使按钮时刻吸附于 GUI 右上角；
+2. **创造模式目录页按键重叠规避**：在分类及搜索页签下强制隐藏按键，防止遮挡搜索条与滚动条；
+3. **创造模式非生存页签按键阻断**：在 `triggerScreenSort` 与 `triggerButtonSort` 中严格限定只在 `creative.isInventoryOpen()` 时触发，杜绝虚拟槽位与真实背包的数据冲突。
 
 ---
 
@@ -51,10 +63,10 @@
 ## 🔐 SHA-256
 
 ```
-845aa61cbea42b4f14bce82e9987ccd502b6404f0f9d78a9005d241baf2b90fe  onekey-fabric-1.1.5.jar
-ffd60e1ba14c15b4ff0237dbbd1e2abfedde27d4051730177d6a691e2c4ba307  onekey-fabric-1.1.5-sources.jar
-2f870b1e66716b28dc6c5efa644bbfb9badef5faa1c86f59d9e9373a0ffc25be  onekey-neoforge-1.1.5.jar
-fb5466f1031033c9d7f61e94e72fa1248b43752ed775843537df7f850ca7fa1d  onekey-neoforge-1.1.5-sources.jar
+2b7176542db190a6948943b2b543c0cea670c87b266448c183da92f90509dc15  onekey-fabric-1.1.5.jar
+4b65b8dadae7f93cdff49df55ac075983a7f9480911ae31b6a4e82e84f8d99a5  onekey-fabric-1.1.5-sources.jar
+8eeb81946824060a96e5b0770e3ddd64f0ee62cec23c85e69330b12ff1240c6a  onekey-neoforge-1.1.5.jar
+20aea711a5e261f16e29db38f63433760ce954297de58cc9a866d23c529ea5d8  onekey-neoforge-1.1.5-sources.jar
 ```
 
 **许可证**：MIT · **源码**：[github.com/Roland114514/OneKey](https://github.com/Roland114514/OneKey)

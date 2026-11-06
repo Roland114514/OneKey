@@ -274,11 +274,12 @@ public final class OneKeyFabricClient implements ClientModInitializer {
                 // 打开容器界面且开启整理按钮时，在右上角挂载原版风格整理按键
                 if (OneKeyFabric.config().sort.enabled && OneKeyFabric.config().sort.showSortButton
                         && isScreenEligibleForSortButton(containerScreen)) {
-                    if (containerScreen instanceof AbstractContainerScreenAccessor accessor) {
-                        int x = accessor.onekey$getLeftPos() + accessor.onekey$getImageWidth() - 18;
-                        int y = accessor.onekey$getTopPos() + 5;
-                        net.minecraft.client.gui.components.Button sortButton = SortButton.create(x, y, containerScreen);
+                    SortButton sortButton = SortButton.create(containerScreen);
+                    if (sortButton != null) {
                         Screens.getWidgets(screen).add(sortButton);
+                        ScreenEvents.beforeExtract(screen).register((scr, extractor, mouseX, mouseY, tickDelta) -> {
+                            sortButton.syncPositionAndVisibility();
+                        });
                     }
                 }
 
@@ -837,6 +838,10 @@ public final class OneKeyFabricClient implements ClientModInitializer {
             return;
         }
 
+        if (screen instanceof CreativeModeInventoryScreen creative && !creative.isInventoryOpen()) {
+            return;
+        }
+
         int syncId = screen.getMenu().containerId;
         int mode = SortRequest.MODE_CONTAINER;
 
@@ -855,6 +860,10 @@ public final class OneKeyFabricClient implements ClientModInitializer {
 
     public static void triggerScreenSort(Minecraft client, AbstractContainerScreen<?> screen) {
         if (client.player == null || screen == null || screen.getMenu() == null) {
+            return;
+        }
+
+        if (screen instanceof CreativeModeInventoryScreen creative && !creative.isInventoryOpen()) {
             return;
         }
 
@@ -1034,13 +1043,6 @@ public final class OneKeyFabricClient implements ClientModInitializer {
 
     private static List<Slot> clientPlayerMainInventorySlots(AbstractContainerMenu menu, LocalPlayer player) {
         List<Slot> result = new ArrayList<>();
-        // 创造模式下如果当前不在生存模式背包页签，则从 player.inventoryMenu 提取全部背包槽位
-        Minecraft client = Minecraft.getInstance();
-        if (client != null && client.gui != null
-                && client.gui.screen() instanceof CreativeModeInventoryScreen creative
-                && !creative.isInventoryOpen()) {
-            menu = player.inventoryMenu;
-        }
         for (Slot slot : menu.slots) {
             if (PlayerSlotFilter.isPlainPlayerInventorySlot(player, slot,
                     OneKeyFabric.config().sort.includeHotbar)) {

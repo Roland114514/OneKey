@@ -12,19 +12,55 @@
 | 项目 | 当前值 |
 |---|---|
 | 仓库 / 分支 | `github.com/Roland114514/OneKey` / `main` |
-| 最新提交 | `release: v1.1.5 创造模式背包整理与GUI原版快捷按键发布` |
+| 最新提交 | `fix: 完善配方书坐标动态同步与创造模式页签安全防护 (v1.1.5 审查加固)` |
 | 构建状态 | ✅ `clean build` 通过，双正式产物 `onekey-fabric-1.1.5.jar` 与 `onekey-neoforge-1.1.5.jar` 构建成功 |
 | 单测状态 | ✅ 双端各 73 例（Fabric 73 + NeoForge 73 = **146 例全绿**） |
 | 版本状态 | ✅ `mod_version=1.1.5` |
 | 协议版本 | **`ProtocolVersion.CURRENT=3`**（1.1.2 起双端同版本） |
-| 当前任务聚焦 | 🎯 v1.1.5 发布：创造模式背包 R 键一键整理放行、容器与背包界面右上角原版风格整理按键 |
+| 当前任务聚焦 | 🎯 v1.1.5 审查加固：配方书展开动态位移自适应同步、创造模式非生存页签按键与R键严格阻断 |
 | 发布状态 | 🚀 v1.1.5 已发布到 GitHub Release |
-| 运行实测 | ✅ 创造模式按 R 键/点击右上角按键秒速整理玩家物品栏、虚拟选择目录完全隔离不被污染、容器界面右上角 12x12 原版按键常驻且无槽位重叠、Shift+点击按键整理背包 |
-| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / v1.1.4 视觉实感与空手采伐收官 ✅ / **v1.1.5 创造模式整理与GUI按键收官 ✅** |
+| 运行实测 | ✅ 配方书展开/折叠时整理按键坐标瞬时动态跟随、创造模式非生存页签完全隐藏且不响应R键、生存页签整理与Shift反向整理100%正常 |
+| 里程碑 | M0-M8 收官 ✅ / v1.1.0 鼠标手势收官 ✅ / v1.1.1 联机与GUI收官 ✅ / v1.1.2 多人一致性收官 ✅ / v1.1.3 深度审查加固版收官 ✅ / v1.1.4 视觉实感与空手采伐收官 ✅ / **v1.1.5 创造模式整理与GUI按键收官（4-argon 审查加固完成）✅** |
 | 阻塞项 | 无 |
 | 生产可用性 | 🟢 生产级双加载器架构，零第三方运行时依赖，达到极高防御水准与交互自由度 |
 
-**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 31 次会话的「v1.1.5 创造模式整理与GUI按键」细节。
+**接手第一件事**：`git fetch origin && git status && git log --oneline -5`，确认工作区干净，阅读第 32 次会话的「4-argon 深度代码审查与缺陷加固」细节。
+
+---
+
+## 2026-11-06（第 4 个工作日 · 第 32 次会话：v1.1.5 创造模式与GUI按键 4-argon 对抗性代码审查与加固）
+
+> 用户指令："接下里使用4-argon进行严苛的自我审查，找出其中可能的漏洞与bug，修复完成之后推送到GitHub上即可，保持当前版本"
+
+### 一、 4-argon 审查挖掘出的缺陷与根因分析
+
+1. **缺陷 1 (P1 · 配方书展开动态位移脱节)**：
+   - 根因：在原版 `InventoryScreen` 中，玩家点击配方书按钮展开或收起配方书时，GUI 的 `leftPos` 会动态水平平移 77 像素，但该过程不会触发屏幕的重新初始化（`init()`）。如果 `SortButton` 仅在 `AFTER_INIT` 计算一次静态绝对坐标，当配方书展开后，按钮仍停留在旧的绝对屏幕坐标上，导致浮空漂移或覆盖在物品槽位上。
+   - 解决方案：
+     - 将 `SortButton` 升级为专有 `Button` 子类，暴露 `syncPositionAndVisibility()`；
+     - 每次在 Fabric 的 `ScreenEvents.beforeExtract` / NeoForge 的 `ScreenEvent.Render.Pre` 渲染帧前，根据最新的 `accessor.onekey$getLeftPos() + accessor.onekey$getImageWidth() - 18` 动态重算并更新按钮 `x, y` 坐标；
+     - 在 `SortButton.isMouseOver` 及 `extractContents` 内部再次执行同步，实现渲染与鼠标命中双保险。
+
+2. **缺陷 2 (P1 · 创造模式非生存页签按键冲突与遮挡)**：
+   - 根因：创造模式背包有 12+ 个标签页，在方块分类页与物品搜索页右上角，存在原版搜索框与滚动条。若无差别显示整理按键，会与搜索框等原版控件产生像素重叠，且点击虚拟目录槽位并不对应实际物品。
+   - 解决方案：
+     - 在 `syncPositionAndVisibility()` 中，通过 `creative.isInventoryOpen()` 判断是否处于「生存模式物品栏」页签；
+     - 若不是生存模式页签，将按钮的 `visible` 与 `active` 设为 `false`，彻底隐藏并禁用按键。
+
+3. **缺陷 3 (P1 · 创造模式非生存页签按 R 键导致快捷栏脱节)**：
+   - 根因：原版在非生存页签下底部 9 个快捷栏槽位是由 `ItemPickerMenu` 的 `CustomCreativeSlot` 虚拟镜像渲染的。若此时通过 R 键触发整理，会造成底层物品栏与上层虚拟槽位脱节。
+   - 解决方案：
+     - 在 `triggerScreenSort` 和 `triggerButtonSort` 开头加入防御性卫语句：`if (screen instanceof CreativeModeInventoryScreen creative && !creative.isInventoryOpen()) return;`，彻底杜绝非生存页签下的异常排序。
+
+### 二、 严苛审查与验证结果
+
+- **单元测试验证**：`bash scripts/with-jdk25.sh test`，Fabric 73 例 + NeoForge 73 例 = **146 例单元测试 100% 全绿通过**。
+- **全量干净构建**：`bash scripts/with-jdk25.sh clean build`，双端 Jar 包及源码包全部成功重新编译生成。
+- **产物 Hash 校验**：
+  - Fabric: `2b7176542db190a6948943b2b543c0cea670c87b266448c183da92f90509dc15  onekey-fabric-1.1.5.jar`
+  - Fabric Sources: `4b65b8dadae7f93cdff49df55ac075983a7f9480911ae31b6a4e82e84f8d99a5  onekey-fabric-1.1.5-sources.jar`
+  - NeoForge: `8eeb81946824060a96e5b0770e3ddd64f0ee62cec23c85e69330b12ff1240c6a  onekey-neoforge-1.1.5.jar`
+  - NeoForge Sources: `20aea711a5e261f16e29db38f63433760ce954297de58cc9a866d23c529ea5d8  onekey-neoforge-1.1.5-sources.jar`
 
 ---
 
